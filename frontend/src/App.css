@@ -1,0 +1,140 @@
+/* ── 전역 ────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Pretendard", "Apple SD Gothic Neo", sans-serif;
+  background: #f5f7fa;
+  color: #1a1a1a;
+}
+
+.app {
+  max-width: 640px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+header {
+  margin-bottom: 32px;
+  text-align: center;
+}
+header h1 { font-size: 1.6rem; font-weight: 700; }
+header p  { margin-top: 6px; color: #666; font-size: 0.95rem; }
+
+main > section {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+main > section h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 14px;
+  color: #444;
+}
+
+/* ── 업로드 존 ────────────────────────────────────── */
+.upload-zone {
+  border: 2px dashed #c8d0dc;
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  color: #888;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.upload-zone:hover   { border-color: #4f80ff; background: #f0f4ff; }
+.upload-zone.dragging { border-color: #4f80ff; background: #e8eeff; }
+.upload-zone.disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── 문항 입력 ────────────────────────────────────── */
+.question-input label { display: block; font-size: 0.85rem; color: #555; margin-bottom: 6px; }
+.question-input input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dde1e9;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+.question-input input:focus { outline: none; border-color: #4f80ff; }
+.hint  { margin-top: 6px; font-size: 0.8rem; color: #999; }
+
+/* ── 버튼 ─────────────────────────────────────────── */
+.extract-btn {
+  margin-top: 14px;
+  width: 100%;
+  padding: 12px;
+  background: #4f80ff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.extract-btn:hover { background: #3a6be8; }
+
+.reset-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: #f0f4ff;
+  color: #4f80ff;
+  border: 1px solid #c0d0ff;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+/* ── 상태 폴러 ────────────────────────────────────── */
+.status-poller { font-size: 0.95rem; }
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid #e0e6f0;
+  border-top-color: #4f80ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 12px 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.done-box { margin-top: 10px; }
+.download-btn {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 10px 20px;
+  background: #22c55e;
+  color: #fff;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.download-btn:hover { background: #16a34a; }
+
+/* ── 메시지 ───────────────────────────────────────── */
+.info-msg    { margin-top: 10px; color: #4f80ff; font-size: 0.88rem; }
+.success-msg { margin-top: 10px; color: #22c55e; font-size: 0.88rem; }
+.error-msg   { margin-top: 8px; color: #ef4444; font-size: 0.88rem; }
+
+.error-box {
+  background: #fff5f5;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+.error-box p  { color: #b91c1c; margin-bottom: 12px; }
+.error-box button {
+  padding: 8px 20px;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
