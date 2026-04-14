@@ -39,9 +39,9 @@ sudo apt install tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng
 ```bash
 cd backend
 
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 
 cp .env.local .env              # 로컬용 환경변수 적용
 uvicorn app.main:app --reload   # http://localhost:8000
