@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 import boto3
 from botocore.exceptions import ClientError
 from app.core.config import settings
@@ -49,7 +50,7 @@ def put_status(job_status: JobStatusFile) -> None:
     )
 
 
-def get_status(job_id: str) -> JobStatusFile | None:
+def get_status(job_id: str) -> Optional[JobStatusFile]:
     key = f"{STATUS_PREFIX}/{job_id}.json"
     try:
         resp = s3.get_object(Bucket=BUCKET, Key=key)

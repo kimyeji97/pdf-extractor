@@ -13,6 +13,7 @@ STORAGE_BACKEND=local 일 때 storage.py 팩토리가 이 모듈을 선택한다
 import json
 import shutil
 from pathlib import Path
+from typing import Optional
 
 from app.core.config import settings
 from app.models.schemas import JobStatusFile, JobStatus
@@ -49,7 +50,7 @@ def put_status(job_status: JobStatusFile) -> None:
     path.write_text(job_status.model_dump_json(), encoding="utf-8")
 
 
-def get_status(job_id: str) -> JobStatusFile | None:
+def get_status(job_id: str) -> Optional[JobStatusFile]:
     path = _BASE / "status" / f"{job_id}.json"
     if not path.exists():
         return None
