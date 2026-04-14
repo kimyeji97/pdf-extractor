@@ -3,7 +3,7 @@ uvicorn[standard]==0.30.6
 pydantic==2.8.2
 pydantic-settings==2.4.0
 boto3==1.35.0          # S3 전용 (Textract 제거)
-pymupdf==1.24.9
+pymupdf==1.25.5
 pdfplumber==0.11.4
 python-multipart==0.0.9
 pytesseract==0.3.13    # Tesseract OCR Python 바인딩
