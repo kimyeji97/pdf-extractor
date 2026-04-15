@@ -3,21 +3,22 @@ import UploadForm from "./components/UploadForm";
 import QuestionInput from "./components/QuestionInput";
 import StatusPoller from "./components/StatusPoller";
 import FileListPanel from "./components/FileListPanel";
+import PageBrowser from "./components/PageBrowser";
 import { requestUploadUrl, uploadPdf, startExtract } from "./api/client";
 import "./App.css";
 
 /**
  * 전체 유저 플로우
- *   file-list → idle → uploading → ready → processing → done / error
+ *   file-list → uploading → page-browse → ready → processing → done / error
  */
 const STEPS = {
-  FILE_LIST: "file-list",   // 앱 진입 기본 화면
-  IDLE: "idle",
-  UPLOADING: "uploading",   // S3 업로드 중
-  READY: "ready",           // 업로드 완료, 추출 대기
-  PROCESSING: "processing", // 추출 작업 진행 중
-  DONE: "done",
-  ERROR: "error",
+  FILE_LIST:   "file-list",   // 앱 진입 기본 화면
+  UPLOADING:   "uploading",   // S3 업로드 중
+  PAGE_BROWSE: "page-browse", // 페이지 썸네일 브라우징
+  READY:       "ready",       // 페이지 선택 완료, 추출 대기
+  PROCESSING:  "processing",  // 추출 작업 진행 중
+  DONE:        "done",
+  ERROR:       "error",
 };
 
 export default function App() {
@@ -25,12 +26,25 @@ export default function App() {
   const [file, setFile] = useState(null);
   const [questions, setQuestions] = useState("");
   const [jobId, setJobId] = useState(null);
+  const [selectedPage, setSelectedPage] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // ── 파일 목록에서 job 선택 ──────────────────────────
+  // ── 파일 목록에서 job 선택 → 페이지 브라우징 ────────
   const handleJobSelect = (selectedJobId) => {
     setJobId(selectedJobId);
+    setSelectedPage(null);
+    setStep(STEPS.PAGE_BROWSE);
+  };
+
+  // ── 페이지 선택 → 문항 입력 ──────────────────────────
+  const handlePageSelect = (pageNum) => {
+    setSelectedPage(pageNum);
     setStep(STEPS.READY);
+  };
+
+  // ── 페이지 브라우징 → 파일 목록으로 복귀 ────────────
+  const handleBackToFileList = () => {
+    setStep(STEPS.FILE_LIST);
   };
 
   // ── Step 1: 파일 선택 후 S3 업로드 ─────────────────
@@ -43,7 +57,8 @@ export default function App() {
       const { job_id, upload_url } = await requestUploadUrl(selectedFile.name);
       setJobId(job_id);
       await uploadPdf(upload_url, selectedFile);
-      setStep(STEPS.READY);
+      setSelectedPage(null);
+      setStep(STEPS.PAGE_BROWSE);
     } catch (e) {
       setErrorMsg(e.message);
       setStep(STEPS.ERROR);
@@ -72,6 +87,7 @@ export default function App() {
     setFile(null);
     setQuestions("");
     setJobId(null);
+    setSelectedPage(null);
     setErrorMsg("");
   };
 
@@ -96,22 +112,35 @@ export default function App() {
           </section>
         )}
 
-        {/* 업로드 영역 (file-list 이후 단계) */}
-        {step !== STEPS.FILE_LIST && (
+        {/* 업로드 중 */}
+        {step === STEPS.UPLOADING && (
           <section>
             <h2>1. PDF 업로드</h2>
-            <UploadForm onFileSelected={handleFileSelected} disabled={isProcessing} />
-            {step === STEPS.UPLOADING && <p className="info-msg">S3에 업로드 중...</p>}
-            {step !== STEPS.UPLOADING && (
-              <p className="success-msg">✓ 업로드 완료</p>
-            )}
+            <p className="info-msg">S3에 업로드 중...</p>
+          </section>
+        )}
+
+        {/* 페이지 브라우징 */}
+        {step === STEPS.PAGE_BROWSE && (
+          <section>
+            <h2>2. 페이지 선택</h2>
+            <PageBrowser
+              jobId={jobId}
+              onPageSelect={handlePageSelect}
+              onBack={handleBackToFileList}
+            />
           </section>
         )}
 
         {/* 문항 번호 입력 */}
         {(step === STEPS.READY || step === STEPS.PROCESSING || step === STEPS.DONE) && (
           <section>
-            <h2>2. 문항 번호 입력</h2>
+            <h2>3. 문항 번호 입력</h2>
+            {selectedPage !== null && (
+              <p style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>
+                선택된 페이지: {selectedPage + 1}페이지
+              </p>
+            )}
             <QuestionInput
               value={questions}
               onChange={setQuestions}
@@ -128,7 +157,7 @@ export default function App() {
         {/* 상태 + 다운로드 */}
         {(step === STEPS.PROCESSING || step === STEPS.DONE) && (
           <section>
-            <h2>3. 결과 다운로드</h2>
+            <h2>4. 결과 다운로드</h2>
             <StatusPoller jobId={jobId} onDone={() => setStep(STEPS.DONE)} />
           </section>
         )}

@@ -26,6 +26,17 @@ export async function listJobs() {
 }
 
 /**
+ * GET /api/jobs/{jobId}/pages
+ * 페이지 목록 + 썸네일 URL 반환
+ * 썸네일 이미지는 <img src={page.thumbnail_url} /> 로 직접 사용
+ */
+export async function getPages(jobId) {
+  const res = await fetch(`${BASE_URL}/jobs/${jobId}/pages`);
+  if (!res.ok) throw new Error("페이지 목록 조회 실패");
+  return res.json(); // { job_id, page_count, pages: [{page_num, thumbnail_url, width, height}] }
+}
+
+/**
  * PDF 업로드
  *
  * S3 모드  : presigned URL로 PUT (Content-Type: application/pdf)

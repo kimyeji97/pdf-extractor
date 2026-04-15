@@ -102,6 +102,18 @@ def read_file(key: str) -> bytes:
     return (_BASE / key).read_bytes()
 
 
+# ── 썸네일 캐시 ───────────────────────────────────────────
+
+def get_thumbnail_cache(job_id: str, page_num: int) -> Optional[bytes]:
+    path = _BASE / "thumbnails" / job_id / f"page_{page_num}.png"
+    return path.read_bytes() if path.exists() else None
+
+
+def save_thumbnail_cache(job_id: str, page_num: int, data: bytes) -> None:
+    path = _ensure(_BASE / "thumbnails" / job_id / f"page_{page_num}.png")
+    path.write_bytes(data)
+
+
 # ── 키 헬퍼 (s3_service 와 동일) ─────────────────────────
 
 def original_key(job_id: str) -> str:

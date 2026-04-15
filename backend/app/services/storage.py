@@ -23,6 +23,8 @@ if settings.STORAGE_BACKEND == "local":
         upload_file,
         save_upload,
         read_file,
+        get_thumbnail_cache,
+        save_thumbnail_cache,
         original_key,
         result_key,
     )
@@ -35,12 +37,12 @@ else:
         list_jobs,
         download_file,
         upload_file,
+        read_file,
+        get_thumbnail_cache,
+        save_thumbnail_cache,
         original_key,
         result_key,
     )
-    # S3 모드에서는 save_upload / read_file 미사용 (presigned URL로 직접 처리)
+    # S3 모드에서는 save_upload 미사용 (presigned URL로 직접 처리)
     def save_upload(*a, **kw):
-        raise NotImplementedError("S3 모드에서는 presigned URL을 사용하세요.")
-
-    def read_file(*a, **kw):
         raise NotImplementedError("S3 모드에서는 presigned URL을 사용하세요.")

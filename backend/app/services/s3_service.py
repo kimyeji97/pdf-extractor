@@ -16,6 +16,7 @@ BUCKET = settings.S3_BUCKET_NAME
 STATUS_PREFIX = "status"
 UPLOADS_PREFIX = "uploads"
 RESULTS_PREFIX = "results"
+THUMBNAILS_PREFIX = "thumbnails"
 
 
 # ── Presigned URL ─────────────────────────────────────
@@ -86,6 +87,31 @@ def list_jobs() -> List[JobStatusFile]:
         reverse=True,
     )
     return jobs
+
+
+# ── 썸네일 캐시 ─────────────────────────────────────────
+
+def get_thumbnail_cache(job_id: str, page_num: int) -> Optional[bytes]:
+    key = f"{THUMBNAILS_PREFIX}/{job_id}/page_{page_num}.png"
+    try:
+        resp = s3.get_object(Bucket=BUCKET, Key=key)
+        return resp["Body"].read()
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            return None
+        raise
+
+
+def save_thumbnail_cache(job_id: str, page_num: int, data: bytes) -> None:
+    key = f"{THUMBNAILS_PREFIX}/{job_id}/page_{page_num}.png"
+    s3.put_object(Bucket=BUCKET, Key=key, Body=data, ContentType="image/png")
+
+
+# ── 파일 읽기 (bytes 반환) ────────────────────────────────
+
+def read_file(key: str) -> bytes:
+    resp = s3.get_object(Bucket=BUCKET, Key=key)
+    return resp["Body"].read()
 
 
 # ── PDF 파일 다운로드 (처리용) ─────────────────────────
