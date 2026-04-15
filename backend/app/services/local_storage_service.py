@@ -114,6 +114,32 @@ def save_thumbnail_cache(job_id: str, page_num: int, data: bytes) -> None:
     path.write_bytes(data)
 
 
+# ── 경계 캐시 ─────────────────────────────────────────────
+
+def get_boundaries_cache(job_id: str) -> Optional[list]:
+    """저장된 문항 경계 JSON을 읽어 dict 리스트로 반환. 없으면 None."""
+    path = _BASE / "boundaries" / f"{job_id}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_boundaries_cache(job_id: str, data: list) -> None:
+    """문항 경계 dict 리스트를 JSON으로 저장."""
+    path = _ensure(_BASE / "boundaries" / f"{job_id}.json")
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
+def get_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) -> Optional[bytes]:
+    path = _BASE / "thumbnails" / job_id / f"q_{page_num}_{question_num}.png"
+    return path.read_bytes() if path.exists() else None
+
+
+def save_question_thumbnail_cache(job_id: str, page_num: int, question_num: int, data: bytes) -> None:
+    path = _ensure(_BASE / "thumbnails" / job_id / f"q_{page_num}_{question_num}.png")
+    path.write_bytes(data)
+
+
 # ── 키 헬퍼 (s3_service 와 동일) ─────────────────────────
 
 def original_key(job_id: str) -> str:

@@ -85,3 +85,38 @@ export async function getStatus(jobId) {
   if (!res.ok) throw new Error("상태 조회 실패");
   return res.json();
 }
+
+/**
+ * GET /api/jobs/{jobId}/pages/{pageNum}/questions
+ * 해당 페이지의 감지된 문항 목록 반환
+ */
+export async function getPageQuestions(jobId, pageNum) {
+  const res = await fetch(`${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions`);
+  if (!res.ok) throw new Error("문항 목록 조회 실패");
+  return res.json();
+  // { job_id, page_num, questions: [{question_num, question_id, thumbnail_url, bbox, col}] }
+}
+
+/**
+ * POST /api/extract-v2
+ * @param {Array<{jobId: string, pageNum: number, questionNum: number}>} selections
+ */
+export async function startExtractV2(selections) {
+  const body = {
+    selections: selections.map((s) => ({
+      job_id: s.jobId,
+      page_num: s.pageNum,
+      question_num: s.questionNum,
+    })),
+  };
+  const res = await fetch(`${BASE_URL}/extract-v2`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "추출 요청 실패");
+  }
+  return res.json(); // { job_id, message }
+}

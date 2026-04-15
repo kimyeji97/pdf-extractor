@@ -16,6 +16,27 @@ def get_page_thumbnail(pdf_bytes: bytes, page_num: int, dpi: int = 96) -> bytes:
     return pix.tobytes("png")
 
 
+def get_question_thumbnail(
+    pdf_bytes: bytes,
+    page_index: int,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    dpi: int = 144,
+) -> bytes:
+    """
+    지정 페이지의 bbox 영역만 크롭하여 PNG bytes로 반환.
+    dpi 기본값 144: 페이지 썸네일(96dpi)보다 선명하게 문항 내용 표시.
+    """
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page = doc[page_index]
+    clip = fitz.Rect(x0, y0, x1, y1)
+    mat = fitz.Matrix(dpi / 72, dpi / 72)
+    pix = page.get_pixmap(matrix=mat, clip=clip)
+    return pix.tobytes("png")
+
+
 def get_page_info(pdf_bytes: bytes) -> list[dict]:
     """모든 페이지의 번호·width·height(pt 단위) 목록 반환"""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")

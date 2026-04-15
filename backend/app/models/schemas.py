@@ -53,3 +53,19 @@ class JobStatusFile(BaseModel):
     question_numbers: Optional[str] = None
     extracted_count: Optional[int] = None
     error: Optional[str] = None
+
+
+# ── v2 추출 요청 ──────────────────────────────────────────
+class SelectionItem(BaseModel):
+    job_id: str
+    page_num: int
+    question_num: int
+
+
+class ExtractV2Request(BaseModel):
+    selections: list[SelectionItem] = Field(..., min_length=1)
+
+
+class ExtractV2Response(BaseModel):
+    job_id: str
+    message: str = "추출 작업이 시작되었습니다."

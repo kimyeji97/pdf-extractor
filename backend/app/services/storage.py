@@ -25,6 +25,10 @@ if settings.STORAGE_BACKEND == "local":
         read_file,
         get_thumbnail_cache,
         save_thumbnail_cache,
+        get_boundaries_cache,
+        save_boundaries_cache,
+        get_question_thumbnail_cache,
+        save_question_thumbnail_cache,
         original_key,
         result_key,
     )
@@ -40,6 +44,10 @@ else:
         read_file,
         get_thumbnail_cache,
         save_thumbnail_cache,
+        get_boundaries_cache,
+        save_boundaries_cache,
+        get_question_thumbnail_cache,
+        save_question_thumbnail_cache,
         original_key,
         result_key,
     )

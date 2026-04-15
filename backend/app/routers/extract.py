@@ -1,14 +1,17 @@
 """
 POST /api/extract         - 문항 추출 작업 시작 (백그라운드)
 GET  /api/status/{job_id} - 작업 상태 조회
+POST /api/extract-v2      - 복수 선택 문항 추출 작업 시작 (백그라운드)
 """
 import tempfile
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from app.models.schemas import (
     ExtractRequest, ExtractResponse,
     StatusResponse, JobStatus, JobStatusFile,
+    SelectionItem, ExtractV2Request, ExtractV2Response,
 )
 from app.services import storage, pdf_service
 
@@ -86,3 +89,47 @@ def _process_extraction(job_id: str, status_file: JobStatusFile) -> None:
 
         finally:
             storage.put_status(status_file)
+
+
+# ── v2 추출 요청 ─────────────────────────────────────────────
+
+@router.post("/extract-v2", response_model=ExtractV2Response)
+def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
+    """
+    복수 job/page/question 선택으로부터 새 PDF 추출.
+    새 export_job_id를 생성하여 PENDING 상태로 저장 후 백그라운드 태스크 시작.
+    """
+    export_job_id = str(uuid.uuid4())
+
+    export_status = JobStatusFile(
+        job_id=export_job_id,
+        status=JobStatus.PENDING,
+    )
+    storage.put_status(export_status)
+
+    background_tasks.add_task(_process_extraction_v2, req.selections, export_job_id)
+    return ExtractV2Response(job_id=export_job_id)
+
+
+def _process_extraction_v2(selections: list[SelectionItem], export_job_id: str) -> None:
+    export_status = storage.get_status(export_job_id)
+    export_status.status = JobStatus.PROCESSING
+    storage.put_status(export_status)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            count = pdf_service.extract_questions_v2(
+                selections=selections,
+                export_job_id=export_job_id,
+                tmpdir=tmpdir,
+            )
+            export_status.status = JobStatus.DONE
+            export_status.result_key = storage.result_key(export_job_id)
+            export_status.extracted_count = count
+
+        except Exception as e:
+            export_status.status = JobStatus.FAILED
+            export_status.error = str(e)
+
+        finally:
+            storage.put_status(export_status)

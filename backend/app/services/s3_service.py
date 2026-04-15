@@ -17,6 +17,7 @@ STATUS_PREFIX = "status"
 UPLOADS_PREFIX = "uploads"
 RESULTS_PREFIX = "results"
 THUMBNAILS_PREFIX = "thumbnails"
+BOUNDARIES_PREFIX = "boundaries"
 
 
 # ── Presigned URL ─────────────────────────────────────
@@ -104,6 +105,47 @@ def get_thumbnail_cache(job_id: str, page_num: int) -> Optional[bytes]:
 
 def save_thumbnail_cache(job_id: str, page_num: int, data: bytes) -> None:
     key = f"{THUMBNAILS_PREFIX}/{job_id}/page_{page_num}.png"
+    s3.put_object(Bucket=BUCKET, Key=key, Body=data, ContentType="image/png")
+
+
+# ── 경계 캐시 ─────────────────────────────────────────────
+
+def get_boundaries_cache(job_id: str) -> Optional[list]:
+    """저장된 문항 경계 JSON을 읽어 dict 리스트로 반환. 없으면 None."""
+    key = f"{BOUNDARIES_PREFIX}/{job_id}.json"
+    try:
+        resp = s3.get_object(Bucket=BUCKET, Key=key)
+        return json.loads(resp["Body"].read())
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            return None
+        raise
+
+
+def save_boundaries_cache(job_id: str, data: list) -> None:
+    """문항 경계 dict 리스트를 JSON으로 저장."""
+    key = f"{BOUNDARIES_PREFIX}/{job_id}.json"
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=key,
+        Body=json.dumps(data, ensure_ascii=False).encode("utf-8"),
+        ContentType="application/json",
+    )
+
+
+def get_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) -> Optional[bytes]:
+    key = f"{THUMBNAILS_PREFIX}/{job_id}/q_{page_num}_{question_num}.png"
+    try:
+        resp = s3.get_object(Bucket=BUCKET, Key=key)
+        return resp["Body"].read()
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            return None
+        raise
+
+
+def save_question_thumbnail_cache(job_id: str, page_num: int, question_num: int, data: bytes) -> None:
+    key = f"{THUMBNAILS_PREFIX}/{job_id}/q_{page_num}_{question_num}.png"
     s3.put_object(Bucket=BUCKET, Key=key, Body=data, ContentType="image/png")
 
 
