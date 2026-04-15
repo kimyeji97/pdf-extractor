@@ -13,7 +13,7 @@ STORAGE_BACKEND=local 일 때 storage.py 팩토리가 이 모듈을 선택한다
 import json
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from app.core.config import settings
 from app.models.schemas import JobStatusFile, JobStatus
@@ -56,6 +56,27 @@ def get_status(job_id: str) -> Optional[JobStatusFile]:
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
     return JobStatusFile(**data)
+
+
+def list_jobs() -> List[JobStatusFile]:
+    """status/ 디렉토리의 모든 상태 파일을 읽어 uploaded_at 내림차순으로 반환"""
+    status_dir = _BASE / "status"
+    if not status_dir.exists():
+        return []
+
+    jobs: List[JobStatusFile] = []
+    for path in status_dir.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            jobs.append(JobStatusFile(**data))
+        except Exception:
+            continue
+
+    jobs.sort(
+        key=lambda j: j.uploaded_at.isoformat() if j.uploaded_at else "",
+        reverse=True,
+    )
+    return jobs
 
 
 # ── 파일 업/다운로드 ──────────────────────────────────────

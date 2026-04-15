@@ -2,29 +2,36 @@ import { useState } from "react";
 import UploadForm from "./components/UploadForm";
 import QuestionInput from "./components/QuestionInput";
 import StatusPoller from "./components/StatusPoller";
+import FileListPanel from "./components/FileListPanel";
 import { requestUploadUrl, uploadPdf, startExtract } from "./api/client";
 import "./App.css";
 
 /**
  * 전체 유저 플로우
- *   idle → uploading → ready → processing → done / error
+ *   file-list → idle → uploading → ready → processing → done / error
  */
 const STEPS = {
+  FILE_LIST: "file-list",   // 앱 진입 기본 화면
   IDLE: "idle",
-  UPLOADING: "uploading",  // S3 업로드 중
-  READY: "ready",          // 업로드 완료, 추출 대기
+  UPLOADING: "uploading",   // S3 업로드 중
+  READY: "ready",           // 업로드 완료, 추출 대기
   PROCESSING: "processing", // 추출 작업 진행 중
   DONE: "done",
   ERROR: "error",
 };
 
 export default function App() {
-  const [step, setStep] = useState(STEPS.IDLE);
+  const [step, setStep] = useState(STEPS.FILE_LIST);
   const [file, setFile] = useState(null);
   const [questions, setQuestions] = useState("");
   const [jobId, setJobId] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // ── 파일 목록에서 job 선택 ──────────────────────────
+  const handleJobSelect = (selectedJobId) => {
+    setJobId(selectedJobId);
+    setStep(STEPS.READY);
+  };
 
   // ── Step 1: 파일 선택 후 S3 업로드 ─────────────────
   const handleFileSelected = async (selectedFile) => {
@@ -33,7 +40,7 @@ export default function App() {
     setErrorMsg("");
 
     try {
-      const { job_id, upload_url } = await requestUploadUrl();
+      const { job_id, upload_url } = await requestUploadUrl(selectedFile.name);
       setJobId(job_id);
       await uploadPdf(upload_url, selectedFile);
       setStep(STEPS.READY);
@@ -61,7 +68,7 @@ export default function App() {
   };
 
   const handleReset = () => {
-    setStep(STEPS.IDLE);
+    setStep(STEPS.FILE_LIST);
     setFile(null);
     setQuestions("");
     setJobId(null);
@@ -78,15 +85,28 @@ export default function App() {
       </header>
 
       <main>
-        {/* 업로드 영역 */}
-        <section>
-          <h2>1. PDF 업로드</h2>
-          <UploadForm onFileSelected={handleFileSelected} disabled={isProcessing} />
-          {step === STEPS.UPLOADING && <p className="info-msg">S3에 업로드 중...</p>}
-          {step !== STEPS.IDLE && step !== STEPS.UPLOADING && (
-            <p className="success-msg">✓ 업로드 완료</p>
-          )}
-        </section>
+        {/* 파일 목록 */}
+        {step === STEPS.FILE_LIST && (
+          <section>
+            <FileListPanel onSelect={handleJobSelect} />
+            <div style={{ marginTop: 16 }}>
+              <p style={{ fontSize: 13, color: "#888" }}>또는 새 PDF를 업로드하세요</p>
+              <UploadForm onFileSelected={handleFileSelected} disabled={false} />
+            </div>
+          </section>
+        )}
+
+        {/* 업로드 영역 (file-list 이후 단계) */}
+        {step !== STEPS.FILE_LIST && (
+          <section>
+            <h2>1. PDF 업로드</h2>
+            <UploadForm onFileSelected={handleFileSelected} disabled={isProcessing} />
+            {step === STEPS.UPLOADING && <p className="info-msg">S3에 업로드 중...</p>}
+            {step !== STEPS.UPLOADING && (
+              <p className="success-msg">✓ 업로드 완료</p>
+            )}
+          </section>
+        )}
 
         {/* 문항 번호 입력 */}
         {(step === STEPS.READY || step === STEPS.PROCESSING || step === STEPS.DONE) && (

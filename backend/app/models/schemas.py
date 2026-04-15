@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
+from datetime import datetime
 from enum import Enum
 
 
@@ -45,6 +46,8 @@ class StatusResponse(BaseModel):
 class JobStatusFile(BaseModel):
     job_id: str
     status: JobStatus
+    filename: Optional[str] = None       # 업로드 시 원본 파일명
+    uploaded_at: Optional[datetime] = None  # 업로드 시각
     original_key: Optional[str] = None   # S3 key of uploaded PDF
     result_key: Optional[str] = None     # S3 key of result PDF
     question_numbers: Optional[str] = None

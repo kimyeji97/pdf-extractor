@@ -4,8 +4,11 @@ POST /api/upload/direct   - 파일 직접 수신    (로컬 모드 전용)
 GET  /api/files/{key:path} - 파일 서빙        (로컬 모드 전용)
 """
 import uuid
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import Response
+from pydantic import BaseModel
+from typing import Optional
 
 from app.core.config import settings
 from app.models.schemas import UploadResponse, JobStatusFile, JobStatus
@@ -14,10 +17,14 @@ from app.services import storage
 router = APIRouter()
 
 
+class UploadRequest(BaseModel):
+    filename: Optional[str] = None
+
+
 # ── presigned URL 요청 (모드 공통) ───────────────────────
 
 @router.post("/upload", response_model=UploadResponse)
-def request_upload():
+def request_upload(body: UploadRequest = UploadRequest()):
     """
     S3 모드: 클라이언트가 presigned URL로 직접 S3에 PUT
     로컬 모드: /api/upload/direct 엔드포인트 URL 반환 (multipart POST)
@@ -34,6 +41,8 @@ def request_upload():
         JobStatusFile(
             job_id=job_id,
             status=JobStatus.PENDING,
+            filename=body.filename or "unknown.pdf",
+            uploaded_at=datetime.now(timezone.utc),
             original_key=key,
         )
     )

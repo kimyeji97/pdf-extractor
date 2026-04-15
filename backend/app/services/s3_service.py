@@ -1,5 +1,5 @@
 import json
-from typing import Optional
+from typing import Optional, List
 import boto3
 from botocore.exceptions import ClientError
 from app.core.config import settings
@@ -60,6 +60,32 @@ def get_status(job_id: str) -> Optional[JobStatusFile]:
         if e.response["Error"]["Code"] == "NoSuchKey":
             return None
         raise
+
+
+def list_jobs() -> List[JobStatusFile]:
+    """S3 status/ 접두사 아래 모든 상태 JSON을 읽어 uploaded_at 내림차순으로 반환"""
+    paginator = s3.get_paginator("list_objects_v2")
+    keys = []
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=f"{STATUS_PREFIX}/"):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key.endswith(".json"):
+                keys.append(key)
+
+    jobs: List[JobStatusFile] = []
+    for key in keys:
+        try:
+            resp = s3.get_object(Bucket=BUCKET, Key=key)
+            data = json.loads(resp["Body"].read())
+            jobs.append(JobStatusFile(**data))
+        except Exception:
+            continue
+
+    jobs.sort(
+        key=lambda j: j.uploaded_at.isoformat() if j.uploaded_at else "",
+        reverse=True,
+    )
+    return jobs
 
 
 # ── PDF 파일 다운로드 (처리용) ─────────────────────────

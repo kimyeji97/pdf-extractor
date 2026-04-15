@@ -3,11 +3,26 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api
 /**
  * POST /api/upload
  * presigned URL(또는 로컬 direct upload URL)과 job_id 반환
+ * @param {string} [filename] - 원본 파일명 (선택)
  */
-export async function requestUploadUrl() {
-  const res = await fetch(`${BASE_URL}/upload`, { method: "POST" });
+export async function requestUploadUrl(filename) {
+  const res = await fetch(`${BASE_URL}/upload`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: filename || null }),
+  });
   if (!res.ok) throw new Error("업로드 URL 요청 실패");
   return res.json(); // { job_id, upload_url }
+}
+
+/**
+ * GET /api/jobs
+ * 업로드된 파일 목록 반환
+ */
+export async function listJobs() {
+  const res = await fetch(`${BASE_URL}/jobs`);
+  if (!res.ok) throw new Error("파일 목록 조회 실패");
+  return res.json(); // { jobs: [...] }
 }
 
 /**
