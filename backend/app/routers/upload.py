@@ -3,16 +3,20 @@ POST /api/upload          - presigned URL 요청 (S3 모드 / 로컬 모드 공�
 POST /api/upload/direct   - 파일 직접 수신    (로컬 모드 전용)
 GET  /api/files/{key:path} - 파일 서빙        (로컬 모드 전용)
 """
+import dataclasses
+import tempfile
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from pathlib import Path
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional
 
 from app.core.config import settings
-from app.models.schemas import UploadResponse, JobStatusFile, JobStatus
+from app.models.schemas import BoundariesStatus, UploadResponse, JobStatusFile, JobStatus
 from app.services import storage
+from app.utils.question_parser import detect_question_boundaries
 
 router = APIRouter()
 
@@ -52,7 +56,7 @@ def request_upload(body: UploadRequest = UploadRequest()):
 # ── 직접 업로드 (로컬 모드 전용) ─────────────────────────
 
 @router.post("/upload/direct")
-async def direct_upload(key: str, file: UploadFile = File(...)):
+async def direct_upload(key: str, file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()):
     """
     로컬 개발용. generate_upload_presigned_url이 반환한 URL로
     프론트엔드가 multipart/form-data POST를 보낸다.
@@ -65,7 +69,50 @@ async def direct_upload(key: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="파일 크기 초과 (최대 10MB)")
 
     storage.save_upload(content, key)
+
+    # key 형태: "uploads/{job_id}/original.pdf"
+    job_id = key.split("/")[1]
+    background_tasks.add_task(_trigger_boundary_detection, job_id)
+
     return {"message": "업로드 완료", "key": key}
+
+
+def _trigger_boundary_detection(job_id: str) -> None:
+    """업로드 완료 직후 백그라운드 실행 — 문항 경계 감지 후 상태 업데이트"""
+    status_file = storage.get_status(job_id)
+    if status_file is None:
+        return
+
+    status_file.boundaries_status = BoundariesStatus.PROCESSING
+    storage.put_status(status_file)
+
+    try:
+        pdf_bytes = storage.read_file(storage.original_key(job_id))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = str(Path(tmpdir) / "original.pdf")
+            Path(pdf_path).write_bytes(pdf_bytes)
+            boundaries = detect_question_boundaries(pdf_path)
+
+        storage.save_boundaries_cache(
+            job_id, [dataclasses.asdict(b) for b in boundaries]
+        )
+
+        questions_per_page: dict[str, int] = {}
+        for b in boundaries:
+            k = str(b.page_index)
+            questions_per_page[k] = questions_per_page.get(k, 0) + 1
+
+        status_file.boundaries_status = BoundariesStatus.DONE
+        status_file.total_question_count = len(boundaries)
+        status_file.questions_per_page = questions_per_page
+
+    except Exception as e:
+        status_file.boundaries_status = BoundariesStatus.FAILED
+        status_file.error = str(e)
+
+    finally:
+        storage.put_status(status_file)
 
 
 # ── 파일 서빙 (로컬 모드 전용) ────────────────────────────

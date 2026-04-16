@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
-from app.models.schemas import JobStatus
+from app.models.schemas import BoundariesStatus, JobStatus, JobType
 from app.services import storage
 from app.services import thumbnail_service
 from app.utils.question_parser import detect_question_boundaries, QuestionBoundary
@@ -31,27 +31,37 @@ class JobSummary(BaseModel):
     status: JobStatus
     uploaded_at: Optional[datetime] = None
     page_count: Optional[int] = None
+    job_type: JobType = JobType.SOURCE
+    boundaries_status: Optional[BoundariesStatus] = None
+    total_question_count: Optional[int] = None
 
 
 class JobListResponse(BaseModel):
-    jobs: List[JobSummary]
+    source_jobs: List[JobSummary]
+    export_jobs: List[JobSummary]
 
 
 @router.get("/jobs", response_model=JobListResponse)
 def list_jobs():
-    """업로드된 PDF 파일 목록을 최신 순으로 반환"""
+    """업로드된 PDF 파일 목록을 최신 순으로 반환 (원본/결과 분리)"""
     job_files = storage.list_jobs()
-    jobs = [
-        JobSummary(
+
+    def to_summary(j) -> JobSummary:
+        return JobSummary(
             job_id=j.job_id,
             filename=j.filename,
             status=j.status,
             uploaded_at=j.uploaded_at,
             page_count=None,
+            job_type=j.job_type,
+            boundaries_status=j.boundaries_status,
+            total_question_count=j.total_question_count,
         )
-        for j in job_files
-    ]
-    return JobListResponse(jobs=jobs)
+
+    source_jobs = [to_summary(j) for j in job_files if j.job_type == JobType.SOURCE]
+    export_jobs = [to_summary(j) for j in job_files if j.job_type == JobType.EXPORT]
+
+    return JobListResponse(source_jobs=source_jobs, export_jobs=export_jobs)
 
 
 # ── 페이지 목록 ───────────────────────────────────────────
@@ -61,6 +71,7 @@ class PageInfo(BaseModel):
     thumbnail_url: str
     width: float
     height: float
+    question_count: Optional[int] = None
 
 
 class PageListResponse(BaseModel):
@@ -79,12 +90,15 @@ def list_pages(job_id: str):
     pdf_bytes = storage.read_file(storage.original_key(job_id))
     page_infos = thumbnail_service.get_page_info(pdf_bytes)
 
+    qpp = job.questions_per_page or {}   # { "0": 5, "1": 3, ... }
+
     pages = [
         PageInfo(
             page_num=p["page_num"],
             thumbnail_url=f"/api/jobs/{job_id}/pages/{p['page_num']}/thumbnail",
             width=p["width"],
             height=p["height"],
+            question_count=qpp.get(str(p["page_num"])),
         )
         for p in page_infos
     ]

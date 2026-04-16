@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from app.models.schemas import (
     ExtractRequest, ExtractResponse,
-    StatusResponse, JobStatus, JobStatusFile,
+    StatusResponse, JobStatus, JobStatusFile, JobType,
     SelectionItem, ExtractV2Request, ExtractV2Response,
 )
 from app.services import storage, pdf_service
@@ -104,6 +104,7 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
     export_status = JobStatusFile(
         job_id=export_job_id,
         status=JobStatus.PENDING,
+        job_type=JobType.EXPORT,
     )
     storage.put_status(export_status)
 

@@ -81,6 +81,9 @@ export default function PageBrowser({ jobId, onPageSelect, onBack }) {
                   )}
                 </div>
                 <span style={styles.pageLabel}>페이지 {page.page_num + 1}</span>
+                <span style={styles.questionCountLabel}>
+                  {page.question_count == null ? "—" : `${page.question_count}문항`}
+                </span>
               </div>
             ))}
       </div>
@@ -164,6 +167,10 @@ const styles = {
   pageLabel: {
     fontSize: 12,
     color: "#666",
+  },
+  questionCountLabel: {
+    fontSize: 11,
+    color: "#999",
   },
   skeleton: {
     borderRadius: 6,

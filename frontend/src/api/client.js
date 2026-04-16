@@ -22,7 +22,7 @@ export async function requestUploadUrl(filename) {
 export async function listJobs() {
   const res = await fetch(`${BASE_URL}/jobs`);
   if (!res.ok) throw new Error("파일 목록 조회 실패");
-  return res.json(); // { jobs: [...] }
+  return res.json(); // { source_jobs: [...], export_jobs: [...] }
 }
 
 /**

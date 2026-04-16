@@ -11,6 +11,18 @@ class JobStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class JobType(str, Enum):
+    SOURCE = "SOURCE"   # 사용자가 업로드한 원본 PDF
+    EXPORT = "EXPORT"   # extract-v2로 생성된 결과 PDF
+
+
+class BoundariesStatus(str, Enum):
+    PENDING    = "PENDING"     # 감지 대기 중
+    PROCESSING = "PROCESSING"  # 감지 진행 중
+    DONE       = "DONE"        # 감지 완료
+    FAILED     = "FAILED"      # 감지 실패
+
+
 # ── 업로드 ──────────────────────────────────────────
 class UploadResponse(BaseModel):
     job_id: str
@@ -53,6 +65,11 @@ class JobStatusFile(BaseModel):
     question_numbers: Optional[str] = None
     extracted_count: Optional[int] = None
     error: Optional[str] = None
+    # ── 신규 필드 ───────────────────────────────
+    job_type: JobType = JobType.SOURCE
+    boundaries_status: Optional[BoundariesStatus] = None
+    total_question_count: Optional[int] = None
+    questions_per_page: Optional[dict] = None   # { "0": 5, "1": 3, ... }
 
 
 # ── v2 추출 요청 ──────────────────────────────────────────

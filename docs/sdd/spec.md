@@ -69,6 +69,27 @@ REQ-02, REQ-03의 파일/페이지 선택을 바꿔가며 문항을 추가 선�
 - 문항 순서는 바스켓 내 표기 순서를 따른다.
 - 기존 `/api/extract` 방식(번호 텍스트 입력)과 **별개**로 동작한다.
 
+### REQ-07 문항 추출 현황 비동기 조회
+
+업로드 직후 백그라운드에서 문항 경계 감지가 자동 시작되며, 파일 목록에서 진행 상태를 확인할 수 있다.
+
+- 조회 시점: 사용자가 명시적으로 새로고침할 때 (`GET /api/jobs` 재호출)
+- 파일별로 감지 상태(대기 / 진행 중 / 완료 / 실패) 및 총 감지 문항 수가 표시된다.
+
+### REQ-08 업로드 파일 / 생성 파일 분리 표시
+
+파일 목록에서 사용자가 업로드한 원본 파일과 추출로 생성된 결과 파일이 별도 섹션으로 분리된다.
+
+- 원본 파일 섹션: 업로드된 PDF 목록
+- 생성 파일 섹션: `extract-v2`로 만들어진 결과 PDF 목록
+
+### REQ-09 페이지별 문항 수 표시
+
+페이지 목록 브라우징 화면에서 각 페이지마다 감지된 문항 수를 표시한다.
+
+- 감지 완료 페이지: 문항 수 숫자 표시
+- 감지 미완료 페이지: `—` 표시
+
 ---
 
 ## 3. 기능 경계 및 plan 문서 매핑
@@ -79,6 +100,7 @@ REQ-02, REQ-03의 파일/페이지 선택을 바꿔가며 문항을 추가 선�
 | REQ-02 페이지 브라우징 | `GET /api/jobs/{id}/pages`<br>`GET /api/jobs/{id}/pages/{n}/thumbnail` | `PageBrowser` | [plan-page-preview.md](file-browser/plan-page-preview.md) |
 | REQ-03~05 문항 선택 | `GET /api/jobs/{id}/pages/{n}/questions`<br>`GET /api/jobs/{id}/pages/{n}/questions/{q}/thumbnail` | `QuestionPicker`<br>`SelectionBasket` | [plan-question-select.md](question-selector/plan-question-select.md) |
 | REQ-06 PDF 내보내기 | `POST /api/extract-v2` | `ExportButton` | [plan-pdf-export.md](export/plan-pdf-export.md) |
+| REQ-07~09 추출 현황 추적 | `GET /api/jobs` (응답 확장)<br>`GET /api/jobs/{id}/pages` (응답 확장) | `FileListPanel` (개선)<br>`PageBrowser` (개선) | [plan-extraction-tracking.md](file-browser/plan-extraction-tracking.md) |
 
 ---
 
