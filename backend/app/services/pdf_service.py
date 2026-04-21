@@ -20,6 +20,7 @@ from pathlib import Path
 from app.utils.question_parser import (
     parse_question_numbers,
     detect_question_boundaries,
+    detect_question_boundaries_adaptive,
     map_questions_to_regions,
     CropRegion,
     QuestionBoundary,
@@ -52,18 +53,41 @@ def extract_questions(
     """
     requested = parse_question_numbers(question_numbers_raw)
 
-    # ── Step 1: 좌표 기반 문항 경계 감지 (2단 레이아웃 지원) ──
+    # ── Step 1: 정규식 기반 문항 경계 감지 (단일 패스) ────────
     boundaries = detect_question_boundaries(input_pdf_path)
     detected_nums = {b.number for b in boundaries}
     missing = [n for n in requested if n not in detected_nums]
 
-    # ── Step 2: 절반 이상 누락이면 OCR fallback ──────────────
+    # ── Step 2: 연속 증가 수열 방식 (새 양식 대응) ────────────
     if len(missing) > len(requested) / 2:
-        ocr_boundaries = textract_service.extract_boundaries(input_pdf_path)
+        adaptive_boundaries = detect_question_boundaries_adaptive(input_pdf_path)
+        if adaptive_boundaries:
+            adaptive_detected = {b.number for b in adaptive_boundaries}
+            adaptive_missing = [n for n in requested if n not in adaptive_detected]
+            if len(adaptive_missing) < len(missing):
+                boundaries = adaptive_boundaries
+                missing = adaptive_missing
+
+    # ── Step 3: 절반 이상 여전히 누락이면 OCR fallback ────────
+    if len(missing) > len(requested) / 2:
+        # 감지된 문항 위치 기반으로 누락 구간 페이지만 OCR 처리
+        import fitz as _fitz
+        _doc = _fitz.open(input_pdf_path)
+        total_pages = len(_doc)
+        _doc.close()
+        ocr_pages = _estimate_missing_page_ranges(
+            detected={b.number: b.page_index for b in boundaries},
+            missing=missing,
+            total_pages=total_pages,
+        )
+        ocr_boundaries = textract_service.extract_boundaries(
+            input_pdf_path,
+            page_indices=ocr_pages if ocr_pages else None,
+        )
         if ocr_boundaries:
             boundaries = ocr_boundaries
 
-    # ── Step 3: 문항 → CropRegion 매핑 ──────────────────────
+    # ── Step 4: 문항 → CropRegion 매핑 ──────────────────────
     q_to_regions = map_questions_to_regions(boundaries, requested)
 
     if not q_to_regions:
@@ -72,8 +96,7 @@ def extract_questions(
             f"감지된 문항 번호: {sorted(detected_nums)}"
         )
 
-    # ── Step 4: CropRegion → 새 PDF 빌드 ────────────────────
-    # 문항 번호 순서대로 region 정렬
+    # ── Step 5: CropRegion → 새 PDF 빌드 ────────────────────
     ordered_regions: list[CropRegion] = []
     for q_num in sorted(q_to_regions.keys()):
         ordered_regions.extend(q_to_regions[q_num])
@@ -81,6 +104,48 @@ def extract_questions(
     _build_pdf_from_regions(input_pdf_path, ordered_regions, output_pdf_path)
 
     return len(q_to_regions)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# OCR 대상 페이지 추정 헬퍼
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _estimate_missing_page_ranges(
+    detected: dict[int, int],   # {question_number: page_index}
+    missing: list[int],
+    total_pages: int,
+    margin: int = 2,
+) -> list[int]:
+    """
+    누락된 문항이 있을 법한 페이지 인덱스 목록을 반환한다.
+
+    전략:
+      - 각 누락 문항의 앞뒤 감지된 문항 페이지를 기준으로 범위 추정
+      - 앞뒤로 margin 페이지 여유 추가
+      - 감지된 문항이 없으면 전체 페이지 반환
+    """
+    if not detected:
+        return list(range(total_pages))
+
+    sorted_detected = sorted(detected.items())  # [(num, page_idx), ...]
+    pages: set[int] = set()
+
+    for q_num in missing:
+        # q_num 바로 앞에 감지된 문항의 페이지
+        prev_page = next(
+            (p for n, p in reversed(sorted_detected) if n < q_num),
+            0,
+        )
+        # q_num 바로 뒤에 감지된 문항의 페이지
+        next_page = next(
+            (p for n, p in sorted_detected if n > q_num),
+            total_pages - 1,
+        )
+        start = max(0, prev_page - margin)
+        end = min(total_pages - 1, next_page + margin)
+        pages.update(range(start, end + 1))
+
+    return sorted(pages)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

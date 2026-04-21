@@ -10,13 +10,14 @@
   - 읽기 순서: 좌 컬럼 상→하, 우 컬럼 상→하
   - Y좌표 클리핑: 같은 페이지 내 다중 문항 분리
 
-확장성:
-  _PIPELINE 목록에 새 감지기(ML, Vision LLM 등)를 추가하면
-  heuristic 실패 시 자동 fallback 됩니다.
+감지 파이프라인:
+  1. 정규식 방식 (기존): 11개 패턴 + 폰트 크기 필터, 1패스로 통합
+  2. 연속 증가 수열 방식 (신규): 형식과 무관하게 +1씩 증가하는 숫자 자동 탐지
+  3. OCR fallback (pdf_service.py 레벨에서 처리)
 """
 
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -173,174 +174,130 @@ def _detect_column_split(words: list[dict], page_width: float) -> float:
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 5. 핵심: 좌표 기반 문항 경계 감지
+# 5. 핵심: 좌표 기반 문항 경계 감지 (단일 패스 통합)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def _compute_global_font_threshold(pdf_path: str) -> float:
-    """
-    1패스: PDF 전체에서 문항 번호 후보의 폰트 크기 분포를 분석하여
-    글로벌 최소 크기 임계값을 반환한다.
-
-    전략:
-      - 헤더/푸터 영역(상단 11%, 하단 9%) 제외 후 분석
-        → 9%가 아닌 11%로 섹션 타이틀(34pt, y≈80) 제외
-      - visible 글자(size > 1.0)만 대상
-      - 가장 많이 등장하는 "큰 폰트 클러스터"를 지배적 문항 폰트로 인정
-        → 높이 10pt 이상의 사이즈 중 출현 빈도 최대 → 그 사이즈의 95%를 임계값으로
-
-    Returns:
-        글로벌 폰트 임계값. 정보가 없으면 0.0 (필터 비적용).
-    """
-    from collections import Counter
-
-    size_counts: Counter[float] = Counter()
-
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            page_h = page.height
-            header_y = page_h * 0.11   # 11%: 섹션 타이틀 제외
-            footer_y = page_h * 0.91
-
-            words = page.extract_words(
-                keep_blank_chars=False,
-                x_tolerance=3,
-                y_tolerance=3,
-                extra_attrs=["size"],
-            )
-            for w in words:
-                if not (header_y <= w["top"] <= footer_y):
-                    continue
-                size = w.get("size", 0)
-                if size <= 1.0:
-                    continue
-                if _extract_question_number(w["text"]) is not None:
-                    # 10pt 이상만 집계 (본문 폰트 이상의 크기)
-                    if size >= 10.0:
-                        size_counts[round(size, 1)] += 1
-
-    if not size_counts:
-        return 0.0
-
-    # 13pt 이상 중에서 가장 빈도 높은 크기 = 지배적 문항 폰트
-    # (10~12pt는 본문/주석 크기로 답안표·페이지번호가 많이 포함됨)
-    large_counts = {sz: cnt for sz, cnt in size_counts.items() if sz >= 13.0}
-
-    if large_counts:
-        dominant_size = max(large_counts, key=large_counts.get)
-    else:
-        # 13pt 이상 없으면 전체 최빈값 사용
-        dominant_size = size_counts.most_common(1)[0][0]
-
-    # 지배적 크기의 92%를 임계값으로
-    # (같은 번호가 1~2pt 다른 크기로 렌더링될 경우 허용)
-    return dominant_size * 0.92
-
 
 def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     """
     pdfplumber의 extract_words()로 단어별 좌표를 추출하고
     2단 레이아웃(좌→우, 상→하)을 고려하여 문항 경계를 감지한다.
 
+    단일 패스: PDF를 한 번만 열어 폰트 임계값 계산과 경계 감지를 동시에 수행.
+
     처리 순서:
-      1. 각 페이지에서 단어 + 좌표 + 폰트 크기 추출
-      2. 헤더/푸터 영역 제외 (상단 9%, 하단 9%)
-      3. 적응형 폰트 필터: 페이지별 최대 폰트의 90% 이상만 후보로 허용
-         → 실제 문항 번호(large font)와 답안표/페이지번호(small font) 구분
-      4. X좌표 히스토그램으로 컬럼 분할점 자동 감지
-      5. 컬럼별 상→하 순서로 문항 번호 패턴 매칭
-      6. y_bottom 보정 (다음 문항 y_top 또는 페이지 높이)
-      7. 중복 제거 (같은 번호 → 첫 번째 출현만 유지)
+      1. 1패스로 전체 페이지를 순회하며 단어+좌표+폰트 크기 수집
+      2. 폰트 임계값 계산 (13pt 이상 최빈 크기의 92%)
+      3. 동일 데이터에서 헤더/푸터 제거 → 컬럼 감지 → 폰트 필터 → 정규식 매칭
+      4. y_bottom 보정 (다음 문항 y_top 또는 페이지 높이)
+      5. 중복 제거 (다중문항 페이지 우선)
 
     Returns:
         문항 번호 오름차순으로 정렬된 QuestionBoundary 리스트
     """
-    # ── 1패스: 글로벌 폰트 임계값 계산 ──────────────────
-    global_font_threshold = _compute_global_font_threshold(pdf_path)
-
     raw: list[QuestionBoundary] = []
+    # 페이지별 단어를 저장해 2단계 처리에 재사용 (PDF를 한 번만 열기 위함)
+    pages_data: list[tuple[float, float, list[dict]]] = []  # (page_w, page_h, words)
+    size_counts: Counter[float] = Counter()
 
     with pdfplumber.open(pdf_path) as pdf:
-        page_heights = [p.height for p in pdf.pages]
-
-        for page_idx, page in enumerate(pdf.pages):
+        for page in pdf.pages:
             page_w = page.width
             page_h = page.height
-
-            # ── 폰트 크기 포함 추출 ────────────────────
             words = page.extract_words(
                 keep_blank_chars=False,
                 x_tolerance=3,
                 y_tolerance=3,
                 extra_attrs=["size"],
             )
-            if not words:
-                continue
+            pages_data.append((page_w, page_h, words))
 
-            # ── 헤더/푸터 제거 (상단 11%, 하단 9%) ─────
-            # 11%: 섹션 타이틀 헤더(y≈80, 9.7%) 제외
+            # 폰트 임계값 계산용 집계 (헤더/푸터 제외)
             header_y = page_h * 0.11
             footer_y = page_h * 0.91
-            content_words = [
-                w for w in words
-                if header_y <= w["top"] <= footer_y
-            ]
-            if not content_words:
+            for w in words:
+                if not (header_y <= w["top"] <= footer_y):
+                    continue
+                size = w.get("size", 0)
+                if size <= 1.0:
+                    continue
+                if _extract_question_number(w["text"]) is not None and size >= 10.0:
+                    size_counts[round(size, 1)] += 1
+
+    # 글로벌 폰트 임계값 결정
+    global_font_threshold = _calc_font_threshold(size_counts)
+
+    # 페이지별 경계 감지 (저장된 데이터 재사용)
+    for page_idx, (page_w, page_h, words) in enumerate(pages_data):
+        if not words:
+            continue
+
+        header_y = page_h * 0.11
+        footer_y = page_h * 0.91
+        content_words = [
+            w for w in words
+            if header_y <= w["top"] <= footer_y
+        ]
+        if not content_words:
+            continue
+
+        split_x = _detect_column_split(content_words, page_w)
+
+        left_words  = [w for w in content_words if w["x0"] <  split_x]
+        right_words = [w for w in content_words if w["x0"] >= split_x]
+
+        col_x_bounds = {
+            0: (
+                min((w["x0"] for w in left_words),  default=0.0),
+                split_x,
+            ),
+            1: (
+                split_x,
+                max((w["x1"] for w in right_words), default=page_w),
+            ),
+        }
+
+        for col_idx, col_words in [(0, left_words), (1, right_words)]:
+            if not col_words:
                 continue
 
-            min_size_threshold = global_font_threshold
+            cx0, cx1 = col_x_bounds[col_idx]
+            sorted_words = sorted(col_words, key=lambda w: w["top"])
 
-            # ── 컬럼 분할 ──────────────────────────────
-            split_x = _detect_column_split(content_words, page_w)
-
-            left_words  = [w for w in content_words if w["x0"] <  split_x]
-            right_words = [w for w in content_words if w["x0"] >= split_x]
-
-            col_x_bounds = {
-                0: (
-                    min((w["x0"] for w in left_words),  default=0.0),
-                    split_x,
-                ),
-                1: (
-                    split_x,
-                    max((w["x1"] for w in right_words), default=page_w),
-                ),
-            }
-
-            # ── 컬럼별 문항 번호 감지 (좌→우, 각 컬럼 내 상→하) ──
-            for col_idx, col_words in [(0, left_words), (1, right_words)]:
-                if not col_words:
+            for w in sorted_words:
+                w_size = w.get("size", 0)
+                if w_size < 1.0:
+                    continue
+                if global_font_threshold > 0 and w_size < global_font_threshold:
                     continue
 
-                cx0, cx1 = col_x_bounds[col_idx]
-                sorted_words = sorted(col_words, key=lambda w: w["top"])
+                q_num = _extract_question_number(w["text"])
+                if q_num is not None:
+                    raw.append(QuestionBoundary(
+                        number=q_num,
+                        page_index=page_idx,
+                        y_top=w["top"],
+                        y_bottom=page_h,
+                        col=col_idx,
+                        col_x0=cx0,
+                        col_x1=cx1,
+                    ))
 
-                for w in sorted_words:
-                    # 폰트 크기 필터
-                    w_size = w.get("size", 0)
-                    if w_size < 1.0:
-                        continue  # invisible 문자
-                    if min_size_threshold > 0 and w_size < min_size_threshold:
-                        continue  # 작은 폰트 (답안표, 페이지번호 등)
-
-                    q_num = _extract_question_number(w["text"])
-                    if q_num is not None:
-                        raw.append(QuestionBoundary(
-                            number=q_num,
-                            page_index=page_idx,
-                            y_top=w["top"],
-                            y_bottom=page_h,   # 임시값
-                            col=col_idx,
-                            col_x0=cx0,
-                            col_x1=cx1,
-                        ))
-
-    # ── y_bottom 채우기 ────────────────────────────────
+    page_heights = [ph for _, ph, _ in pages_data]
     _fill_y_bottom(raw, page_heights)
-
-    # ── 중복 제거 (다중문항 페이지 우선 선택) ────────
     unique = _deduplicate_boundaries(raw)
-
     return sorted(unique, key=lambda b: b.number)
+
+
+def _calc_font_threshold(size_counts: Counter) -> float:
+    """집계된 폰트 크기 카운터에서 임계값 계산."""
+    if not size_counts:
+        return 0.0
+    large_counts = {sz: cnt for sz, cnt in size_counts.items() if sz >= 13.0}
+    if large_counts:
+        dominant_size = max(large_counts, key=large_counts.get)
+    else:
+        dominant_size = size_counts.most_common(1)[0][0]
+    return dominant_size * 0.92
 
 
 def _deduplicate_boundaries(
@@ -351,27 +308,20 @@ def _deduplicate_boundaries(
 
     선택 전략 (우선순위 순):
       1. "다중문항 페이지" 우선 — 해당 페이지에 2개 이상의 문항 번호가 있으면 실제 문제 페이지일 확률이 높음
-         (표지/TOC 페이지는 보통 문항 번호가 하나뿐)
       2. 같은 우선순위면 먼저 등장한 것 선택 (페이지 순, 컬럼 순, y 순)
     """
-    # 페이지별 감지된 문항 번호 수 집계
     page_q_count: dict[int, int] = defaultdict(int)
     for b in raw:
         page_q_count[b.page_index] += 1
 
-    # 각 번호의 후보들을 모아 최선의 것을 선택
-    from collections import defaultdict as _dd
-    candidates: dict[int, list[QuestionBoundary]] = _dd(list)
+    candidates: dict[int, list[QuestionBoundary]] = defaultdict(list)
     for b in raw:
         candidates[b.number].append(b)
 
     unique: list[QuestionBoundary] = []
     for q_num, cands in candidates.items():
-        # 다중문항 페이지(>=2개)에 있는 후보 우선
         multi_page_cands = [c for c in cands if page_q_count[c.page_index] >= 2]
         pool = multi_page_cands if multi_page_cands else cands
-
-        # pool 내에서 첫 등장 (페이지 오름차순 → 컬럼 오름차순 → y 오름차순)
         best = sorted(pool, key=lambda b: (b.page_index, b.col, b.y_top))[0]
         unique.append(best)
 
@@ -398,7 +348,152 @@ def _fill_y_bottom(
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 6. 문항 → CropRegion 매핑
+# 6. 연속 증가 수열 기반 형식-독립 감지
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# 숫자를 포함한 단어에서 (prefix, number, suffix) 추출
+_NUM_RE = re.compile(r"^(.*?)(\d{1,3})([\.\]\)번]*)$")
+
+
+def _parse_candidate(text: str) -> Optional[tuple[str, int, str]]:
+    """
+    텍스트를 (prefix, number, suffix) 로 분해.
+    숫자가 없거나 범위 밖이면 None.
+    """
+    t = text.strip()
+    m = _NUM_RE.match(t)
+    if not m:
+        return None
+    prefix, num_str, suffix = m.group(1), m.group(2), m.group(3)
+    n = int(num_str)
+    if not (_Q_MIN <= n <= _Q_MAX):
+        return None
+    return (prefix, n, suffix)
+
+
+def detect_question_boundaries_adaptive(pdf_path: str) -> list[QuestionBoundary]:
+    """
+    형식-독립 문항 경계 감지.
+
+    "동일한 양식(prefix+suffix)으로 +1씩 증가하는 숫자" = 문항 번호로 간주.
+
+    알고리즘:
+      1. 전 페이지 단어 수집 (폰트 크기 포함)
+      2. 각 단어를 (prefix, number, suffix) 로 분해
+      3. (prefix, suffix, 폰트클러스터) 키로 그룹핑
+      4. 그룹 내에서 페이지·컬럼·Y 순으로 정렬 후 연속 정수 수열 탐색
+      5. 길이 3 이상인 수열만 유효 문항으로 인정
+      6. 수열 길이 기준 최고 신뢰도 그룹 선택
+      7. y_bottom 보정 + 중복 제거
+
+    Returns:
+        문항 번호 오름차순으로 정렬된 QuestionBoundary 리스트.
+        유의미한 수열을 찾지 못하면 빈 리스트 반환.
+    """
+    # ── 전 페이지 단어 수집 ────────────────────────────
+    pages_data: list[tuple[float, float, list[dict]]] = []
+
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            words = page.extract_words(
+                keep_blank_chars=False,
+                x_tolerance=3,
+                y_tolerance=3,
+                extra_attrs=["size"],
+            )
+            pages_data.append((page.width, page.height, words))
+
+    # ── 후보 단어 수집 + 그룹핑 ───────────────────────
+    # key: (prefix, suffix, font_cluster)
+    # value: list of (page_idx, col, y_top, number, col_x0, col_x1, page_h)
+    groups: dict[tuple, list] = defaultdict(list)
+
+    for page_idx, (page_w, page_h, words) in enumerate(pages_data):
+        if not words:
+            continue
+
+        header_y = page_h * 0.11
+        footer_y = page_h * 0.91
+        content_words = [w for w in words if header_y <= w["top"] <= footer_y]
+        if not content_words:
+            continue
+
+        split_x = _detect_column_split(content_words, page_w)
+        left_words  = [w for w in content_words if w["x0"] <  split_x]
+        right_words = [w for w in content_words if w["x0"] >= split_x]
+        col_x_bounds = {
+            0: (min((w["x0"] for w in left_words),  default=0.0), split_x),
+            1: (split_x, max((w["x1"] for w in right_words), default=page_w)),
+        }
+
+        for col_idx, col_words in [(0, left_words), (1, right_words)]:
+            for w in col_words:
+                parsed = _parse_candidate(w["text"])
+                if parsed is None:
+                    continue
+                prefix, number, suffix = parsed
+                font_cluster = round(w.get("size", 0) / 2) * 2  # 2pt 단위 클러스터
+                cx0, cx1 = col_x_bounds[col_idx]
+                key = (prefix, suffix, font_cluster)
+                groups[key].append((page_idx, col_idx, w["top"], number, cx0, cx1, page_h))
+
+    # ── 그룹별 연속 수열 탐색 ─────────────────────────
+    # 결과: {number: QuestionBoundary}
+    best_sequence: list[tuple] = []  # 가장 긴 연속 수열 원소 리스트
+    best_key: Optional[tuple] = None
+
+    for key, entries in groups.items():
+        # 페이지→컬럼→Y 순서로 정렬
+        sorted_entries = sorted(entries, key=lambda e: (e[0], e[1], e[2]))
+
+        # 연속 증가 수열 탐색 (숫자 기준 연속성)
+        seqs: list[list[tuple]] = []
+        current_seq: list[tuple] = []
+        prev_num = -1
+
+        for entry in sorted_entries:
+            num = entry[3]
+            if current_seq and num == prev_num + 1:
+                current_seq.append(entry)
+            else:
+                if len(current_seq) >= 3:
+                    seqs.append(current_seq)
+                current_seq = [entry]
+            prev_num = num
+
+        if len(current_seq) >= 3:
+            seqs.append(current_seq)
+
+        for seq in seqs:
+            if len(seq) > len(best_sequence):
+                best_sequence = seq
+                best_key = key
+
+    if len(best_sequence) < 3:
+        return []
+
+    # ── QuestionBoundary 생성 ─────────────────────────
+    raw: list[QuestionBoundary] = []
+    page_heights = [ph for _, ph, _ in pages_data]
+
+    for page_idx, col_idx, y_top, number, cx0, cx1, page_h in best_sequence:
+        raw.append(QuestionBoundary(
+            number=number,
+            page_index=page_idx,
+            y_top=y_top,
+            y_bottom=page_h,
+            col=col_idx,
+            col_x0=cx0,
+            col_x1=cx1,
+        ))
+
+    _fill_y_bottom(raw, page_heights)
+    unique = _deduplicate_boundaries(raw)
+    return sorted(unique, key=lambda b: b.number)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 7. 문항 → CropRegion 매핑
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def map_questions_to_regions(
@@ -447,12 +542,11 @@ def map_questions_to_regions(
                 x0=cur.col_x0, y0=cur.y_top,
                 x1=cur.col_x1, y1=cur.y_bottom,
             ))
-            # 중간 페이지 전체 포함 (문항이 여러 페이지에 걸친 경우)
             for mid_page in range(cur.page_index + 1, next_b.page_index):
                 regions.append(CropRegion(
                     page_index=mid_page,
                     x0=0, y0=0,
-                    x1=9999, y1=9999,  # pdf_service에서 페이지 전체로 처리
+                    x1=9999, y1=9999,
                 ))
 
         elif next_b.page_index == cur.page_index and next_b.col == cur.col:
@@ -465,13 +559,11 @@ def map_questions_to_regions(
 
         elif next_b.page_index == cur.page_index and next_b.col > cur.col:
             # B: 같은 페이지·다음 컬럼으로 넘어감
-            # 현재 컬럼 잔여 영역
             regions.append(CropRegion(
                 page_index=cur.page_index,
                 x0=cur.col_x0, y0=cur.y_top,
                 x1=cur.col_x1, y1=cur.y_bottom,
             ))
-            # 다음 컬럼의 시작부터 다음 문항 y_top 까지
             if next_b.y_top > 0:
                 regions.append(CropRegion(
                     page_index=cur.page_index,
@@ -487,14 +579,13 @@ def map_questions_to_regions(
                 x1=cur.col_x1, y1=cur.y_bottom,
             ))
 
-        # 유효한 높이 가진 영역만 저장
         result[q_num] = [r for r in regions if r.height > 2 or r.y1 == 9999]
 
     return result
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 7. (레거시 호환) 텍스트 기반 경계 감지
+# 8. (레거시 호환) 텍스트 기반 경계 감지
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def detect_question_boundaries_from_text(

@@ -16,6 +16,7 @@ import fitz                  # pymupdf — PDF → 이미지
 import pytesseract
 from PIL import Image
 import io
+from typing import Optional
 
 from app.core.config import settings
 from app.utils.question_parser import QuestionBoundary, detect_question_boundaries_from_text
@@ -28,28 +29,53 @@ _TESS_CONFIG = "--psm 6 --oem 3"
 _TESS_LANG = settings.TESSERACT_LANG   # .env의 TESSERACT_LANG 으로 제어
 
 
-def extract_boundaries(pdf_path: str) -> list[QuestionBoundary]:
+def extract_boundaries(
+    pdf_path: str,
+    page_indices: Optional[list[int]] = None,
+) -> list[QuestionBoundary]:
     """
     PDF를 페이지별 이미지로 변환 후 Tesseract OCR → 문항 경계 감지.
-    detect_question_boundaries_from_text 와 동일한 결과 형식으로 반환.
+
+    Args:
+        pdf_path: 원본 PDF 경로
+        page_indices: OCR 대상 페이지 인덱스 목록 (0-based).
+                      None이면 전체 페이지 처리.
     """
-    pages_text = _pdf_to_tesseract_texts(pdf_path)
+    pages_text = _pdf_to_tesseract_texts(pdf_path, page_indices=page_indices)
     return detect_question_boundaries_from_text(pages_text)
 
 
 # ── 내부 헬퍼 ─────────────────────────────────────────
 
-def _pdf_to_tesseract_texts(pdf_path: str) -> list[str]:
+def _pdf_to_tesseract_texts(
+    pdf_path: str,
+    page_indices: Optional[list[int]] = None,
+) -> list[str]:
     """
     PDF 각 페이지 → PIL Image → pytesseract → 텍스트
+
+    Args:
+        pdf_path: 원본 PDF 경로
+        page_indices: 처리할 페이지 인덱스 목록. None이면 전체.
+
+    Returns:
+        페이지별 텍스트 리스트. page_indices를 지정한 경우에도
+        detect_question_boundaries_from_text가 page_index를 올바르게
+        참조하도록 전체 페이지 수만큼 슬롯을 확보하고 미처리 페이지는 ""로 채운다.
 
     DPI 200: Tesseract 권장 최솟값(150) 이상, t2.micro 메모리 내 처리 가능한 상한
     A4 200DPI ≈ 1654×2339px → PIL Image 메모리 ~15MB/페이지 → 충분히 안전
     """
     doc = fitz.open(pdf_path)
-    texts: list[str] = []
+    total_pages = len(doc)
+    target_set = set(page_indices) if page_indices is not None else set(range(total_pages))
 
-    for page in doc:
+    texts: list[str] = [""] * total_pages
+
+    for page_num in range(total_pages):
+        if page_num not in target_set:
+            continue
+        page = doc[page_num]
         mat = fitz.Matrix(200 / 72, 200 / 72)   # 200 DPI
         pix = page.get_pixmap(matrix=mat)
 
@@ -57,7 +83,7 @@ def _pdf_to_tesseract_texts(pdf_path: str) -> list[str]:
         img = Image.open(io.BytesIO(pix.tobytes("png")))
 
         text = pytesseract.image_to_string(img, lang=_TESS_LANG, config=_TESS_CONFIG)
-        texts.append(text)
+        texts[page_num] = text
 
     doc.close()
     return texts
