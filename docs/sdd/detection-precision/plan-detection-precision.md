@@ -2,7 +2,7 @@
 
 > **요구사항**: REQ-15, REQ-23, REQ-24  
 > **작성일**: 2026-04-26  
-> **관련 spec**: [plan-v3.md](../plan-v3.md)  
+> **관련 spec**: [plan-v3.md](../spec-v3.md)  
 > **변경 범위**: 백엔드 전용 (`question_parser.py`, `schemas.py`)
 
 ---

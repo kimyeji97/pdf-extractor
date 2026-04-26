@@ -2,7 +2,7 @@
 
 > **요구사항**: REQ-11, REQ-12, REQ-13, REQ-14, REQ-15  
 > **작성일**: 2026-04-26  
-> **관련 spec**: [plan-v3.md](../plan-v3.md)  
+> **관련 spec**: [plan-v3.md](../spec-v3.md)  
 > **변경 범위**: 백엔드 (`browse.py`, `storage.py`) + 프론트엔드 (`QuestionAnalysisView`)  
 > **전제**: [plan-detection-precision.md](../detection-precision/plan-detection-precision.md) 완료 (QuestionBoundary 모델 확장)
 

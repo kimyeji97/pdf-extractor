@@ -2,7 +2,7 @@
 
 > **요구사항**: REQ-21, REQ-22  
 > **작성일**: 2026-04-26  
-> **관련 spec**: [plan-v3.md](../plan-v3.md)  
+> **관련 spec**: [plan-v3.md](../spec-v3.md)  
 > **변경 범위**: 프론트엔드 전용 (`WorkbookHistoryView`)  
 > **전제**: [plan-workbook-editor.md](../workbook-editor/plan-workbook-editor.md) 완료 (workbook API)
 

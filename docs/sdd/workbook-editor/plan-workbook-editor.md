@@ -2,7 +2,7 @@
 
 > **요구사항**: REQ-16, REQ-17, REQ-18, REQ-19, REQ-20  
 > **작성일**: 2026-04-26  
-> **관련 spec**: [plan-v3.md](../plan-v3.md)  
+> **관련 spec**: [plan-v3.md](../spec-v3.md)  
 > **변경 범위**: 백엔드 (`extract.py`, `pdf_service.py`, `workbook.py` 신규) + 프론트엔드 (`WorkbookEditorView`)  
 > **전제**: [plan-question-analysis.md](../question-analysis/plan-question-analysis.md) 완료 (수동 문항 API)
 
