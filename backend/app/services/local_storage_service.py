@@ -8,7 +8,13 @@ STORAGE_BACKEND=local 일 때 storage.py 팩토리가 이 모듈을 선택한다
   local_storage/
   ├── uploads/{job_id}/original.pdf
   ├── results/{job_id}/result.pdf
-  └── status/{job_id}.json
+  ├── status/{job_id}.json
+  ├── boundaries/{job_id}.json
+  ├── thumbnails/{job_id}/page_{n}.png
+  ├── thumbnails/{job_id}/q_{page}_{num}.png
+  ├── thumbnails/{job_id}/manual_{page}_{manual_id}.png   ← v3 신규
+  ├── manual_questions/{job_id}.json                       ← v3 신규
+  └── workbooks/{workbook_id}.json                         ← v3 신규
 """
 import json
 import shutil
@@ -156,6 +162,96 @@ def get_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) 
 def save_question_thumbnail_cache(job_id: str, page_num: int, question_num: int, data: bytes) -> None:
     path = _ensure(_BASE / "thumbnails" / job_id / f"q_{page_num}_{question_num}.png")
     path.write_bytes(data)
+
+
+def delete_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) -> None:
+    """자동 감지 문항 삭제 시 썸네일 캐시도 함께 제거한다."""
+    path = _BASE / "thumbnails" / job_id / f"q_{page_num}_{question_num}.png"
+    if path.exists():
+        path.unlink()
+
+
+# ── 수동 문항 캐시 (v3 REQ-13) ──────────────────────────────
+
+def get_manual_thumbnail_cache(job_id: str, page_num: int, manual_id: str) -> Optional[bytes]:
+    """수동 추가 문항의 크롭 썸네일 PNG를 반환. 없으면 None."""
+    path = _BASE / "thumbnails" / job_id / f"manual_{page_num}_{manual_id}.png"
+    return path.read_bytes() if path.exists() else None
+
+
+def save_manual_thumbnail_cache(job_id: str, page_num: int, manual_id: str, data: bytes) -> None:
+    """수동 추가 문항의 크롭 썸네일 PNG를 캐시에 저장한다."""
+    path = _ensure(_BASE / "thumbnails" / job_id / f"manual_{page_num}_{manual_id}.png")
+    path.write_bytes(data)
+
+
+def delete_manual_thumbnail_cache(job_id: str, page_num: int, manual_id: str) -> None:
+    """수동 문항 삭제 시 썸네일 캐시도 함께 제거한다."""
+    path = _BASE / "thumbnails" / job_id / f"manual_{page_num}_{manual_id}.png"
+    if path.exists():
+        path.unlink()
+
+
+# ── 수동 문항 영속 저장 (v3 REQ-13) ────────────────────────
+
+def get_manual_questions(job_id: str) -> list:
+    """
+    수동 추가 문항 목록을 반환한다.
+    파일이 없으면 빈 리스트를 반환하여 호출부에서 None 체크 없이 사용 가능하다.
+    """
+    path = _BASE / "manual_questions" / f"{job_id}.json"
+    if not path.exists():
+        return []
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_manual_questions(job_id: str, data: list) -> None:
+    """
+    수동 추가 문항 목록을 저장한다.
+    새로고침 후 복원을 위해 반드시 서버에 영속 저장해야 한다 (REQ-13 요구사항).
+    """
+    path = _ensure(_BASE / "manual_questions" / f"{job_id}.json")
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
+# ── 문제집 메타데이터 (v3 REQ-21~22) ───────────────────────
+
+def get_workbook(workbook_id: str) -> Optional[dict]:
+    """문제집 메타데이터 단건 조회. 없으면 None."""
+    path = _BASE / "workbooks" / f"{workbook_id}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_workbook(workbook_id: str, data: dict) -> None:
+    """
+    문제집 메타데이터를 저장한다.
+    extract-v2 DONE 확인 후 프론트엔드가 POST /api/workbooks를 호출하여 저장.
+    """
+    path = _ensure(_BASE / "workbooks" / f"{workbook_id}.json")
+    path.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
+
+
+def list_workbooks() -> list:
+    """
+    저장된 문제집 메타데이터 전체를 created_at 내림차순으로 반환.
+    이력 화면(REQ-21)에서 사용한다.
+    """
+    workbook_dir = _BASE / "workbooks"
+    if not workbook_dir.exists():
+        return []
+
+    workbooks = []
+    for path in workbook_dir.glob("*.json"):
+        try:
+            workbooks.append(json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+
+    # created_at 내림차순 정렬 — 최신 문제집이 목록 상단에 오도록
+    workbooks.sort(key=lambda w: w.get("created_at", ""), reverse=True)
+    return workbooks
 
 
 # ── 키 헬퍼 (s3_service 와 동일) ─────────────────────────

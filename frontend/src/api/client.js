@@ -131,15 +131,19 @@ export async function refreshJobQuestions(jobId) {
  *   jobId: string,
  *   pageNum: number,
  *   questionNum?: number,
- *   customRegion?: {x0: number, y0: number, x1: number, y1: number},
+ *   manualId?: string,
+ *   customRegion?: {x0, y0, x1, y1},
  *   label?: string,
  * }>} selections
+ * @param {string} layout - 레이아웃: "2단" | "4단" | "6단" (기본 "2단")
  */
-export async function startExtractV2(selections) {
+export async function startExtractV2(selections, layout = "2단") {
   const body = {
+    layout,
     selections: selections.map((s) => {
       const item = { job_id: s.jobId, page_num: s.pageNum };
       if (s.questionNum != null)  item.question_num  = s.questionNum;
+      if (s.manualId != null)     item.manual_id     = s.manualId;
       if (s.customRegion != null) item.custom_region = s.customRegion;
       if (s.label != null)        item.label         = s.label;
       return item;
@@ -155,4 +159,126 @@ export async function startExtractV2(selections) {
     throw new Error(err.detail || "추출 요청 실패");
   }
   return res.json(); // { job_id, message }
+}
+
+
+// ━━━ v3 신규 API 함수 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * POST /api/jobs/{jobId}/pages/{pageNum}/questions/manual
+ * 수동 추가 문항 저장 (REQ-13)
+ * @param {string} jobId
+ * @param {number} pageNum
+ * @param {{ title: string, region: {x0, y0, x1, y1} }} param
+ */
+export async function addManualQuestion(jobId, pageNum, { title, region }) {
+  const res = await fetch(
+    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/manual`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, region }),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "수동 문항 추가 실패");
+  }
+  return res.json(); // ManualQuestion
+}
+
+/**
+ * PATCH /api/jobs/{jobId}/pages/{pageNum}/questions/{questionNum}
+ * 자동 감지 문항 타이틀 수정 (REQ-12)
+ */
+export async function updateQuestionTitle(jobId, pageNum, questionNum, title) {
+  const res = await fetch(
+    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/${questionNum}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }
+  );
+  if (!res.ok) throw new Error("타이틀 수정 실패");
+  return res.json();
+}
+
+/**
+ * PATCH /api/jobs/{jobId}/pages/{pageNum}/questions/manual/{manualId}
+ * 수동 추가 문항 타이틀 수정 (REQ-12)
+ */
+export async function updateManualQuestionTitle(jobId, pageNum, manualId, title) {
+  const res = await fetch(
+    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/manual/${manualId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }
+  );
+  if (!res.ok) throw new Error("수동 문항 타이틀 수정 실패");
+  return res.json();
+}
+
+/**
+ * DELETE /api/jobs/{jobId}/pages/{pageNum}/questions/{questionNum}
+ * 자동 감지 문항 삭제 (REQ-14)
+ */
+export async function deleteQuestion(jobId, pageNum, questionNum) {
+  const res = await fetch(
+    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/${questionNum}`,
+    { method: "DELETE" }
+  );
+  if (!res.ok && res.status !== 204) throw new Error("문항 삭제 실패");
+}
+
+/**
+ * DELETE /api/jobs/{jobId}/pages/{pageNum}/questions/manual/{manualId}
+ * 수동 추가 문항 삭제 (REQ-14)
+ */
+export async function deleteManualQuestion(jobId, pageNum, manualId) {
+  const res = await fetch(
+    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/manual/${manualId}`,
+    { method: "DELETE" }
+  );
+  if (!res.ok && res.status !== 204) throw new Error("수동 문항 삭제 실패");
+}
+
+/**
+ * GET /api/workbooks
+ * 생성된 문제집 이력 목록 (REQ-21)
+ */
+export async function getWorkbooks() {
+  const res = await fetch(`${BASE_URL}/workbooks`);
+  if (!res.ok) throw new Error("문제집 이력 조회 실패");
+  return res.json(); // WorkbookMeta[]
+}
+
+/**
+ * GET /api/workbooks/{workbookId}
+ * 문제집 메타데이터 단건 조회 (REQ-20 편집 복원)
+ */
+export async function getWorkbook(workbookId) {
+  const res = await fetch(`${BASE_URL}/workbooks/${workbookId}`);
+  if (!res.ok) throw new Error("문제집 조회 실패");
+  return res.json(); // WorkbookMeta
+}
+
+/**
+ * POST /api/workbooks
+ * 문제집 메타데이터 저장 (extract-v2 완료 후 호출)
+ * @param {object} meta - WorkbookMeta 형식
+ */
+export async function createWorkbookMeta(meta) {
+  const res = await fetch(`${BASE_URL}/workbooks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(meta),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "문제집 저장 실패");
+  }
+  return res.json(); // WorkbookMeta
 }

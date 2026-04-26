@@ -348,6 +348,7 @@ def extract_questions_v2(
     selections: list,
     export_job_id: str,
     tmpdir: str,
+    layout: str = "2단",
 ) -> int:
     """
     복수 job/page/question 선택을 하나의 PDF로 추출하여 스토리지에 저장한다.
@@ -355,29 +356,31 @@ def extract_questions_v2(
 
     Args:
         selections:     list[SelectionItem] — 사용자가 선택한 문항/영역 목록
-                        (순환참조 회피로 타입힌트 생략)
         export_job_id:  새로 생성된 export job의 UUID
         tmpdir:         임시 디렉토리 경로 (PDF 다운로드·결과 저장용)
+        layout:         그리드 레이아웃 ("2단", "4단", "6단") — REQ-18
+                        기존 API 호환을 위해 기본값 "2단" (각 문항이 한 셀에 배치됨)
 
     Returns:
         추출 성공한 항목(문항 또는 수동 영역) 수
 
     ━━━ 처리 흐름 ━━━
       1. 고유 job_id별로 원본 PDF를 스토리지에서 다운로드
-         (같은 job_id는 한 번만 다운로드 — pdf_paths dict로 중복 방지)
-      2. job_id별 문항 경계 데이터 확보
-         → 캐시 있으면 재사용, 없으면 detect_question_boundaries 실행 후 저장
-         (경계 감지는 전체 PDF 기준이므로 캐시 활용이 성능에 크게 영향)
+      2. job_id별 문항 경계 데이터 확보 (캐시 우선)
       3. selections 순서를 유지하며 SourcedCropRegion 목록 구성
-         → 수동 지정 영역(custom_region)은 좌표를 그대로 사용
-         → 자동 감지 문항(question_num)은 경계 캐시 + map_questions_to_regions 사용
-      4. SourcedCropRegion 목록으로 최종 PDF 빌드
+         → 수동 지정 영역(custom_region): 좌표 그대로 사용
+         → 수동 추가 문항(manual_id): manual_questions 스토리지에서 region 조회
+         → 자동 감지 문항(question_num): 경계 캐시에서 bbox 조회
+      4. 레이아웃 그리드 PDF 빌드 (layout_spec.py 기반, contain_fit 적용)
       5. 결과 PDF를 스토리지에 업로드
     """
     from app.services import storage
+    from app.utils.layout_spec import (
+        calc_cell_rect, contain_fit, questions_per_page,
+        LAYOUTS, DEFAULT_LAYOUT, A4_WIDTH_PT, A4_HEIGHT_PT,
+    )
 
     # ── Step 1: 고유 job_id별 PDF 다운로드 ─────────────────
-    # 여러 selections이 같은 job_id를 참조해도 PDF는 한 번만 다운로드
     pdf_paths: dict[str, str] = {}
     for sel in selections:
         if sel.job_id not in pdf_paths:
@@ -386,84 +389,162 @@ def extract_questions_v2(
             pdf_paths[sel.job_id] = local_path
 
     # ── Step 2: job_id별 문항 경계 데이터 확보 ─────────────
-    # 경계 감지(detect_question_boundaries)는 전체 PDF를 분석하는 무거운 작업.
-    # 스토리지 캐시(boundaries/{job_id}.json)에 저장된 결과가 있으면 재사용.
-    # 없으면 감지 후 캐시에 저장 — 이후 같은 PDF 요청 시 즉시 응답 가능.
     boundaries_map: dict[str, list[QuestionBoundary]] = {}
     for job_id, pdf_path in pdf_paths.items():
         cached = storage.get_boundaries_cache(job_id)
         if cached is not None:
-            # 캐시 히트: JSON dict → QuestionBoundary 객체로 역직렬화
             boundaries_map[job_id] = [QuestionBoundary(**b) for b in cached]
         else:
-            # 캐시 미스: 전체 PDF 재분석
             boundaries = detect_question_boundaries(pdf_path)
             boundaries_map[job_id] = boundaries
-            # 결과 캐시 저장 (dataclass → dict 변환)
             storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
 
     # ── Step 3: selections → SourcedCropRegion 변환 ─────────
-    # selections 순서가 곧 출력 PDF 페이지 순서가 된다.
+    # selections 순서가 곧 그리드 배치 순서가 된다 (REQ-19 DnD 순서 반영).
     all_regions: list[SourcedCropRegion] = []
     success_count = 0
 
     for sel in selections:
 
-        # ── 수동 지정 영역 (custom_region 우선) ─────────────
-        # 사용자가 드래그로 직접 지정한 영역.
-        # 경계 감지 결과와 무관하게 지정된 좌표를 그대로 크롭에 사용.
+        # ── 구형 수동 지정 영역 (custom_region) ─────────────
+        # 구형 v2 API 호환: 사용자가 드래그로 직접 지정한 영역
         if getattr(sel, "custom_region", None) is not None:
             cr = sel.custom_region
             all_regions.append(SourcedCropRegion(
                 src_path=pdf_paths[sel.job_id],
                 page_index=sel.page_num,
-                x0=cr.x0,
-                y0=cr.y0,
-                x1=cr.x1,
-                y1=cr.y1,
+                x0=cr.x0, y0=cr.y0, x1=cr.x1, y1=cr.y1,
             ))
             success_count += 1
             continue
 
-        # ── 자동 감지 문항 ───────────────────────────────────
-        # question_num 기반: 경계 캐시에서 해당 번호의 위치를 찾아 CropRegion으로 변환.
-        # question_num도 custom_region도 없는 경우는 잘못된 요청이므로 스킵.
+        # ── v3 수동 추가 문항 (manual_id) ───────────────────
+        # REQ-13: manual_questions 스토리지에서 region 조회
+        if getattr(sel, "manual_id", None) is not None:
+            manual_list = storage.get_manual_questions(sel.job_id)
+            target = next((m for m in manual_list if m.get("manual_id") == sel.manual_id), None)
+            if target is None:
+                continue  # 존재하지 않는 manual_id → 스킵
+            r = target["region"]
+            all_regions.append(SourcedCropRegion(
+                src_path=pdf_paths[sel.job_id],
+                page_index=sel.page_num,
+                x0=r["x0"], y0=r["y0"], x1=r["x1"], y1=r["y1"],
+            ))
+            success_count += 1
+            continue
+
+        # ── 자동 감지 문항 (question_num) ───────────────────
         if getattr(sel, "question_num", None) is None:
             continue
 
         boundaries = boundaries_map.get(sel.job_id, [])
-        # 단일 문항 → 1개 이상의 CropRegion (페이지/컬럼 걸침 대응)
         q_to_regions = map_questions_to_regions(boundaries, [sel.question_num])
-
         if sel.question_num not in q_to_regions:
-            continue  # 해당 번호를 감지하지 못함 → 스킵
+            continue
 
         success_count += 1
         for region in q_to_regions[sel.question_num]:
             all_regions.append(SourcedCropRegion(
                 src_path=pdf_paths[sel.job_id],
                 page_index=region.page_index,
-                x0=region.x0,
-                y0=region.y0,
-                x1=region.x1,
-                y1=region.y1,
+                x0=region.x0, y0=region.y0, x1=region.x1, y1=region.y1,
             ))
 
     if not all_regions:
         raise ValueError("선택한 문항을 PDF에서 감지하지 못했습니다.")
 
-    # ── Step 4: 최종 PDF 빌드 ────────────────────────────────
-    # SourcedCropRegion 목록을 순서대로 크롭하여 하나의 PDF로 합침
+    # ── Step 4: 레이아웃 그리드 PDF 빌드 ────────────────────
+    # layout_spec.py의 상수와 contain_fit()을 사용하여
+    # Canvas 미리보기와 동일한 그리드 레이아웃으로 PDF를 생성한다 (REQ-17).
     output_path = str(Path(tmpdir) / "result.pdf")
-    _build_pdf_from_multi_sources(all_regions, output_path)
+
+    # layout 유효성 검증 — 지원하지 않는 값이면 기본값 사용
+    effective_layout = layout if layout in LAYOUTS else DEFAULT_LAYOUT
+    _build_grid_pdf(all_regions, output_path, effective_layout)
 
     # ── Step 5: 결과 스토리지에 업로드 ──────────────────────
-    # 클라이언트는 /api/status/{export_job_id} 폴링으로 DONE 상태를 확인 후
-    # download_url로 다운로드한다
     res_key = storage.result_key(export_job_id)
     storage.upload_file(output_path, res_key)
 
     return success_count
+
+
+def _build_grid_pdf(
+    regions: list["SourcedCropRegion"],
+    dst_path: str,
+    layout_key: str,
+) -> None:
+    """
+    레이아웃 그리드(2단/4단/6단)에 문항을 배치하여 A4 PDF를 빌드한다.
+
+    Canvas ↔ PDF 일치 보장:
+      - layout_spec.py의 A4_WIDTH_PT, A4_HEIGHT_PT, MARGIN_PT, GAP_PT 상수 사용
+      - contain_fit() 수식이 frontend/src/utils/workbookLayout.js#containFit() 와 동일
+      - 같은 그리드 좌표 공식, 같은 contain 피팅 → 미리보기 = 실제 출력
+
+    처리 흐름:
+      regions 목록을 순서대로 (page, row, col) 셀에 배치.
+      한 페이지가 채워지면 다음 A4 페이지를 새로 생성.
+      각 셀에는 contain_fit()으로 계산한 dst_rect에 show_pdf_page()로 벡터 크롭 삽입.
+    """
+    from app.utils.layout_spec import (
+        calc_cell_rect, contain_fit, questions_per_page, LAYOUTS,
+        A4_WIDTH_PT, A4_HEIGHT_PT,
+    )
+
+    spec = LAYOUTS[layout_key]
+    rows = spec["rows"]
+    cols = spec["cols"]
+    qpp  = questions_per_page(layout_key)   # 페이지당 문항 수
+
+    src_cache: dict[str, fitz.Document] = {}
+    dst = fitz.open()
+    current_page: fitz.Page | None = None
+
+    for idx, region in enumerate(regions):
+        cell_idx = idx % qpp              # 현재 페이지 내 셀 인덱스 (0~qpp-1)
+        row = cell_idx // cols
+        col = cell_idx % cols
+
+        # 새 페이지 필요 — 첫 항목이거나 이전 페이지가 가득 찬 경우
+        if cell_idx == 0:
+            current_page = dst.new_page(width=A4_WIDTH_PT, height=A4_HEIGHT_PT)
+
+        # 원본 PDF 열기 (캐시 활용)
+        if region.src_path not in src_cache:
+            src_cache[region.src_path] = fitz.open(region.src_path)
+        src_doc = src_cache[region.src_path]
+
+        if not (0 <= region.page_index < len(src_doc)):
+            continue  # 범위 초과 방어
+
+        # 셀 좌표 계산 (layout_spec.py 공식)
+        cell_x, cell_y, cell_w, cell_h = calc_cell_rect(layout_key, row, col)
+
+        # 원본 문항 크기 (bbox 크기)
+        src_w = region.x1 - region.x0
+        src_h = region.y1 - region.y0
+
+        # Contain(letterbox) 피팅 — 종횡비 유지, 셀 크기에 맞춤
+        # Canvas와 완전히 동일한 수식으로 미리보기 ↔ PDF 출력 일치 보장
+        dst_x, dst_y, dst_w, dst_h = contain_fit(src_w, src_h, cell_x, cell_y, cell_w, cell_h)
+
+        dst_rect  = fitz.Rect(dst_x, dst_y, dst_x + dst_w, dst_y + dst_h)
+        clip_rect = fitz.Rect(region.x0, region.y0, region.x1, region.y1)
+
+        # 벡터 기반 크롭 삽입 (래스터화 없음)
+        current_page.show_pdf_page(
+            dst_rect,                   # 출력 A4 페이지에서 그릴 위치
+            src_doc,                    # 원본 Document
+            region.page_index,          # 원본 페이지 번호
+            clip=clip_rect,             # 원본에서 가져올 영역 (문항 bbox)
+        )
+
+    dst.save(dst_path, garbage=4, deflate=True)
+    for doc in src_cache.values():
+        doc.close()
+    dst.close()
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

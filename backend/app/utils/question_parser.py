@@ -92,14 +92,28 @@ class QuestionBoundary:
       - (col_x0, y_top) → 크롭 시작점
       - (col_x1, y_bottom) → 크롭 끝점
       - col: 2단 레이아웃에서 왼쪽(0) / 오른쪽(1) 구분
+
+    v3 신규 필드:
+      - title: 사용자가 UI에서 수정한 문항 이름. None이면 "문항 {number}"로 표시
+      - is_false_positive: 경계가 페이지 전체 크기와 일치하는 오탐지 여부 (REQ-15)
+      - is_manual: 수동으로 추가한 문항인지 여부 (REQ-13)
+      - manual_id: 수동 추가 문항의 UUID (is_manual=True일 때만 유효)
+
+    하위 호환: 기존 boundaries/*.json을 역직렬화할 때 신규 필드가 없으면
+    dataclass field(default=...)이 적용되어 별도 마이그레이션 없이 로드 가능.
     """
     number: int
     page_index: int           # 0-based 페이지 인덱스
     y_top: float              # 문항 번호 텍스트의 상단 Y좌표 (페이지 상단=0)
     y_bottom: float           # 문항 끝 Y좌표 (다음 문항 y_top 또는 페이지 하단)
     col: int                  # 0=왼쪽 컬럼, 1=오른쪽 컬럼
-    col_x0: float             # 소속 컬럼의 왼쪽 X경계
-    col_x1: float             # 소속 컬럼의 오른쪽 X경계
+    col_x0: float             # 소속 컬럼의 왼쪽 X경계 (REQ-24: 문항 번호 x0 - 10pt)
+    col_x1: float             # 소속 컬럼의 오른쪽 X경계 (REQ-24: 문항 내 최대 x1)
+    # ── v3 신규 필드 (기본값 있음 → 기존 캐시 역직렬화 하위 호환) ──
+    title: Optional[str] = field(default=None)          # 사용자 지정 문항 타이틀
+    is_false_positive: bool = field(default=False)      # 오탐지 여부 (REQ-15)
+    is_manual: bool = field(default=False)              # 수동 추가 문항 여부
+    manual_id: Optional[str] = field(default=None)      # 수동 추가 UUID
 
 
 @dataclass
@@ -344,10 +358,12 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
             header_y = page_h * _HEADER_PERCENT
             footer_y = page_h * _FOOTER_PERCENT
             for w in words:
+                # 상단/하단에 존재하는 텍스트면 주석 등으로 간주하여 skip
                 if not (header_y <= w["top"] <= footer_y):
                     continue
+                # 폰트 크기 0이거나 잘못된 값 제외
                 size = w.get("size", 0)
-                if size <= 1.0:  # 폰트 크기 0이거나 잘못된 값 제외
+                if size <= 1.0:
                     continue
                 # 문항 번호처럼 보이는 단어(숫자 패턴 매칭)이고 10pt 이상인 것만 집계
                 # → 본문 텍스트(주로 소형)가 아닌 문항 번호 크기 분포를 파악
@@ -360,6 +376,7 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     global_font_threshold = _calc_font_threshold(size_counts)
 
     # ── Step 3: 페이지별 정규식 기반 경계 감지 ────────────────
+    # enumerate: (index, value) 튜플 형태로 데이터 반환
     for page_idx, (page_w, page_h, words) in enumerate(pages_data):
         if not words:
             continue
@@ -439,6 +456,11 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     # 현재 문항의 끝 = 같은 컬럼 내 다음 문항의 시작 y좌표 (없으면 페이지 하단)
     page_heights = [ph for _, ph, _ in pages_data]
     _fill_y_bottom(raw, page_heights)
+
+    # ── Step 5-b: 감지 정밀도 개선 (v3 REQ-23/24/15) ─────────
+    # _fill_y_bottom으로 y_bottom이 확정된 뒤 단어 범위를 알 수 있으므로 이 시점에 처리.
+    # x 좌표 정밀화, y_bottom 조임, 오탐지 마킹을 순서대로 수행.
+    _apply_precision_improvements(raw, pages_data)
 
     ## ── Step 6: 중복 제거 + Step 7: 정렬 ────────────────────
     # unique = _deduplicate_boundaries(raw)
@@ -533,6 +555,124 @@ def _fill_y_bottom(
         for i, b in enumerate(sorted_g):
             # 다음 문항이 있으면 그 시작점까지, 없으면 페이지 하단까지
             b.y_bottom = sorted_g[i + 1].y_top if i + 1 < len(sorted_g) else page_h
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 5-b. v3 감지 정밀도 개선 (REQ-23, REQ-24, REQ-15)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# 오탐지 판정 허용 오차 (pt 단위)
+# 페이지 전체 크기와 ±2pt 이내로 일치하면 오탐지로 간주한다.
+_FALSE_POSITIVE_TOLERANCE = 2.0
+
+
+def _calc_tight_y_bottom(
+    question_words: list[dict],
+    fallback_y_bottom: float,
+) -> float:
+    """
+    [REQ-23] 문항 내 실제 텍스트 하단 + 50pt 이내로 y_bottom을 조여준다.
+
+    문제:
+      _fill_y_bottom은 "다음 문항 y_top까지"를 y_bottom으로 쓰는데,
+      두 문항 사이 여백이 클 경우 크롭 영역에 불필요한 빈 공간이 생긴다.
+
+    해결:
+      문항에 속하는 단어들의 bottom 좌표 중 최대값에 50pt를 더한 값과
+      fallback_y_bottom(다음 문항 y_top 또는 페이지 하단) 중 더 작은 값 사용.
+      50pt 여유를 두는 이유: 문항 번호 직후에 오는 그림/표는 텍스트가 없기 때문.
+
+    Args:
+        question_words: 해당 문항 영역(y_top ~ fallback_y_bottom) 안의 단어들
+        fallback_y_bottom: 다음 문항 y_top 또는 페이지 하단 (상한값)
+    """
+    if not question_words:
+        # 텍스트가 없으면 기존 값 유지 (그림만 있는 문항 등)
+        return fallback_y_bottom
+    last_text_bottom = max(w["bottom"] for w in question_words)
+    return min(fallback_y_bottom, last_text_bottom + 50)
+
+
+def _is_false_positive(
+    boundary: QuestionBoundary,
+    page_width: float,
+    page_height: float,
+) -> bool:
+    """
+    [REQ-15] 감지된 경계가 페이지 전체 크기와 일치하면 오탐지로 판정한다.
+
+    오탐지 발생 원인:
+      pdfplumber가 페이지 전체를 감싸는 테두리 사각형을 인식하거나,
+      스캔 본의 검은 외곽선을 텍스트 영역으로 잘못 포함시키는 경우 발생.
+      이 경우 경계가 (0, 0) ~ (page_width, page_height)에 매우 근접한다.
+
+    처리 방침:
+      is_false_positive=True로 마킹하되 목록에서 제거하지 않는다.
+      UI에서 빨간 테두리 + "오탐지 의심" 배지를 표시하여 사용자가 확인할 수 있도록.
+    """
+    return (
+        abs(boundary.col_x0 - 0) < _FALSE_POSITIVE_TOLERANCE
+        and abs(boundary.y_top - 0) < _FALSE_POSITIVE_TOLERANCE
+        and abs(boundary.col_x1 - page_width) < _FALSE_POSITIVE_TOLERANCE
+        and abs(boundary.y_bottom - page_height) < _FALSE_POSITIVE_TOLERANCE
+    )
+
+
+def _apply_precision_improvements(
+    boundaries: list[QuestionBoundary],
+    pages_data: list[tuple[float, float, list[dict]]],
+) -> None:
+    """
+    [REQ-23, REQ-24, REQ-15] _fill_y_bottom 이후 경계 정밀도를 추가로 개선한다.
+    In-place 수정.
+
+    처리 순서 (각 경계별):
+      1. [REQ-24] 문항 번호 텍스트 x0 - 10pt → col_x0 재계산
+                  문항 내 단어 최대 x1 → col_x1 재계산
+      2. [REQ-23] 마지막 텍스트 bottom + 50pt 이내로 y_bottom 조임
+      3. [REQ-15] 경계가 페이지 전체 크기와 일치하면 is_false_positive=True 마킹
+
+    이 단계를 _fill_y_bottom 이후에 분리해서 처리하는 이유:
+      - REQ-24 x 정밀화와 REQ-23 y_bottom 정밀화 모두 해당 문항의 단어 목록이 필요함
+      - 단어 필터링에는 확정된 y_bottom(다음 문항 y_top)이 필요함
+      - _fill_y_bottom이 y_bottom을 확정한 이후에만 단어 범위를 정확히 알 수 있음
+    """
+    for b in boundaries:
+        if b.page_index >= len(pages_data):
+            continue
+        page_w, page_h, all_words = pages_data[b.page_index]
+
+        # 이 문항 영역에 속하는 단어만 추출
+        # x: 컬럼 범위 내, y: y_top ~ y_bottom 범위 내
+        question_words = [
+            w for w in all_words
+            if b.col_x0 <= w["x0"] <= b.col_x1
+            and b.y_top <= w["top"] <= b.y_bottom
+        ]
+
+        # ── REQ-24: x 좌표 정밀화 ────────────────────────────────
+        # 문항 번호 텍스트의 x0를 실제 col_x0로 재계산한다.
+        # 컬럼 분할점 기반 고정 경계 대신 실제 문항 번호 텍스트 위치 기반으로 정밀화.
+        num_word = next(
+            (w for w in question_words
+             if _extract_question_number(w.get("text", "")) == b.number),
+            None,
+        )
+        if num_word:
+            # 문항 번호 텍스트 x0에서 10pt 왼쪽으로 여유를 줘서 번호가 잘리지 않도록
+            b.col_x0 = max(0.0, num_word["x0"] - 10)
+        # 해당 문항에 속한 모든 단어의 최대 x1을 새 col_x1로 사용
+        if question_words:
+            b.col_x1 = min(page_w, max(w["x1"] for w in question_words))
+
+        # ── REQ-23: y_bottom 정밀화 ──────────────────────────────
+        # 다음 문항 y_top까지 포함했던 넓은 y_bottom을 실제 텍스트 하단에 맞게 줄임.
+        # 문항 사이 불필요한 여백을 제거하여 크롭 이미지가 더 촘촘하게 표시됨.
+        b.y_bottom = _calc_tight_y_bottom(question_words, b.y_bottom)
+
+        # ── REQ-15: 오탐지 마킹 ──────────────────────────────────
+        # x 정밀화 + y 정밀화 후 최종 경계로 오탐지 여부를 판정한다.
+        b.is_false_positive = _is_false_positive(b, page_w, page_h)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

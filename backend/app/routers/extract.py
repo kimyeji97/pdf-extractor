@@ -98,6 +98,7 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
     """
     복수 job/page/question 선택으로부터 새 PDF 추출.
     새 export_job_id를 생성하여 PENDING 상태로 저장 후 백그라운드 태스크 시작.
+    req.layout 으로 그리드 레이아웃 지정 가능 (REQ-18).
     """
     export_job_id = str(uuid.uuid4())
 
@@ -108,11 +109,13 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
     )
     storage.put_status(export_status)
 
-    background_tasks.add_task(_process_extraction_v2, req.selections, export_job_id)
+    # layout 파라미터를 백그라운드 태스크로 전달 (기본값 "2단")
+    layout = req.layout or "2단"
+    background_tasks.add_task(_process_extraction_v2, req.selections, export_job_id, layout)
     return ExtractV2Response(job_id=export_job_id)
 
 
-def _process_extraction_v2(selections: list[SelectionItem], export_job_id: str) -> None:
+def _process_extraction_v2(selections: list[SelectionItem], export_job_id: str, layout: str = "2단") -> None:
     export_status = storage.get_status(export_job_id)
     export_status.status = JobStatus.PROCESSING
     storage.put_status(export_status)
@@ -123,6 +126,7 @@ def _process_extraction_v2(selections: list[SelectionItem], export_job_id: str) 
                 selections=selections,
                 export_job_id=export_job_id,
                 tmpdir=tmpdir,
+                layout=layout,
             )
             export_status.status = JobStatus.DONE
             export_status.result_key = storage.result_key(export_job_id)

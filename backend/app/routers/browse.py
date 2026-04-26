@@ -1,23 +1,33 @@
 """
-GET  /api/jobs                                                     - 업로드된 파일 목록 조회
-GET  /api/jobs/{job_id}                                            - 단일 job 정보 조회 (boundaries_status 포함)
-POST /api/jobs/{job_id}/refresh                                    - 전체 문서 재감지 (비동기)
-GET  /api/jobs/{job_id}/pages                                      - 페이지 목록 + 썸네일 URL
-GET  /api/jobs/{job_id}/pages/{n}/thumbnail                        - 썸네일 PNG 반환
-GET  /api/jobs/{job_id}/pages/{n}/questions                        - 페이지 내 문항 목록
-GET  /api/jobs/{job_id}/pages/{n}/questions/{q}/thumbnail          - 문항 크롭 썸네일
+GET    /api/jobs                                                         - 업로드된 파일 목록 조회
+GET    /api/jobs/{job_id}                                                - 단일 job 정보 조회
+POST   /api/jobs/{job_id}/refresh                                        - 전체 문서 재감지 (비동기)
+GET    /api/jobs/{job_id}/pages                                          - 페이지 목록 + 썸네일 URL
+GET    /api/jobs/{job_id}/pages/{n}/thumbnail                            - 썸네일 PNG 반환
+GET    /api/jobs/{job_id}/pages/{n}/questions                            - 문항 목록 (자동+수동 병합)
+GET    /api/jobs/{job_id}/pages/{n}/questions/{q}/thumbnail              - 자동 문항 크롭 썸네일
+PATCH  /api/jobs/{job_id}/pages/{n}/questions/{q}                        - 자동 문항 타이틀 수정 (REQ-12)
+DELETE /api/jobs/{job_id}/pages/{n}/questions/{q}                        - 자동 문항 삭제 (REQ-14)
+POST   /api/jobs/{job_id}/pages/{n}/questions/manual                     - 수동 문항 추가 (REQ-13)
+PATCH  /api/jobs/{job_id}/pages/{n}/questions/manual/{mid}               - 수동 문항 타이틀 수정 (REQ-12)
+DELETE /api/jobs/{job_id}/pages/{n}/questions/manual/{mid}               - 수동 문항 삭제 (REQ-14)
+GET    /api/jobs/{job_id}/pages/{n}/questions/manual/{mid}/thumbnail     - 수동 문항 썸네일
 """
 import dataclasses
 import tempfile
+import uuid
 from pathlib import Path
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
 
-from app.models.schemas import BoundariesStatus, JobStatus, JobType
+from app.models.schemas import (
+    BoundariesStatus, JobStatus, JobType,
+    ManualQuestion, ManualQuestionCreate, QuestionTitleUpdate, RegionCoord,
+)
 from app.services import storage
 from app.services import thumbnail_service
 from app.utils.question_parser import detect_question_boundaries, QuestionBoundary
@@ -253,11 +263,20 @@ class BBox(BaseModel):
 
 
 class QuestionInfo(BaseModel):
-    question_num: Optional[int] = None     # 자동 감지: 번호 있음 / 수동: None
-    question_id: str                        # "{job_id}:{page_num}:{question_num}"
+    """
+    문항 목록 API 응답의 단위 항목.
+    자동 감지 문항과 수동 추가 문항을 하나의 형식으로 표현한다.
+    """
+    question_num: Optional[int] = None      # 자동 감지 문항 번호 (수동이면 None)
+    manual_id: Optional[str] = None         # 수동 문항 UUID (자동이면 None)
+    question_id: str                         # 고유 ID — UI 키값으로 사용
     thumbnail_url: str
     bbox: BBox
     col: int
+    # v3 신규 필드 ─────────────────────────────────────────────
+    title: Optional[str] = None             # 사용자 지정 타이틀 (None이면 "문항 N" 표시)
+    is_false_positive: bool = False          # 오탐지 의심 여부 (REQ-15)
+    is_manual: bool = False                  # 수동 추가 문항 여부 (REQ-13)
 
 
 class QuestionListResponse(BaseModel):
@@ -270,6 +289,7 @@ class QuestionListResponse(BaseModel):
 def list_questions(job_id: str, page_num: int):
     """
     지정 페이지의 문항 목록과 bbox 반환.
+    자동 감지 문항과 수동 추가 문항을 병합하여 반환한다 (REQ-13).
     경계 캐시가 있으면 재사용, 없으면 detect_question_boundaries 실행 후 캐시 저장.
     """
     job = storage.get_status(job_id)
@@ -280,7 +300,7 @@ def list_questions(job_id: str, page_num: int):
     if job.boundaries_status == BoundariesStatus.PROCESSING:
         return QuestionListResponse(job_id=job_id, page_num=page_num, questions=[])
 
-    # 경계 캐시 확인
+    # 경계 캐시 확인 — 있으면 재사용, 없으면 감지 후 저장
     cached = storage.get_boundaries_cache(job_id)
     if cached is not None:
         boundaries = [QuestionBoundary(**b) for b in cached]
@@ -303,21 +323,219 @@ def list_questions(job_id: str, page_num: int):
         job.questions_per_page = qpp
         storage.put_status(job)
 
-    # 해당 페이지의 문항만 필터링
+    # 해당 페이지의 자동 감지 문항만 필터링
     page_boundaries = [b for b in boundaries if b.page_index == page_num]
 
-    questions = [
+    # 자동 감지 문항 → QuestionInfo 변환
+    auto_questions = [
         QuestionInfo(
             question_num=b.number,
+            manual_id=None,
             question_id=f"{job_id}:{page_num}:{b.number}",
             thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/{b.number}/thumbnail",
             bbox=BBox(x0=b.col_x0, y0=b.y_top, x1=b.col_x1, y1=b.y_bottom),
             col=b.col,
+            title=b.title,
+            is_false_positive=b.is_false_positive,
+            is_manual=False,
         )
         for b in sorted(page_boundaries, key=lambda x: (x.col, x.y_top))
     ]
 
+    # 수동 추가 문항 병합 (REQ-13)
+    # 수동 문항은 서버에 별도 저장됨 — manual_questions/{job_id}.json
+    manual_list = storage.get_manual_questions(job_id)
+    page_manual = [m for m in manual_list if m.get("page_num") == page_num]
+    manual_questions = [
+        QuestionInfo(
+            question_num=None,
+            manual_id=m["manual_id"],
+            question_id=f"{job_id}:{page_num}:manual:{m['manual_id']}",
+            thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/manual/{m['manual_id']}/thumbnail",
+            bbox=BBox(
+                x0=m["region"]["x0"],
+                y0=m["region"]["y0"],
+                x1=m["region"]["x1"],
+                y1=m["region"]["y1"],
+            ),
+            col=0,              # 수동 문항은 컬럼 개념 없이 0으로 고정
+            title=m.get("title"),
+            is_false_positive=False,
+            is_manual=True,
+        )
+        for m in sorted(page_manual, key=lambda m: m["region"]["y0"])
+    ]
+
+    # 정렬: 자동 문항 먼저(col, y_top 순), 수동 문항은 그 뒤에 y_top 순
+    questions = auto_questions + manual_questions
     return QuestionListResponse(job_id=job_id, page_num=page_num, questions=questions)
+
+
+# ── 자동 문항 타이틀 수정 (REQ-12) ───────────────────────────
+
+@router.patch("/jobs/{job_id}/pages/{page_num}/questions/{question_num}")
+def update_question_title(job_id: str, page_num: int, question_num: int, body: QuestionTitleUpdate):
+    """
+    자동 감지 문항의 타이틀을 수정한다.
+    변경사항은 boundaries/{job_id}.json 캐시에 직접 반영되어 서버에 영속 저장된다.
+    """
+    cached = storage.get_boundaries_cache(job_id)
+    if cached is None:
+        raise HTTPException(status_code=404, detail="경계 캐시가 없습니다. 먼저 문항 목록을 조회해 주세요.")
+
+    # 해당 문항 검색 및 타이틀 업데이트
+    updated = False
+    for b in cached:
+        if b.get("page_index") == page_num and b.get("number") == question_num:
+            b["title"] = body.title
+            updated = True
+            break
+
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"문항 {question_num}을 찾을 수 없습니다.")
+
+    storage.save_boundaries_cache(job_id, cached)
+    return {"question_num": question_num, "title": body.title}
+
+
+# ── 자동 문항 삭제 (REQ-14) ──────────────────────────────────
+
+@router.delete("/jobs/{job_id}/pages/{page_num}/questions/{question_num}", status_code=204)
+def delete_question(job_id: str, page_num: int, question_num: int):
+    """
+    자동 감지 문항을 삭제한다.
+    boundaries 캐시에서 제거하고 questions_per_page, total_question_count를 재계산한다.
+    문항 썸네일 캐시도 함께 삭제한다.
+    """
+    cached = storage.get_boundaries_cache(job_id)
+    if cached is None:
+        raise HTTPException(status_code=404, detail="경계 캐시가 없습니다.")
+
+    original_count = len(cached)
+    cached = [
+        b for b in cached
+        if not (b.get("page_index") == page_num and b.get("number") == question_num)
+    ]
+    if len(cached) == original_count:
+        raise HTTPException(status_code=404, detail=f"문항 {question_num}을 찾을 수 없습니다.")
+
+    storage.save_boundaries_cache(job_id, cached)
+
+    # questions_per_page, total_question_count 재계산
+    job = storage.get_status(job_id)
+    if job:
+        qpp: dict[str, int] = {}
+        for b in cached:
+            key = str(b.get("page_index", 0))
+            qpp[key] = qpp.get(key, 0) + 1
+        job.questions_per_page = qpp
+        job.total_question_count = len(cached)
+        storage.put_status(job)
+
+    # 썸네일 캐시 삭제
+    storage.delete_question_thumbnail_cache(job_id, page_num, question_num)
+
+
+# ── 수동 문항 추가 (REQ-13) ──────────────────────────────────
+
+@router.post("/jobs/{job_id}/pages/{page_num}/questions/manual", status_code=201)
+def add_manual_question(job_id: str, page_num: int, body: ManualQuestionCreate):
+    """
+    수동 드래그로 지정한 영역을 문항으로 추가한다.
+    새로고침 후에도 복원되도록 manual_questions/{job_id}.json에 영속 저장한다.
+
+    처리 순서:
+      1. UUID 생성 → manual_id
+      2. manual_questions/{job_id}.json에 append
+      3. 해당 영역 크롭 PNG 생성 → 썸네일 캐시 저장
+      4. ManualQuestion 응답 반환
+    """
+    job = storage.get_status(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+
+    manual_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    new_item = {
+        "manual_id": manual_id,
+        "job_id": job_id,
+        "page_num": page_num,
+        "title": body.title,
+        "region": {
+            "x0": body.region.x0,
+            "y0": body.region.y0,
+            "x1": body.region.x1,
+            "y1": body.region.y1,
+        },
+        "created_at": now,
+    }
+
+    # 기존 목록에 추가하여 저장
+    manual_list = storage.get_manual_questions(job_id)
+    manual_list.append(new_item)
+    storage.save_manual_questions(job_id, manual_list)
+
+    # 수동 문항 영역 썸네일 생성 및 캐시 저장
+    try:
+        pdf_bytes = storage.read_file(storage.original_key(job_id))
+        png_bytes = thumbnail_service.get_question_thumbnail(
+            pdf_bytes=pdf_bytes,
+            page_index=page_num,
+            x0=body.region.x0,
+            y0=body.region.y0,
+            x1=body.region.x1,
+            y1=body.region.y1,
+        )
+        storage.save_manual_thumbnail_cache(job_id, page_num, manual_id, png_bytes)
+    except Exception:
+        # 썸네일 생성 실패는 문항 추가 자체를 막지 않음
+        pass
+
+    return ManualQuestion(
+        manual_id=manual_id,
+        job_id=job_id,
+        page_num=page_num,
+        title=body.title,
+        region=RegionCoord(**new_item["region"]),
+        created_at=datetime.fromisoformat(now),
+    )
+
+
+# ── 수동 문항 타이틀 수정 (REQ-12) ───────────────────────────
+
+@router.patch("/jobs/{job_id}/pages/{page_num}/questions/manual/{manual_id}")
+def update_manual_question_title(job_id: str, page_num: int, manual_id: str, body: QuestionTitleUpdate):
+    """수동 추가 문항의 타이틀을 수정한다. manual_questions/{job_id}.json에 저장."""
+    manual_list = storage.get_manual_questions(job_id)
+    updated = False
+    for m in manual_list:
+        if m.get("manual_id") == manual_id:
+            m["title"] = body.title
+            updated = True
+            break
+
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"수동 문항 {manual_id}를 찾을 수 없습니다.")
+
+    storage.save_manual_questions(job_id, manual_list)
+    return {"manual_id": manual_id, "title": body.title}
+
+
+# ── 수동 문항 삭제 (REQ-14) ──────────────────────────────────
+
+@router.delete("/jobs/{job_id}/pages/{page_num}/questions/manual/{manual_id}", status_code=204)
+def delete_manual_question(job_id: str, page_num: int, manual_id: str):
+    """수동 추가 문항을 삭제한다. 썸네일 캐시도 함께 삭제."""
+    manual_list = storage.get_manual_questions(job_id)
+    original_count = len(manual_list)
+    manual_list = [m for m in manual_list if m.get("manual_id") != manual_id]
+
+    if len(manual_list) == original_count:
+        raise HTTPException(status_code=404, detail=f"수동 문항 {manual_id}를 찾을 수 없습니다.")
+
+    storage.save_manual_questions(job_id, manual_list)
+    storage.delete_manual_thumbnail_cache(job_id, page_num, manual_id)
 
 
 # ── 문항 썸네일 ────────────────────────────────────────────
@@ -372,4 +590,37 @@ def get_question_thumbnail_endpoint(job_id: str, page_num: int, question_num: in
     )
 
     storage.save_question_thumbnail_cache(job_id, page_num, question_num, png_bytes)
+    return Response(content=png_bytes, media_type="image/png")
+
+
+# ── 수동 문항 썸네일 ──────────────────────────────────────────
+
+@router.get("/jobs/{job_id}/pages/{page_num}/questions/manual/{manual_id}/thumbnail")
+def get_manual_question_thumbnail(job_id: str, page_num: int, manual_id: str):
+    """
+    수동 추가 문항의 크롭 썸네일 PNG 반환.
+    캐시에 있으면 반환, 없으면 region 좌표로 재생성한다.
+    """
+    # 캐시 확인
+    cached_thumb = storage.get_manual_thumbnail_cache(job_id, page_num, manual_id)
+    if cached_thumb is not None:
+        return Response(content=cached_thumb, media_type="image/png")
+
+    # 수동 문항 정보 조회
+    manual_list = storage.get_manual_questions(job_id)
+    target = next((m for m in manual_list if m.get("manual_id") == manual_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"수동 문항 {manual_id}를 찾을 수 없습니다.")
+
+    region = target["region"]
+    pdf_bytes = storage.read_file(storage.original_key(job_id))
+    png_bytes = thumbnail_service.get_question_thumbnail(
+        pdf_bytes=pdf_bytes,
+        page_index=page_num,
+        x0=region["x0"],
+        y0=region["y0"],
+        x1=region["x1"],
+        y1=region["y1"],
+    )
+    storage.save_manual_thumbnail_cache(job_id, page_num, manual_id, png_bytes)
     return Response(content=png_bytes, media_type="image/png")

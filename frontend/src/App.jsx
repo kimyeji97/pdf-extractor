@@ -1,277 +1,74 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import UploadForm from "./components/UploadForm";
-import FileListPanel from "./components/FileListPanel";
-import PageBrowser from "./components/PageBrowser";
-import QuestionPicker from "./components/QuestionPicker";
-import SelectionBasket from "./components/SelectionBasket";
-import { requestUploadUrl, uploadPdf, startExtractV2, getStatus } from "./api/client";
+/**
+ * 앱 루트 컴포넌트
+ *
+ * v3에서 NavMenu + 3개 뷰로 구조 개편 (REQ-10).
+ * 기존 단일 3패널 레이아웃을 QuestionAnalysisView로 이전하고
+ * 탭 네비게이션으로 뷰를 전환한다.
+ *
+ * 탭 전환 전략 — hide-not-unmount:
+ *   각 뷰 컴포넌트는 한 번만 마운트되고, display:none / display:block 으로 가시성 전환.
+ *   이유: unmount하면 파일 선택, 페이지 선택 등 하위 상태가 초기화되어 UX가 나빠짐.
+ *   탭 간 이동 후 돌아왔을 때 직전 상태 그대로 유지됨.
+ *
+ * 뷰 간 통신:
+ *   - WorkbookHistoryView → WorkbookEditorView: initialWorkbookId 로 편집 복원 (REQ-20)
+ *   - onLoadForEdit 콜백이 activeMenu 전환 + initialWorkbookId 설정을 담당
+ */
+import { useState } from "react";
+import NavMenu from "./components/NavMenu";
+import QuestionAnalysisView from "./views/QuestionAnalysisView";
+import WorkbookEditorView from "./views/WorkbookEditorView";
+import WorkbookHistoryView from "./views/WorkbookHistoryView";
 import "./App.css";
 
 export default function App() {
-  // ── 선택 상태 ───────────────────────────────────────
-  const [jobId, setJobId]                       = useState(null);
-  const [selectedJobFilename, setSelectedJobFilename] = useState(null);
-  const [selectedPage, setSelectedPage]         = useState(null);
-  const [selectedPageInfo, setSelectedPageInfo] = useState(null);
+  // 현재 활성 탭: "analysis" | "editor" | "history"
+  const [activeMenu, setActiveMenu] = useState("analysis");
 
-  // ── 바스켓 / 내보내기 ───────────────────────────────
-  const [basket, setBasket]     = useState([]);
-  const [exporting, setExporting] = useState(false);
-  const exportPollRef             = useRef(null);
+  // 생성된 문제집 탭에서 "편집으로 불러오기" 클릭 시 전달되는 workbook_id (REQ-20)
+  // WorkbookEditorView에 prop으로 전달하여 해당 문제집의 selections/layout 복원
+  const [initialWorkbookId, setInitialWorkbookId] = useState(null);
 
-  // ── 업로드 ──────────────────────────────────────────
-  const [uploading, setUploading]   = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  // FileListPanel에 새로고침 신호를 보내는 카운터
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  // ── 패널 너비 (리사이즈) ─────────────────────────────
-  const [panelWidths, setPanelWidths] = useState({ files: 270, pages: 290 });
-  const resizingRef = useRef(null); // { panel: 'files'|'pages', startX, startWidth }
-  const isResizingRef = useRef(false);
-
-  // ── 리사이즈 핸들러 ─────────────────────────────────
-  const handleResizeStart = useCallback((panel, e) => {
-    e.preventDefault();
-    isResizingRef.current = true;
-    resizingRef.current = {
-      panel,
-      startX: e.clientX,
-      startWidth: panelWidths[panel],
-    };
-  }, [panelWidths]);
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!resizingRef.current) return;
-      const { panel, startX, startWidth } = resizingRef.current;
-      const delta = e.clientX - startX;
-      const newWidth = Math.max(180, Math.min(560, startWidth + delta));
-      setPanelWidths(prev => ({ ...prev, [panel]: newWidth }));
-    };
-    const handleMouseUp = () => {
-      resizingRef.current = null;
-      isResizingRef.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, []);
-
-  // 리사이즈 중 커서 스타일 전역 적용
-  const handleResizeMouseDown = (panel, e) => {
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    handleResizeStart(panel, e);
+  // 생성된 문제집 탭에서 편집 탭으로 전환하는 콜백
+  const handleLoadForEdit = (workbookId) => {
+    setInitialWorkbookId(workbookId);
+    setActiveMenu("editor");
   };
 
-  // ── 핸들러: 파일 선택 ───────────────────────────────
-  const handleJobSelect = (selectedJobId, filename) => {
-    setJobId(selectedJobId);
-    setSelectedJobFilename(filename || null);
-    setSelectedPage(null);
-    setSelectedPageInfo(null);
-  };
-
-  // ── 핸들러: 페이지 선택 ─────────────────────────────
-  const handlePageSelect = (pageNum, pageInfo) => {
-    setSelectedPage(pageNum);
-    setSelectedPageInfo(pageInfo || null);
-  };
-
-  // ── 핸들러: PDF 업로드 ──────────────────────────────
-  const handleFileSelected = async (selectedFile) => {
-    setUploading(true);
-    setUploadError("");
-    try {
-      const { job_id, upload_url } = await requestUploadUrl(selectedFile.name);
-      await uploadPdf(upload_url, selectedFile);
-      setJobId(job_id);
-      setSelectedJobFilename(selectedFile.name);
-      setSelectedPage(null);
-      setSelectedPageInfo(null);
-      setRefreshTrigger((t) => t + 1);
-    } catch (e) {
-      setUploadError(e.message);
-    } finally {
-      setUploading(false);
+  // 탭 변경 시 편집 복원 ID 초기화 (직접 탭 클릭 시에는 빈 에디터로 시작)
+  const handleMenuChange = (menuId) => {
+    if (menuId !== "editor") {
+      setInitialWorkbookId(null);
     }
+    setActiveMenu(menuId);
   };
 
-  // ── 바스켓 조작 ─────────────────────────────────────
-  const addToBasket = (item) => {
-    setBasket((prev) =>
-      prev.some((b) => b.questionId === item.questionId) ? prev : [...prev, item]
-    );
-  };
-
-  const removeFromBasket = (questionId) => {
-    setBasket((prev) => prev.filter((b) => b.questionId !== questionId));
-  };
-
-  // ── PDF 내보내기 (v2) ───────────────────────────────
-  const handleExport = async () => {
-    if (basket.length === 0 || exporting) return;
-    setExporting(true);
-    try {
-      const { job_id: exportJobId } = await startExtractV2(basket);
-
-      exportPollRef.current = setInterval(async () => {
-        try {
-          const data = await getStatus(exportJobId);
-          if (data.status === "DONE") {
-            clearInterval(exportPollRef.current);
-            exportPollRef.current = null;
-            setExporting(false);
-            if (data.download_url) {
-              const a = document.createElement("a");
-              a.href = data.download_url;
-              a.download = "selected_questions.pdf";
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-            }
-            setRefreshTrigger((t) => t + 1);
-          } else if (data.status === "FAILED") {
-            clearInterval(exportPollRef.current);
-            exportPollRef.current = null;
-            setExporting(false);
-            alert("내보내기 실패: " + (data.error || "알 수 없는 오류"));
-          }
-        } catch {
-          /* 폴링 오류 무시 후 재시도 */
-        }
-      }, 2000);
-    } catch (e) {
-      setExporting(false);
-      alert("내보내기 요청 실패: " + e.message);
-    }
-  };
-
-  // ── 렌더 ────────────────────────────────────────────
   return (
     <div className="app-layout">
 
       {/* ─── 상단 헤더 ─────────────────────────────── */}
       <header className="app-header">
         <h1>기출문제 PDF 문항 추출기</h1>
-        {selectedJobFilename ? (
-          <span className="app-header-filename" title={selectedJobFilename}>
-            📄 {selectedJobFilename}
-          </span>
-        ) : (
-          <p>파일 선택 → 페이지 선택 → 문항 선택 → PDF 다운로드</p>
-        )}
+
+        {/* ─── 탭 네비게이션 (REQ-10) ───────────────── */}
+        <NavMenu activeMenu={activeMenu} onMenuChange={handleMenuChange} />
       </header>
 
-      {/* ─── 3패널 영역 ────────────────────────────── */}
-      <div className="panels">
+      {/* ─── 뷰 컨테이너 (hide-not-unmount) ─────────── */}
+      {/* display를 CSS로 제어하여 컴포넌트 상태를 유지한 채 탭 전환 */}
 
-        {/* ① 파일 목록 */}
-        <div
-          className="panel panel-files"
-          style={{ width: panelWidths.files, minWidth: 180, flexShrink: 0 }}
-        >
-          <div className="panel-header">
-            <span className="panel-title">① 파일 선택</span>
-          </div>
-          <div className="panel-body">
-            <FileListPanel
-              selectedJobId={jobId}
-              onSelect={handleJobSelect}
-              refreshTrigger={refreshTrigger}
-            />
-            <div className="upload-section">
-              <div className="upload-divider">새 PDF 업로드</div>
-              {uploadError && <p className="error-msg">{uploadError}</p>}
-              {uploading  && <p className="info-msg">업로드 중...</p>}
-              <UploadForm onFileSelected={handleFileSelected} disabled={uploading} />
-            </div>
-          </div>
-        </div>
-
-        {/* 리사이즈 핸들 1 */}
-        <div
-          className="resize-handle"
-          onMouseDown={(e) => handleResizeMouseDown("files", e)}
-          title="드래그하여 너비 조절"
-        />
-
-        {/* ② 페이지 선택 */}
-        <div
-          className="panel panel-pages"
-          style={{ width: panelWidths.pages, minWidth: 180, flexShrink: 0 }}
-        >
-          <div className="panel-header">
-            <span className="panel-title">② 페이지 선택</span>
-            {jobId && <span className="panel-hint">페이지를 클릭하세요</span>}
-          </div>
-          <div className="panel-body">
-            {jobId ? (
-              <PageBrowser
-                key={jobId}
-                jobId={jobId}
-                onPageSelect={handlePageSelect}
-                selectedPageNum={selectedPage}
-              />
-            ) : (
-              <div className="empty-state">
-                <div className="empty-icon">📂</div>
-                <p>왼쪽 목록에서<br />PDF 파일을 선택하세요</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 리사이즈 핸들 2 */}
-        <div
-          className="resize-handle"
-          onMouseDown={(e) => handleResizeMouseDown("pages", e)}
-          title="드래그하여 너비 조절"
-        />
-
-        {/* ③ 문항 선택 */}
-        <div className="panel panel-questions" style={{ flex: 1, minWidth: 0 }}>
-          <div className="panel-header">
-            <span className="panel-title">③ 문항 선택</span>
-            {selectedPage !== null && (
-              <span className="panel-hint">{selectedPage + 1}페이지 · 문항을 클릭해 바스켓에 추가</span>
-            )}
-          </div>
-          <div className="panel-body">
-            {selectedPage !== null ? (
-              <QuestionPicker
-                key={`${jobId}-${selectedPage}`}
-                jobId={jobId}
-                pageNum={selectedPage}
-                pageInfo={selectedPageInfo}
-                basket={basket}
-                onAddToBasket={addToBasket}
-                onRemoveFromBasket={removeFromBasket}
-              />
-            ) : (
-              <div className="empty-state">
-                <div className="empty-icon">📄</div>
-                <p>페이지를 선택하면<br />문항 목록이 표시됩니다</p>
-              </div>
-            )}
-          </div>
-        </div>
-
+      <div style={{ display: activeMenu === "analysis" ? "contents" : "none" }}>
+        <QuestionAnalysisView />
       </div>
 
-      {/* ─── 하단 고정 바스켓 ───────────────────────── */}
-      <SelectionBasket
-        basket={basket}
-        onRemove={removeFromBasket}
-        onExport={handleExport}
-        exporting={exporting}
-      />
+      <div style={{ display: activeMenu === "editor" ? "contents" : "none" }}>
+        <WorkbookEditorView initialWorkbookId={initialWorkbookId} />
+      </div>
+
+      <div style={{ display: activeMenu === "history" ? "contents" : "none" }}>
+        <WorkbookHistoryView onLoadForEdit={handleLoadForEdit} />
+      </div>
+
     </div>
   );
 }
