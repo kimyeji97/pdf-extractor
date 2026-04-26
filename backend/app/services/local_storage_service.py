@@ -130,6 +130,24 @@ def save_boundaries_cache(job_id: str, data: list) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
+def clear_boundaries_cache(job_id: str) -> None:
+    """
+    저장된 문항 경계 캐시를 삭제한다.
+    재감지 요청 시 호출하여 이전 감지 결과를 무효화한다.
+    문항 썸네일 캐시도 함께 삭제 — 경계가 바뀌면 썸네일 좌표도 달라지기 때문.
+    """
+    # 경계 JSON 삭제
+    boundary_path = _BASE / "boundaries" / f"{job_id}.json"
+    if boundary_path.exists():
+        boundary_path.unlink()
+
+    # 이 job의 문항 썸네일 캐시 전체 삭제 (q_*.png 파일만, 페이지 썸네일은 유지)
+    thumb_dir = _BASE / "thumbnails" / job_id
+    if thumb_dir.exists():
+        for f in thumb_dir.glob("q_*.png"):
+            f.unlink()
+
+
 def get_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) -> Optional[bytes]:
     path = _BASE / "thumbnails" / job_id / f"q_{page_num}_{question_num}.png"
     return path.read_bytes() if path.exists() else None

@@ -1,140 +1,199 @@
-/* ── 전역 ────────────────────────────────────────── */
+/* ── 전역 리셋 ──────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: "Pretendard", "Apple SD Gothic Neo", sans-serif;
   background: #f5f7fa;
   color: #1a1a1a;
+  overflow: hidden;
 }
 
-.app {
-  max-width: 640px;
-  margin: 40px auto;
-  padding: 0 16px;
+/* ━━━ 앱 전체 레이아웃 (3패널 고정) ━━━━━━━━━━━━━━━━━━━ */
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
-header {
-  margin-bottom: 32px;
-  text-align: center;
-}
-header h1 { font-size: 1.6rem; font-weight: 700; }
-header p  { margin-top: 6px; color: #666; font-size: 0.95rem; }
-
-main > section {
+/* ── 상단 헤더 ──────────────────────────────────────── */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
   background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border-bottom: 1px solid #e4e8ef;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  min-height: 48px;
 }
-main > section h2 {
+.app-header h1 {
   font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 14px;
-  color: #444;
+  font-weight: 700;
+  color: #1a1a1a;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.app-header p {
+  font-size: 0.78rem;
+  color: #aaa;
+}
+.app-header-filename {
+  font-size: 0.82rem;
+  color: #4a90e2;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 400px;
+  padding: 3px 8px;
+  background: #f0f6ff;
+  border-radius: 4px;
+  border: 1px solid #c8daf7;
 }
 
-/* ── 업로드 존 ────────────────────────────────────── */
+/* ── 3패널 컨테이너 ─────────────────────────────────── */
+.panels {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  /* 하단 바스켓 영역 높이만큼 패딩 */
+  padding-bottom: 52px;
+}
+
+/* ── 패널 공통 ──────────────────────────────────────── */
+.panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+}
+/* resize-handle이 구분선 역할을 대신하므로 border-right 제거 */
+
+/* 패널 헤더 (고정) */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e4e8ef;
+  background: #f8fafc;
+  flex-shrink: 0;
+  min-height: 42px;
+}
+.panel-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #333;
+}
+.panel-hint {
+  font-size: 11px;
+  color: #aaa;
+}
+
+/* 패널 본문 (스크롤) */
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+/* ── 리사이즈 핸들 ───────────────────────────────────── */
+.resize-handle {
+  width: 5px;
+  flex-shrink: 0;
+  background: #e4e8ef;
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+  transition: background 0.15s;
+  /* 클릭 영역을 살짝 넓혀 UX 향상 */
+}
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: -3px; right: -3px;
+}
+.resize-handle:hover {
+  background: #4a90e2;
+}
+
+/* ── 빈 상태 (패널 미선택 안내) ────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 180px;
+  gap: 10px;
+  color: #ccc;
+}
+.empty-icon {
+  font-size: 36px;
+  line-height: 1;
+}
+.empty-state p {
+  font-size: 13px;
+  color: #bbb;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ── 업로드 구분선 ──────────────────────────────────── */
+.upload-section {
+  margin-top: 20px;
+}
+.upload-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #bbb;
+  margin-bottom: 10px;
+}
+.upload-divider::before,
+.upload-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #ebebeb;
+}
+
+/* ── 업로드 존 ──────────────────────────────────────── */
 .upload-zone {
-  border: 2px dashed #c8d0dc;
+  border: 2px dashed #d0d6e0;
   border-radius: 8px;
-  padding: 40px 20px;
+  padding: 20px 10px;
   text-align: center;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
-  color: #888;
-  font-size: 0.9rem;
+  color: #aaa;
+  font-size: 0.78rem;
   line-height: 1.6;
 }
-.upload-zone:hover   { border-color: #4f80ff; background: #f0f4ff; }
-.upload-zone.dragging { border-color: #4f80ff; background: #e8eeff; }
+.upload-zone:hover    { border-color: #4a90e2; background: #f0f6ff; }
+.upload-zone.dragging { border-color: #4a90e2; background: #e8f0ff; }
 .upload-zone.disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* ── 문항 입력 ────────────────────────────────────── */
-.question-input label { display: block; font-size: 0.85rem; color: #555; margin-bottom: 6px; }
-.question-input input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #dde1e9;
-  border-radius: 6px;
-  font-size: 1rem;
-}
-.question-input input:focus { outline: none; border-color: #4f80ff; }
-.hint  { margin-top: 6px; font-size: 0.8rem; color: #999; }
+/* ── 메시지 공통 ─────────────────────────────────────── */
+.info-msg    { margin-top: 8px; color: #4a90e2; font-size: 12px; }
+.success-msg { margin-top: 8px; color: #22c55e; font-size: 12px; }
+.error-msg   { margin-top: 6px; color: #ef4444; font-size: 12px; }
 
-/* ── 버튼 ─────────────────────────────────────────── */
-.extract-btn {
-  margin-top: 14px;
-  width: 100%;
-  padding: 12px;
-  background: #4f80ff;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
+/* ── 스피너 (shimmer 애니메이션) ────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
-.extract-btn:hover { background: #3a6be8; }
-
-.reset-btn {
-  display: block;
-  width: 100%;
-  padding: 12px;
-  background: #f0f4ff;
-  color: #4f80ff;
-  border: 1px solid #c0d0ff;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 8px;
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-/* ── 상태 폴러 ────────────────────────────────────── */
-.status-poller { font-size: 0.95rem; }
-.spinner {
-  width: 28px; height: 28px;
-  border: 3px solid #e0e6f0;
-  border-top-color: #4f80ff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 12px 0;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.done-box { margin-top: 10px; }
-.download-btn {
-  display: inline-block;
-  margin-top: 10px;
-  padding: 10px 20px;
-  background: #22c55e;
-  color: #fff;
-  border-radius: 8px;
-  text-decoration: none;
-  font-weight: 600;
-}
-.download-btn:hover { background: #16a34a; }
-
-/* ── 메시지 ───────────────────────────────────────── */
-.info-msg    { margin-top: 10px; color: #4f80ff; font-size: 0.88rem; }
-.success-msg { margin-top: 10px; color: #22c55e; font-size: 0.88rem; }
-.error-msg   { margin-top: 8px; color: #ef4444; font-size: 0.88rem; }
-
-.error-box {
-  background: #fff5f5;
-  border: 1px solid #fca5a5;
-  border-radius: 10px;
-  padding: 20px;
-  text-align: center;
-}
-.error-box p  { color: #b91c1c; margin-bottom: 12px; }
-.error-box button {
-  padding: 8px 20px;
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
+/* ── 스크롤바 스타일 ─────────────────────────────────── */
+.panel-body::-webkit-scrollbar { width: 5px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb { background: #d8dce4; border-radius: 4px; }

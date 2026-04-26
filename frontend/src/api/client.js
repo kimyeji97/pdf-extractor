@@ -26,6 +26,18 @@ export async function listJobs() {
 }
 
 /**
+ * GET /api/jobs/{jobId}
+ * 단일 job 상세 정보 반환 (boundaries_status, total_question_count 포함)
+ * 재감지 완료 폴링 시 사용
+ */
+export async function getJobInfo(jobId) {
+  const res = await fetch(`${BASE_URL}/jobs/${jobId}`);
+  if (!res.ok) throw new Error("job 정보 조회 실패");
+  return res.json();
+  // { job_id, filename, status, boundaries_status, total_question_count, ... }
+}
+
+/**
  * GET /api/jobs/{jobId}/pages
  * 페이지 목록 + 썸네일 URL 반환
  * 썸네일 이미지는 <img src={page.thumbnail_url} /> 로 직접 사용
@@ -79,6 +91,7 @@ export async function startExtract(jobId, questionNumbers) {
 
 /**
  * GET /api/status/{jobId}
+ * 내보내기 작업 상태 조회 (extract-v2 폴링용)
  */
 export async function getStatus(jobId) {
   const res = await fetch(`${BASE_URL}/status/${jobId}`);
@@ -98,16 +111,39 @@ export async function getPageQuestions(jobId, pageNum) {
 }
 
 /**
+ * POST /api/jobs/{jobId}/refresh
+ * 전체 문서 재감지 요청 (비동기).
+ * 즉시 { job_id, boundaries_status: "PROCESSING" } 를 반환.
+ * 완료 여부는 getJobInfo(jobId).boundaries_status 를 폴링하여 확인.
+ */
+export async function refreshJobQuestions(jobId) {
+  const res = await fetch(`${BASE_URL}/jobs/${jobId}/refresh`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("문항 재감지 요청 실패");
+  return res.json();
+  // { job_id, boundaries_status: "PROCESSING", message }
+}
+
+/**
  * POST /api/extract-v2
- * @param {Array<{jobId: string, pageNum: number, questionNum: number}>} selections
+ * @param {Array<{
+ *   jobId: string,
+ *   pageNum: number,
+ *   questionNum?: number,
+ *   customRegion?: {x0: number, y0: number, x1: number, y1: number},
+ *   label?: string,
+ * }>} selections
  */
 export async function startExtractV2(selections) {
   const body = {
-    selections: selections.map((s) => ({
-      job_id: s.jobId,
-      page_num: s.pageNum,
-      question_num: s.questionNum,
-    })),
+    selections: selections.map((s) => {
+      const item = { job_id: s.jobId, page_num: s.pageNum };
+      if (s.questionNum != null)  item.question_num  = s.questionNum;
+      if (s.customRegion != null) item.custom_region = s.customRegion;
+      if (s.label != null)        item.label         = s.label;
+      return item;
+    }),
   };
   const res = await fetch(`${BASE_URL}/extract-v2`, {
     method: "POST",

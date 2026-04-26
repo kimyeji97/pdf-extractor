@@ -6,16 +6,15 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api
 /**
  * @param {{
  *   jobId: string,
- *   onPageSelect: (pageNum: number) => void,
- *   onBack: () => void
+ *   onPageSelect: (pageNum: number, pageInfo: object) => void,
+ *   selectedPageNum: number | null  // App에서 관리하는 현재 선택 페이지 (하이라이트용)
  * }} props
  */
-export default function PageBrowser({ jobId, onPageSelect, onBack }) {
-  const [pages, setPages] = useState([]);
+export default function PageBrowser({ jobId, onPageSelect, selectedPageNum }) {
+  const [pages, setPages]         = useState([]);
   const [pageCount, setPageCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [selectedPage, setSelectedPage] = useState(null);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
 
   const fetchPages = useCallback(async () => {
     setLoading(true);
@@ -36,21 +35,16 @@ export default function PageBrowser({ jobId, onPageSelect, onBack }) {
   }, [fetchPages]);
 
   const handleSelect = (pageNum) => {
-    setSelectedPage(pageNum);
-    onPageSelect(pageNum);
+    const pageInfo = pages.find((p) => p.page_num === pageNum) || null;
+    onPageSelect(pageNum, pageInfo);
   };
 
   return (
     <div style={styles.container}>
-      {/* 헤더 */}
-      <div style={styles.header}>
-        <button style={styles.backBtn} onClick={onBack}>
-          ← 파일 목록으로
-        </button>
-        {pageCount > 0 && (
-          <span style={styles.pageCount}>전체 {pageCount}페이지</span>
-        )}
-      </div>
+      {/* 페이지 수 표시 */}
+      {pageCount > 0 && (
+        <p style={styles.countLabel}>전체 {pageCount}페이지</p>
+      )}
 
       {error && <p style={styles.error}>{error}</p>}
 
@@ -60,32 +54,33 @@ export default function PageBrowser({ jobId, onPageSelect, onBack }) {
           ? Array.from({ length: 8 }).map((_, i) => (
               <div key={i} style={styles.skeleton} />
             ))
-          : pages.map((page) => (
-              <div
-                key={page.page_num}
-                style={{
-                  ...styles.card,
-                  ...(selectedPage === page.page_num ? styles.cardSelected : {}),
-                }}
-                onClick={() => handleSelect(page.page_num)}
-              >
-                <div style={styles.imgWrapper}>
-                  <img
-                    src={`${BASE_URL.replace(/\/api$/, "")}${page.thumbnail_url}`}
-                    alt={`페이지 ${page.page_num + 1}`}
-                    style={styles.img}
-                    loading="lazy"
-                  />
-                  {selectedPage === page.page_num && (
-                    <div style={styles.checkMark}>✓</div>
-                  )}
+          : pages.map((page) => {
+              const isSelected = selectedPageNum === page.page_num;
+              return (
+                <div
+                  key={page.page_num}
+                  style={{
+                    ...styles.card,
+                    ...(isSelected ? styles.cardSelected : {}),
+                  }}
+                  onClick={() => handleSelect(page.page_num)}
+                >
+                  <div style={styles.imgWrapper}>
+                    <img
+                      src={`${BASE_URL.replace(/\/api$/, "")}${page.thumbnail_url}`}
+                      alt={`페이지 ${page.page_num + 1}`}
+                      style={styles.img}
+                      loading="lazy"
+                    />
+                    {isSelected && <div style={styles.checkMark}>✓</div>}
+                  </div>
+                  <span style={styles.pageLabel}>페이지 {page.page_num + 1}</span>
+                  <span style={styles.questionCountLabel}>
+                    {page.question_count == null ? "—" : `${page.question_count}문항`}
+                  </span>
                 </div>
-                <span style={styles.pageLabel}>페이지 {page.page_num + 1}</span>
-                <span style={styles.questionCountLabel}>
-                  {page.question_count == null ? "—" : `${page.question_count}문항`}
-                </span>
-              </div>
-            ))}
+              );
+            })}
       </div>
     </div>
   );
@@ -95,39 +90,26 @@ const styles = {
   container: {
     width: "100%",
   },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  backBtn: {
-    background: "none",
-    border: "none",
-    color: "#4a90e2",
-    cursor: "pointer",
-    fontSize: 14,
-    padding: "4px 0",
-  },
-  pageCount: {
-    fontSize: 13,
-    color: "#888",
+  countLabel: {
+    fontSize: 12,
+    color: "#aaa",
+    marginBottom: 10,
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 12,
+    gridTemplateColumns: "repeat(2, 1fr)",
+    gap: 10,
   },
   card: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
     cursor: "pointer",
     borderRadius: 6,
     padding: 6,
     border: "2px solid transparent",
-    transition: "border-color 0.15s",
+    transition: "border-color 0.15s, background 0.15s",
   },
   cardSelected: {
     borderColor: "#4a90e2",
@@ -136,7 +118,7 @@ const styles = {
   imgWrapper: {
     position: "relative",
     width: "100%",
-    paddingTop: "141%", // A4 비율 (1:√2)
+    paddingTop: "141%",   /* A4 비율 (1:√2) */
     background: "#f0f0f0",
     borderRadius: 4,
     overflow: "hidden",
@@ -151,26 +133,26 @@ const styles = {
   },
   checkMark: {
     position: "absolute",
-    top: 6,
-    right: 6,
+    top: 5,
+    right: 5,
     background: "#4a90e2",
     color: "#fff",
     borderRadius: "50%",
-    width: 22,
-    height: 22,
+    width: 20,
+    height: 20,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "bold",
   },
   pageLabel: {
-    fontSize: 12,
-    color: "#666",
+    fontSize: 11,
+    color: "#555",
   },
   questionCountLabel: {
-    fontSize: 11,
-    color: "#999",
+    fontSize: 10,
+    color: "#aaa",
   },
   skeleton: {
     borderRadius: 6,
@@ -182,6 +164,6 @@ const styles = {
   },
   error: {
     color: "#c0392b",
-    fontSize: 13,
+    fontSize: 12,
   },
 };

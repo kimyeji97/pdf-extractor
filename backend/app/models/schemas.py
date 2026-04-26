@@ -73,10 +73,27 @@ class JobStatusFile(BaseModel):
 
 
 # ── v2 추출 요청 ──────────────────────────────────────────
+
+class RegionCoord(BaseModel):
+    """PDF 좌표계(pt) 기준 사각형 영역. 수동 선택 시 사용."""
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+
 class SelectionItem(BaseModel):
+    """
+    추출 단위 1건.
+    - 자동 감지 문항: question_num 필수, custom_region 없음
+    - 수동 지정 영역: custom_region 필수, question_num 없음
+    둘 중 하나는 반드시 있어야 한다.
+    """
     job_id: str
     page_num: int
-    question_num: int
+    question_num: Optional[int] = None
+    custom_region: Optional[RegionCoord] = None
+    label: Optional[str] = None  # UI 표시용 (예: "수동 선택")
 
 
 class ExtractV2Request(BaseModel):

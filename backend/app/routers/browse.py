@@ -1,15 +1,17 @@
 """
-GET /api/jobs                                                     - 업로드된 파일 목록 조회
-GET /api/jobs/{job_id}/pages                                      - 페이지 목록 + 썸네일 URL
-GET /api/jobs/{job_id}/pages/{n}/thumbnail                        - 썸네일 PNG 반환
-GET /api/jobs/{job_id}/pages/{n}/questions                        - 페이지 내 문항 목록
-GET /api/jobs/{job_id}/pages/{n}/questions/{q}/thumbnail          - 문항 크롭 썸네일
+GET  /api/jobs                                                     - 업로드된 파일 목록 조회
+GET  /api/jobs/{job_id}                                            - 단일 job 정보 조회 (boundaries_status 포함)
+POST /api/jobs/{job_id}/refresh                                    - 전체 문서 재감지 (비동기)
+GET  /api/jobs/{job_id}/pages                                      - 페이지 목록 + 썸네일 URL
+GET  /api/jobs/{job_id}/pages/{n}/thumbnail                        - 썸네일 PNG 반환
+GET  /api/jobs/{job_id}/pages/{n}/questions                        - 페이지 내 문항 목록
+GET  /api/jobs/{job_id}/pages/{n}/questions/{q}/thumbnail          - 문항 크롭 썸네일
 """
 import dataclasses
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import List, Optional
@@ -62,6 +64,114 @@ def list_jobs():
     export_jobs = [to_summary(j) for j in job_files if j.job_type == JobType.EXPORT]
 
     return JobListResponse(source_jobs=source_jobs, export_jobs=export_jobs)
+
+
+@router.get("/jobs/{job_id}", response_model=JobSummary)
+def get_job(job_id: str):
+    """단일 job의 상태 정보 반환 (boundaries_status 포함 — 재감지 폴링용)"""
+    job = storage.get_status(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    return JobSummary(
+        job_id=job.job_id,
+        filename=job.filename,
+        status=job.status,
+        uploaded_at=job.uploaded_at,
+        job_type=job.job_type,
+        boundaries_status=job.boundaries_status,
+        total_question_count=job.total_question_count,
+    )
+
+
+# ── 문서 전체 재감지 (비동기) ────────────────────────────────
+
+class RefreshResponse(BaseModel):
+    job_id: str
+    boundaries_status: BoundariesStatus
+    message: str = "재감지가 시작되었습니다."
+
+
+@router.post("/jobs/{job_id}/refresh", response_model=RefreshResponse)
+def refresh_job_questions(job_id: str, background_tasks: BackgroundTasks):
+    """
+    전체 문서 재감지 요청 (비동기).
+
+    동작:
+      1. boundaries_status를 PROCESSING으로 즉시 업데이트 후 반환 (논블로킹)
+      2. 백그라운드에서 기존 캐시 삭제 → 전체 PDF 재분석 → 캐시 저장
+      3. 완료/실패 시 boundaries_status 업데이트 (DONE / FAILED)
+
+    프론트에서는:
+      - POST 후 즉시 PROCESSING 응답을 받음
+      - GET /api/jobs/{job_id} 를 폴링하여 DONE/FAILED 확인
+      - DONE 이 되면 해당 페이지 문항 목록 다시 로드
+    """
+    job = storage.get_status(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+
+    # 이미 처리 중이면 중복 요청 방지
+    if job.boundaries_status == BoundariesStatus.PROCESSING:
+        return RefreshResponse(
+            job_id=job_id,
+            boundaries_status=BoundariesStatus.PROCESSING,
+            message="이미 재감지가 진행 중입니다.",
+        )
+
+    # 즉시 PROCESSING 상태로 업데이트 → 프론트 폴링 기준점
+    job.boundaries_status = BoundariesStatus.PROCESSING
+    storage.put_status(job)
+
+    # 백그라운드에서 실제 감지 실행
+    background_tasks.add_task(_run_refresh_detection, job_id)
+
+    return RefreshResponse(job_id=job_id, boundaries_status=BoundariesStatus.PROCESSING)
+
+
+def _run_refresh_detection(job_id: str) -> None:
+    """
+    백그라운드 태스크: 캐시 초기화 후 전체 PDF 재감지.
+
+    1. 기존 경계 캐시 + 문항 썸네일 캐시 삭제
+    2. 원본 PDF로 detect_question_boundaries 재실행
+    3. 새 결과를 캐시에 저장
+    4. questions_per_page, total_question_count 갱신
+    5. boundaries_status = DONE 또는 FAILED 저장
+    """
+    job = storage.get_status(job_id)
+    if job is None:
+        return
+
+    try:
+        # Step 1: 기존 캐시 무효화
+        storage.clear_boundaries_cache(job_id)
+
+        # Step 2: PDF 재분석
+        pdf_bytes = storage.read_file(storage.original_key(job_id))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = str(Path(tmpdir) / "original.pdf")
+            Path(pdf_path).write_bytes(pdf_bytes)
+            boundaries = detect_question_boundaries(pdf_path)
+
+        # Step 3: 새 결과 캐시 저장
+        storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
+
+        # Step 4: 페이지별 문항 수 집계 → questions_per_page 갱신
+        qpp: dict[str, int] = {}
+        for b in boundaries:
+            key = str(b.page_index)
+            qpp[key] = qpp.get(key, 0) + 1
+
+        job.boundaries_status = BoundariesStatus.DONE
+        job.total_question_count = len(boundaries)
+        job.questions_per_page = qpp
+
+    except Exception as e:
+        job.boundaries_status = BoundariesStatus.FAILED
+        job.error = str(e)
+
+    finally:
+        storage.put_status(job)
 
 
 # ── 페이지 목록 ───────────────────────────────────────────
@@ -143,8 +253,8 @@ class BBox(BaseModel):
 
 
 class QuestionInfo(BaseModel):
-    question_num: int
-    question_id: str        # "{job_id}:{page_num}:{question_num}"
+    question_num: Optional[int] = None     # 자동 감지: 번호 있음 / 수동: None
+    question_id: str                        # "{job_id}:{page_num}:{question_num}"
     thumbnail_url: str
     bbox: BBox
     col: int
@@ -166,6 +276,10 @@ def list_questions(job_id: str, page_num: int):
     if job is None:
         raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
 
+    # 재감지 중이면 캐시 사용 금지 (오래된 데이터 반환 방지)
+    if job.boundaries_status == BoundariesStatus.PROCESSING:
+        return QuestionListResponse(job_id=job_id, page_num=page_num, questions=[])
+
     # 경계 캐시 확인
     cached = storage.get_boundaries_cache(job_id)
     if cached is not None:
@@ -178,6 +292,16 @@ def list_questions(job_id: str, page_num: int):
             boundaries = detect_question_boundaries(pdf_path)
 
         storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
+
+        # boundaries_status 갱신 (처음 감지 완료)
+        qpp: dict[str, int] = {}
+        for b in boundaries:
+            key = str(b.page_index)
+            qpp[key] = qpp.get(key, 0) + 1
+        job.boundaries_status = BoundariesStatus.DONE
+        job.total_question_count = len(boundaries)
+        job.questions_per_page = qpp
+        storage.put_status(job)
 
     # 해당 페이지의 문항만 필터링
     page_boundaries = [b for b in boundaries if b.page_index == page_num]

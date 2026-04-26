@@ -1,85 +1,109 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import UploadForm from "./components/UploadForm";
-import QuestionInput from "./components/QuestionInput";
-import StatusPoller from "./components/StatusPoller";
 import FileListPanel from "./components/FileListPanel";
 import PageBrowser from "./components/PageBrowser";
 import QuestionPicker from "./components/QuestionPicker";
 import SelectionBasket from "./components/SelectionBasket";
-import { requestUploadUrl, uploadPdf, startExtract, startExtractV2, getStatus } from "./api/client";
+import { requestUploadUrl, uploadPdf, startExtractV2, getStatus } from "./api/client";
 import "./App.css";
 
-/**
- * 전체 유저 플로우
- *   file-list → uploading → page-browse → question-pick → (basket에서 PDF 다운로드)
- *   기존 v1 플로우: file-list → ... → ready → processing → done / error
- */
-const STEPS = {
-  FILE_LIST:     "file-list",     // 앱 진입 기본 화면
-  UPLOADING:     "uploading",     // S3 업로드 중
-  PAGE_BROWSE:   "page-browse",   // 페이지 썸네일 브라우징
-  QUESTION_PICK: "question-pick", // 페이지 내 문항 선택
-  READY:         "ready",         // (v1) 페이지 선택 완료, 추출 대기
-  PROCESSING:    "processing",    // (v1) 추출 작업 진행 중
-  DONE:          "done",
-  ERROR:         "error",
-};
-
 export default function App() {
-  const [step, setStep] = useState(STEPS.FILE_LIST);
-  const [file, setFile] = useState(null);
-  const [questions, setQuestions] = useState("");
-  const [jobId, setJobId] = useState(null);
-  const [selectedPage, setSelectedPage] = useState(null);
-  const [errorMsg, setErrorMsg] = useState("");
+  // ── 선택 상태 ───────────────────────────────────────
+  const [jobId, setJobId]                       = useState(null);
+  const [selectedJobFilename, setSelectedJobFilename] = useState(null);
+  const [selectedPage, setSelectedPage]         = useState(null);
+  const [selectedPageInfo, setSelectedPageInfo] = useState(null);
 
-  // 바스켓 상태
-  const [basket, setBasket] = useState([]);
+  // ── 바스켓 / 내보내기 ───────────────────────────────
+  const [basket, setBasket]     = useState([]);
   const [exporting, setExporting] = useState(false);
-  const exportPollRef = useRef(null);
+  const exportPollRef             = useRef(null);
 
-  // ── 파일 목록에서 job 선택 → 페이지 브라우징 ────────
-  const handleJobSelect = (selectedJobId) => {
+  // ── 업로드 ──────────────────────────────────────────
+  const [uploading, setUploading]   = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  // FileListPanel에 새로고침 신호를 보내는 카운터
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // ── 패널 너비 (리사이즈) ─────────────────────────────
+  const [panelWidths, setPanelWidths] = useState({ files: 270, pages: 290 });
+  const resizingRef = useRef(null); // { panel: 'files'|'pages', startX, startWidth }
+  const isResizingRef = useRef(false);
+
+  // ── 리사이즈 핸들러 ─────────────────────────────────
+  const handleResizeStart = useCallback((panel, e) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    resizingRef.current = {
+      panel,
+      startX: e.clientX,
+      startWidth: panelWidths[panel],
+    };
+  }, [panelWidths]);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!resizingRef.current) return;
+      const { panel, startX, startWidth } = resizingRef.current;
+      const delta = e.clientX - startX;
+      const newWidth = Math.max(180, Math.min(560, startWidth + delta));
+      setPanelWidths(prev => ({ ...prev, [panel]: newWidth }));
+    };
+    const handleMouseUp = () => {
+      resizingRef.current = null;
+      isResizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  // 리사이즈 중 커서 스타일 전역 적용
+  const handleResizeMouseDown = (panel, e) => {
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    handleResizeStart(panel, e);
+  };
+
+  // ── 핸들러: 파일 선택 ───────────────────────────────
+  const handleJobSelect = (selectedJobId, filename) => {
     setJobId(selectedJobId);
+    setSelectedJobFilename(filename || null);
     setSelectedPage(null);
-    setStep(STEPS.PAGE_BROWSE);
+    setSelectedPageInfo(null);
   };
 
-  // ── 페이지 선택 → 문항 선택 ──────────────────────────
-  const handlePageSelect = (pageNum) => {
+  // ── 핸들러: 페이지 선택 ─────────────────────────────
+  const handlePageSelect = (pageNum, pageInfo) => {
     setSelectedPage(pageNum);
-    setStep(STEPS.QUESTION_PICK);
+    setSelectedPageInfo(pageInfo || null);
   };
 
-  // ── 페이지 브라우징 → 파일 목록으로 복귀 ────────────
-  const handleBackToFileList = () => {
-    setStep(STEPS.FILE_LIST);
-  };
-
-  // ── 문항 선택 → 페이지 브라우징으로 복귀 ────────────
-  const handleBackToPageBrowse = () => {
-    setStep(STEPS.PAGE_BROWSE);
-  };
-
-  // ── Step 1: 파일 선택 후 S3 업로드 ─────────────────
+  // ── 핸들러: PDF 업로드 ──────────────────────────────
   const handleFileSelected = async (selectedFile) => {
-    setFile(selectedFile);
-    setStep(STEPS.UPLOADING);
-    setErrorMsg("");
-
+    setUploading(true);
+    setUploadError("");
     try {
       const { job_id, upload_url } = await requestUploadUrl(selectedFile.name);
-      setJobId(job_id);
       await uploadPdf(upload_url, selectedFile);
+      setJobId(job_id);
+      setSelectedJobFilename(selectedFile.name);
       setSelectedPage(null);
-      setStep(STEPS.PAGE_BROWSE);
+      setSelectedPageInfo(null);
+      setRefreshTrigger((t) => t + 1);
     } catch (e) {
-      setErrorMsg(e.message);
-      setStep(STEPS.ERROR);
+      setUploadError(e.message);
+    } finally {
+      setUploading(false);
     }
   };
 
-  // ── 바스켓 조작 ───────────────────────────────────
+  // ── 바스켓 조작 ─────────────────────────────────────
   const addToBasket = (item) => {
     setBasket((prev) =>
       prev.some((b) => b.questionId === item.questionId) ? prev : [...prev, item]
@@ -90,11 +114,10 @@ export default function App() {
     setBasket((prev) => prev.filter((b) => b.questionId !== questionId));
   };
 
-  // ── PDF 내보내기 (v2) ─────────────────────────────
+  // ── PDF 내보내기 (v2) ───────────────────────────────
   const handleExport = async () => {
     if (basket.length === 0 || exporting) return;
     setExporting(true);
-
     try {
       const { job_id: exportJobId } = await startExtractV2(basket);
 
@@ -105,7 +128,6 @@ export default function App() {
             clearInterval(exportPollRef.current);
             exportPollRef.current = null;
             setExporting(false);
-            // 자동 다운로드
             if (data.download_url) {
               const a = document.createElement("a");
               a.href = data.download_url;
@@ -114,6 +136,7 @@ export default function App() {
               a.click();
               document.body.removeChild(a);
             }
+            setRefreshTrigger((t) => t + 1);
           } else if (data.status === "FAILED") {
             clearInterval(exportPollRef.current);
             exportPollRef.current = null;
@@ -121,7 +144,7 @@ export default function App() {
             alert("내보내기 실패: " + (data.error || "알 수 없는 오류"));
           }
         } catch {
-          // 폴링 오류는 무시하고 재시도
+          /* 폴링 오류 무시 후 재시도 */
         }
       }, 2000);
     } catch (e) {
@@ -130,155 +153,125 @@ export default function App() {
     }
   };
 
-  // ── (v1) 추출 시작 ─────────────────────────────────
-  const handleExtract = async () => {
-    if (!questions.trim()) {
-      alert("추출할 문항 번호를 입력하세요.");
-      return;
-    }
-    setErrorMsg("");
-    setStep(STEPS.PROCESSING);
-
-    try {
-      await startExtract(jobId, questions.trim());
-    } catch (e) {
-      setErrorMsg(e.message);
-      setStep(STEPS.ERROR);
-    }
-  };
-
-  const handleReset = () => {
-    if (exportPollRef.current) {
-      clearInterval(exportPollRef.current);
-      exportPollRef.current = null;
-    }
-    setStep(STEPS.FILE_LIST);
-    setFile(null);
-    setQuestions("");
-    setJobId(null);
-    setSelectedPage(null);
-    setErrorMsg("");
-    setBasket([]);
-    setExporting(false);
-  };
-
-  const isProcessing = step === STEPS.UPLOADING || step === STEPS.PROCESSING;
-  const showBasket = basket.length > 0 || step === STEPS.QUESTION_PICK;
-
+  // ── 렌더 ────────────────────────────────────────────
   return (
-    <div className="app">
-      <header>
+    <div className="app-layout">
+
+      {/* ─── 상단 헤더 ─────────────────────────────── */}
+      <header className="app-header">
         <h1>기출문제 PDF 문항 추출기</h1>
-        <p>원하는 문항 번호만 골라 새 PDF로 받아보세요</p>
+        {selectedJobFilename ? (
+          <span className="app-header-filename" title={selectedJobFilename}>
+            📄 {selectedJobFilename}
+          </span>
+        ) : (
+          <p>파일 선택 → 페이지 선택 → 문항 선택 → PDF 다운로드</p>
+        )}
       </header>
 
-      <main style={{ paddingBottom: showBasket ? 72 : 0 }}>
-        {/* 파일 목록 */}
-        {step === STEPS.FILE_LIST && (
-          <section>
-            <FileListPanel onSelect={handleJobSelect} />
-            <div style={{ marginTop: 16 }}>
-              <p style={{ fontSize: 13, color: "#888" }}>또는 새 PDF를 업로드하세요</p>
-              <UploadForm onFileSelected={handleFileSelected} disabled={false} />
-            </div>
-          </section>
-        )}
+      {/* ─── 3패널 영역 ────────────────────────────── */}
+      <div className="panels">
 
-        {/* 업로드 중 */}
-        {step === STEPS.UPLOADING && (
-          <section>
-            <h2>1. PDF 업로드</h2>
-            <p className="info-msg">S3에 업로드 중...</p>
-          </section>
-        )}
-
-        {/* 페이지 브라우징 */}
-        {step === STEPS.PAGE_BROWSE && (
-          <section>
-            <h2>2. 페이지 선택</h2>
-            <PageBrowser
-              jobId={jobId}
-              onPageSelect={handlePageSelect}
-              onBack={handleBackToFileList}
-            />
-          </section>
-        )}
-
-        {/* 문항 선택 (신규) */}
-        {step === STEPS.QUESTION_PICK && (
-          <section>
-            <h2>3. 문항 선택</h2>
-            {selectedPage !== null && (
-              <p style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>
-                {selectedPage + 1}페이지 · 문항을 클릭해 바스켓에 추가하세요
-              </p>
-            )}
-            <QuestionPicker
-              jobId={jobId}
-              pageNum={selectedPage}
-              basket={basket}
-              onAddToBasket={addToBasket}
-              onRemoveFromBasket={removeFromBasket}
-              onBack={handleBackToPageBrowse}
-            />
-          </section>
-        )}
-
-        {/* (v1) 문항 번호 입력 */}
-        {(step === STEPS.READY || step === STEPS.PROCESSING || step === STEPS.DONE) && (
-          <section>
-            <h2>3. 문항 번호 입력</h2>
-            {selectedPage !== null && (
-              <p style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>
-                선택된 페이지: {selectedPage + 1}페이지
-              </p>
-            )}
-            <QuestionInput
-              value={questions}
-              onChange={setQuestions}
-              disabled={step !== STEPS.READY}
-            />
-            {step === STEPS.READY && (
-              <button className="extract-btn" onClick={handleExtract}>
-                추출 시작
-              </button>
-            )}
-          </section>
-        )}
-
-        {/* 상태 + 다운로드 */}
-        {(step === STEPS.PROCESSING || step === STEPS.DONE) && (
-          <section>
-            <h2>4. 결과 다운로드</h2>
-            <StatusPoller jobId={jobId} onDone={() => setStep(STEPS.DONE)} />
-          </section>
-        )}
-
-        {/* 에러 */}
-        {step === STEPS.ERROR && (
-          <div className="error-box">
-            <p>오류: {errorMsg}</p>
-            <button onClick={handleReset}>다시 시작</button>
+        {/* ① 파일 목록 */}
+        <div
+          className="panel panel-files"
+          style={{ width: panelWidths.files, minWidth: 180, flexShrink: 0 }}
+        >
+          <div className="panel-header">
+            <span className="panel-title">① 파일 선택</span>
           </div>
-        )}
+          <div className="panel-body">
+            <FileListPanel
+              selectedJobId={jobId}
+              onSelect={handleJobSelect}
+              refreshTrigger={refreshTrigger}
+            />
+            <div className="upload-section">
+              <div className="upload-divider">새 PDF 업로드</div>
+              {uploadError && <p className="error-msg">{uploadError}</p>}
+              {uploading  && <p className="info-msg">업로드 중...</p>}
+              <UploadForm onFileSelected={handleFileSelected} disabled={uploading} />
+            </div>
+          </div>
+        </div>
 
-        {/* 완료 후 재시작 */}
-        {step === STEPS.DONE && (
-          <button className="reset-btn" onClick={handleReset}>
-            새 PDF 추출하기
-          </button>
-        )}
-      </main>
-
-      {/* 하단 고정 바스켓 */}
-      {showBasket && (
-        <SelectionBasket
-          basket={basket}
-          onRemove={removeFromBasket}
-          onExport={handleExport}
-          exporting={exporting}
+        {/* 리사이즈 핸들 1 */}
+        <div
+          className="resize-handle"
+          onMouseDown={(e) => handleResizeMouseDown("files", e)}
+          title="드래그하여 너비 조절"
         />
-      )}
+
+        {/* ② 페이지 선택 */}
+        <div
+          className="panel panel-pages"
+          style={{ width: panelWidths.pages, minWidth: 180, flexShrink: 0 }}
+        >
+          <div className="panel-header">
+            <span className="panel-title">② 페이지 선택</span>
+            {jobId && <span className="panel-hint">페이지를 클릭하세요</span>}
+          </div>
+          <div className="panel-body">
+            {jobId ? (
+              <PageBrowser
+                key={jobId}
+                jobId={jobId}
+                onPageSelect={handlePageSelect}
+                selectedPageNum={selectedPage}
+              />
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">📂</div>
+                <p>왼쪽 목록에서<br />PDF 파일을 선택하세요</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 리사이즈 핸들 2 */}
+        <div
+          className="resize-handle"
+          onMouseDown={(e) => handleResizeMouseDown("pages", e)}
+          title="드래그하여 너비 조절"
+        />
+
+        {/* ③ 문항 선택 */}
+        <div className="panel panel-questions" style={{ flex: 1, minWidth: 0 }}>
+          <div className="panel-header">
+            <span className="panel-title">③ 문항 선택</span>
+            {selectedPage !== null && (
+              <span className="panel-hint">{selectedPage + 1}페이지 · 문항을 클릭해 바스켓에 추가</span>
+            )}
+          </div>
+          <div className="panel-body">
+            {selectedPage !== null ? (
+              <QuestionPicker
+                key={`${jobId}-${selectedPage}`}
+                jobId={jobId}
+                pageNum={selectedPage}
+                pageInfo={selectedPageInfo}
+                basket={basket}
+                onAddToBasket={addToBasket}
+                onRemoveFromBasket={removeFromBasket}
+              />
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">📄</div>
+                <p>페이지를 선택하면<br />문항 목록이 표시됩니다</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* ─── 하단 고정 바스켓 ───────────────────────── */}
+      <SelectionBasket
+        basket={basket}
+        onRemove={removeFromBasket}
+        onExport={handleExport}
+        exporting={exporting}
+      />
     </div>
   );
 }

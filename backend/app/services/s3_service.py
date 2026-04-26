@@ -133,6 +133,31 @@ def save_boundaries_cache(job_id: str, data: list) -> None:
     )
 
 
+def clear_boundaries_cache(job_id: str) -> None:
+    """
+    저장된 문항 경계 캐시를 삭제한다.
+    재감지 요청 시 호출하여 이전 감지 결과를 무효화한다.
+    문항 썸네일 캐시도 함께 삭제 — 경계가 바뀌면 썸네일 좌표도 달라지기 때문.
+    """
+    import boto3
+    from botocore.exceptions import ClientError as _ClientError
+
+    # 경계 JSON 삭제
+    boundary_key = f"{BOUNDARIES_PREFIX}/{job_id}.json"
+    try:
+        s3.delete_object(Bucket=BUCKET, Key=boundary_key)
+    except _ClientError:
+        pass  # 없어도 무시
+
+    # 문항 썸네일 캐시 일괄 삭제 (q_*.png 접두사 필터)
+    prefix = f"{THUMBNAILS_PREFIX}/{job_id}/q_"
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        objects = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
+        if objects:
+            s3.delete_objects(Bucket=BUCKET, Delete={"Objects": objects})
+
+
 def get_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) -> Optional[bytes]:
     key = f"{THUMBNAILS_PREFIX}/{job_id}/q_{page_num}_{question_num}.png"
     try:
