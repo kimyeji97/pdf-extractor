@@ -142,6 +142,7 @@ export async function startExtractV2(selections, layout = "2단") {
     layout,
     selections: selections.map((s) => {
       const item = { job_id: s.jobId, page_num: s.pageNum };
+      if (s.questionId != null)   item.question_id   = s.questionId;
       if (s.questionNum != null)  item.question_num  = s.questionNum;
       if (s.manualId != null)     item.manual_id     = s.manualId;
       if (s.customRegion != null) item.custom_region = s.customRegion;

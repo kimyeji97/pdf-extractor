@@ -11,8 +11,10 @@ POST /api/workbooks          - 문제집 메타데이터 저장 (extract-v2 완�
 """
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from app.models.schemas import WorkbookMeta, WorkbookSelectionItem
 from app.services import storage
 
@@ -51,13 +53,17 @@ def get_workbook(workbook_id: str):
     return WorkbookMeta(**data)
 
 
-class WorkbookCreateRequest(WorkbookMeta):
+class WorkbookCreateRequest(BaseModel):
     """
     POST /api/workbooks 요청 바디.
-    WorkbookMeta를 그대로 사용하되, workbook_id와 created_at은 서버에서 생성해도 되나
-    프론트가 이미 export_job_id 기준으로 식별하므로 바디에 포함하여 전달받는다.
+    workbook_id, created_at은 서버에서 자동 생성하므로 선택 필드로 처리한다.
     """
-    pass
+    workbook_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    layout: str
+    selections: list[WorkbookSelectionItem]
+    result_job_id: str
+    question_count: int
 
 
 @router.post("/workbooks", response_model=WorkbookMeta, status_code=201)
@@ -69,13 +75,16 @@ def create_workbook(body: WorkbookCreateRequest):
     저장 경로: local_storage/workbooks/{workbook_id}.json
     이력 목록(GET /api/workbooks)과 편집 복원(GET /api/workbooks/{id})에서 재사용된다.
     """
-    # workbook_id 없으면 서버에서 생성
-    if not body.workbook_id:
-        body = body.model_copy(update={"workbook_id": str(uuid.uuid4())})
+    workbook_id = body.workbook_id or str(uuid.uuid4())
+    created_at  = body.created_at  or datetime.now(timezone.utc)
 
-    # created_at 없으면 현재 시각으로 설정
-    if not body.created_at:
-        body = body.model_copy(update={"created_at": datetime.now(timezone.utc)})
-
-    storage.save_workbook(body.workbook_id, body.model_dump(mode="json"))
-    return body
+    meta = WorkbookMeta(
+        workbook_id=workbook_id,
+        created_at=created_at,
+        layout=body.layout,
+        selections=body.selections,
+        result_job_id=body.result_job_id,
+        question_count=body.question_count,
+    )
+    storage.save_workbook(workbook_id, meta.model_dump(mode="json"))
+    return meta

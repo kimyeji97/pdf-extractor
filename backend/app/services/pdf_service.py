@@ -435,21 +435,26 @@ def extract_questions_v2(
             continue
 
         # ── 자동 감지 문항 (question_num) ───────────────────
+        # page_num으로 먼저 필터링 후 question_num 매칭
+        # — 다른 페이지에 동일 번호 문항이 있어도 혼동되지 않도록 함
         if getattr(sel, "question_num", None) is None:
             continue
 
         boundaries = boundaries_map.get(sel.job_id, [])
-        q_to_regions = map_questions_to_regions(boundaries, [sel.question_num])
-        if sel.question_num not in q_to_regions:
+        target = next(
+            (b for b in boundaries
+             if b.page_index == sel.page_num and b.number == sel.question_num),
+            None,
+        )
+        if target is None:
             continue
 
+        all_regions.append(SourcedCropRegion(
+            src_path=pdf_paths[sel.job_id],
+            page_index=target.page_index,
+            x0=target.col_x0, y0=target.y_top, x1=target.col_x1, y1=target.y_bottom,
+        ))
         success_count += 1
-        for region in q_to_regions[sel.question_num]:
-            all_regions.append(SourcedCropRegion(
-                src_path=pdf_paths[sel.job_id],
-                page_index=region.page_index,
-                x0=region.x0, y0=region.y0, x1=region.x1, y1=region.y1,
-            ))
 
     if not all_regions:
         raise ValueError("선택한 문항을 PDF에서 감지하지 못했습니다.")

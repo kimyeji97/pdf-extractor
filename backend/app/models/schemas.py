@@ -134,6 +134,7 @@ class QuestionTitleUpdate(BaseModel):
 
 class WorkbookSelectionItem(BaseModel):
     """문제집에 포함된 문항 1건의 식별 정보."""
+    question_id: Optional[str] = None     # 고유 식별자 — "{job_id}:{page_num}:{num}" 또는 manual_id
     job_id: str
     page_num: int
     question_num: Optional[int] = None    # 자동 감지 문항 번호
@@ -145,7 +146,7 @@ class WorkbookMeta(BaseModel):
     """생성된 문제집의 메타데이터. local_storage/workbooks/{id}.json에 저장."""
     workbook_id: str
     created_at: datetime
-    layout: str                           # "2단" / "4단" / "6단"
+    layout: str                           # "세로 2단" / "가로 2단" / "4단" / "6단"
     selections: list[WorkbookSelectionItem]
     result_job_id: str                    # extract-v2가 반환한 export job UUID
     question_count: int

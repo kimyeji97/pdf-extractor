@@ -278,6 +278,7 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
       const selections = basket.map((b) => ({
         jobId:       b.jobId,
         pageNum:     b.pageNum,
+        questionId:  b.questionId,
         questionNum: b.isManual ? undefined : b.questionNum,
         manualId:    b.isManual ? b.manualId : undefined,
         label:       b.displayTitle,
@@ -303,18 +304,19 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
               a.click();
               document.body.removeChild(a);
             }
-            // 문제집 메타 저장 (REQ-19)
+            // 문제집 메타 저장
             try {
               await createWorkbookMeta({
                 layout,
                 question_count: basket.length,
                 result_job_id:  exportJobId,
                 selections: basket.map((b) => ({
+                  question_id:  b.questionId,
                   job_id:       b.jobId,
                   page_num:     b.pageNum,
                   question_num: b.isManual ? undefined : b.questionNum,
                   manual_id:    b.isManual ? b.manualId : undefined,
-                  label:        b.displayTitle,
+                  title:        b.displayTitle,
                 })),
               });
             } catch { /* 저장 실패는 조용히 무시 */ }
