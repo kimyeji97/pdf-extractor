@@ -210,25 +210,96 @@ Phase 7  생성된 문제집 메뉴 UI (프론트엔드)
 
 ---
 
-## Action Item
-- [ ] 생성된 문제집 메뉴에 생성된 파일 목록이 안보임. (but. 문제집 생성 or 문항 분석에는 존재함.)
-- [ ] 문제집 생성시 파일명 입력 받도록
-- [ ] 문제집 생성할때 미리보기와 다른 문항이 다운로드 됨. (다른 페이지의 같은 번호 문항인 듯.)
-  - UI에서는 페이지 오름차순해서 보여주고, 서버에서는 페이지 역순으로해서 번호를 찾는 듯.
-  - 생성된 문항에 '문서ID_페이지번호_문항타이틀'로 식별자 추가.
-  - 각 문항별 식별자로 통신하도록.
-- [ ] 문제집 생성 > 그리드 레이아웃 6단이 현재 3x3임. 이걸 2x3으로 변경 (가로 3줄, 세로 2줄.)
-- [ ] 문제집 생성 > 그리드 레이아웃 2단 명칭 '세로 2단'으로 변경
-- [ ] 문제집 생성 > 그리드 레이아웃 '가로 2단' 추가 (가로 2줄 세로 1줄)
-- [ ] 문제집 생성 > 세로 단 구분 줄 추가
-- [ ] 문항은 각 영역의 좌측 상단에 고정.
-- [ ] 문항 감지 현황 소켓 통신으로 프로그래스 바 제공 (총 n페이지 중 n페이지 감지 완료.)
-- [ ] 문항 분석 > 3번 문항 분석에서 문항 이미지 크게. (8배로 - 반응형 적용해야 함.), 문항 타이틀은 이미지 상단으로 올려.
-- [ ] 문항 분석 > 담기 및 PDF 다운로드 기능 제거 (이걸 문제집 생성 메뉴로 이관 시킨거야.)
-- [ ] 문항 분석 > 재감지 버튼을 '3번 문항분석'에러 '1번 파일 선택' 섹션으로 이동. (페이지 단위로 재감지가 아닌 파일 단위로 재감지되기 때문.)
-- [ ] 문항 분석 > 1번 파일 선택과 2번 페이지 선택은 섹션 합침 
-  - 1번 파일 선택한 후 해당 섹션에 2번 페이지 선택으로 전환, 뒤로가기 버튼 존재. 
-  - 뒤로가기 버튼시 해당 영역은 1번 파일선택 섹션으로 재 전환
-  - 2번 페이지 선택 모드에서는 페이지 미리보기 제공 안함. (페이지별 감지된 문항수만 제공)
-  - 페이지 선택하면 두번째 섹션에 해당 페이지 썸네일 전체 미리보기 표시
-  - [수동 추가] 버튼 두번째 섹션으로 이동. (수동 추가 클릭하면 드래그 드랍 활성화됨 -> 두번째 섹션에서 영역 지정 -> 문항이 세번째 섹션에 추가되는건 모두 동일)
+## 추가 요구사항 (v3.1)
+
+> 구현 완료 후 발견된 버그 및 UX 개선 사항.  
+> 상세 설계는 각 plan 문서 참고.
+
+### 버그
+
+| ID | 요구사항 | 관련 plan |
+|----|----------|----------|
+| REQ-B01 | 생성된 문제집 메뉴에서 이력 목록이 표시되지 않음 → `POST /api/workbooks` 저장 연결 수정 | plan-workbook-history |
+| REQ-B02 | 문제집 생성 시 미리보기와 다른 문항이 다운로드됨 → 문항 식별자를 `{job_id}_{page_num}_{title}` 형식으로 통일하고 모든 통신에 적용 | plan-workbook-editor |
+
+### 문제집 생성 개선
+
+| ID | 요구사항 | 관련 plan |
+|----|----------|----------|
+| REQ-C01 | 문제집 생성 시 파일명 입력 받기 (기본값: `문제집_YYYY-MM-DD`) | plan-workbook-editor |
+| REQ-C02 | 그리드 레이아웃 6단을 3×3(9문항) → 2×3(6문항)으로 변경 | plan-workbook-editor |
+| REQ-C03 | 그리드 레이아웃 `2단` 명칭을 `세로 2단`으로 변경 | plan-workbook-editor |
+| REQ-C04 | 그리드 레이아웃 `가로 2단` 추가 (2행 1열) | plan-workbook-editor |
+| REQ-C05 | 열 간 세로 구분선 추가 (Canvas 미리보기 + 생성 PDF 동시 적용) | plan-workbook-editor |
+| REQ-C06 | 문항 이미지를 셀 좌측 상단에 고정 배치 (기존 가운데 letterbox 방식 변경) | plan-workbook-editor |
+
+### 문항 분석 개선
+
+| ID | 요구사항 | 관련 plan |
+|----|----------|----------|
+| REQ-D01 | 문항 이미지를 현재 대비 8배 크기로 표시 (반응형), 문항 타이틀을 이미지 상단으로 이동 | plan-question-analysis |
+| REQ-D02 | 문항 분석 메뉴에서 담기 및 PDF 다운로드 기능 제거 (문제집 생성 메뉴로 이관) | plan-question-analysis |
+| REQ-D03 | 재감지 버튼을 문항 목록 툴바에서 파일 선택 섹션으로 이동 (파일 단위 재감지) | plan-question-analysis |
+| REQ-D04 | 파일 선택 패널과 페이지 선택 패널을 하나의 섹션으로 통합: 파일 선택 후 동일 영역이 페이지 선택 모드로 전환, 뒤로가기 버튼으로 복귀, 페이지 선택 모드에서는 썸네일 없이 감지 문항 수만 표시, 페이지 선택 시 두 번째 섹션에 전체 썸네일 표시, [수동 추가] 버튼을 두 번째 섹션으로 이동 | plan-question-analysis |
+
+### 감지 UX 개선
+
+| ID | 요구사항 | 관련 plan |
+|----|----------|----------|
+| REQ-E01 | 문항 감지 중 WebSocket으로 페이지별 진행률 스트리밍 (총 n페이지 중 n페이지 완료) | plan-detection-precision |
+
+---
+
+## 구현 순서 (v3.1 Phase)
+
+> v3 Phase 1~7 완료 후 이어서 진행.  
+> 버그 수정 → 백엔드 공통 변경 → 기능 개선 순으로 진행한다.
+
+```
+Phase A  버그 수정 (최우선)
+         ├─ REQ-B02: question_id 식별자 체계 도입
+         │    백엔드: browse.py QuestionInfo에 question_id 추가
+         │           pdf_service.py question_id 기반 탐색으로 교체
+         │           schemas.py WorkbookSelectionItem.question_id 추가
+         │    프론트: QuestionListPanel, client.js, WorkbookEditorView
+         │    의존성: 없음. 가장 먼저 처리.
+         │
+         └─ REQ-B01: 생성된 문제집 목록 미노출 수정
+              백엔드: workbook.py 디렉토리 자동 생성 보장
+              프론트: WorkbookEditorView PDF DONE 후 POST /api/workbooks 연결
+              의존성: REQ-B02 완료 후 (WorkbookSelectionItem 스키마 확정)
+
+Phase B  레이아웃 상수 변경 (백엔드 + 프론트 동시)
+         ├─ REQ-C02: 6단 2×3으로 변경
+         ├─ REQ-C03: 세로 2단 명칭 변경
+         ├─ REQ-C04: 가로 2단 추가
+         └─ REQ-C06: 좌측 상단 정렬 (contain → top_left_fit)
+              layout_spec.py + workbookLayout.js 동시 수정
+              의존성: Phase A 완료 (스키마 확정 후 레이아웃 변경)
+
+Phase C  문제집 생성 UI 개선
+         ├─ REQ-C01: 파일명 입력 (스키마 + UI)
+         └─ REQ-C05: 세로 구분선 (pdf_service + Canvas)
+              의존성: Phase B 완료 (레이아웃 상수 확정)
+
+Phase D  문항 분석 UI 재편
+         ├─ REQ-D02: 담기/다운로드 제거
+         ├─ REQ-D03: 재감지 버튼 이동
+         ├─ REQ-D01: 문항 이미지 대형화 + 타이틀 상단
+         └─ REQ-D04: 파일+페이지 패널 통합 (FilePagePanel 신규)
+              의존성: Phase A 완료. Phase B·C와 병행 가능.
+
+Phase E  WebSocket 진행률 스트리밍
+         └─ REQ-E01: detect_page() 분리 → 비동기화 → WS 엔드포인트 → 프론트 훅
+              의존성: Phase D 완료 (FilePagePanel에 진행률 바 삽입)
+```
+
+### Phase별 작업 파일 요약
+
+| Phase | 수정 파일 |
+|-------|---------|
+| A | `browse.py`, `pdf_service.py`, `schemas.py`, `WorkbookEditorView.jsx`, `QuestionListPanel.jsx`, `client.js`, `workbook.py` |
+| B | `layout_spec.py`, `workbookLayout.js`, `WorkbookPreview.jsx`, `WorkbookEditorView.jsx` |
+| C | `layout_spec.py`, `pdf_service.py`, `workbookLayout.js`, `WorkbookPreview.jsx`, `WorkbookEditorView.jsx`, `schemas.py` |
+| D | `QuestionAnalysisView.jsx` (신규 `FilePagePanel.jsx` 포함) |
+| E | `extract.py` (WS 엔드포인트), `question_parser.py`, `FilePagePanel.jsx` |
