@@ -1,15 +1,16 @@
 """
-문제집 레이아웃 상수 및 계산 유틸리티 (REQ-18, Canvas ↔ PDF 일치)
+문제집 레이아웃 상수 및 계산 유틸리티 (REQ-18, REQ-C02~C06)
 
 ━━━ Canvas ↔ PDF 일치 보장 ━━━
-이 파일의 상수(A4_WIDTH_PT, MARGIN_PT 등)와 contain_fit/calc_cell_rect 수식은
+이 파일의 상수(A4_WIDTH_PT, MARGIN_PT 등)와 top_left_fit/calc_cell_rect 수식은
 frontend/src/utils/workbookLayout.js 와 완전히 동일해야 한다.
 값 변경 시 JS 파일도 반드시 함께 수정해야 Canvas 미리보기와 실제 PDF 출력이 일치한다.
 
-━━━ 지원 레이아웃 ━━━
-  2단: 1행×2열 → 페이지당 2문항
-  4단: 2행×2열 → 페이지당 4문항
-  6단: 3행×3열 → 페이지당 9문항
+━━━ 지원 레이아웃 (v3.1 REQ-C02~C04) ━━━
+  세로 2단: 1행×2열 → 페이지당 2문항
+  가로 2단: 2행×1열 → 페이지당 2문항
+  4단:      2행×2열 → 페이지당 4문항
+  6단:      2행×3열 → 페이지당 6문항  (기존 3×3에서 변경)
 """
 
 # ── A4 규격 (pt 단위) ────────────────────────────────────────
@@ -23,16 +24,22 @@ A4_HEIGHT_PT = 842
 MARGIN_PT = 20
 GAP_PT    = 5
 
-# ── 레이아웃 정의 ─────────────────────────────────────────────
+# ── 구분선 (REQ-C05) ─────────────────────────────────────────
+# 세로 열 구분선 스타일 (Canvas + PDF 동시 적용)
+DIVIDER_WIDTH_PT = 0.5
+DIVIDER_COLOR    = (0.8, 0.8, 0.8)  # fitz RGB (0~1). CSS "#cccccc" 에 해당.
+
+# ── 레이아웃 정의 (REQ-C02, C03, C04) ────────────────────────
 # rows × cols 그리드. 각 레이아웃 이름은 UI/API에서 그대로 사용한다.
 LAYOUTS: dict[str, dict] = {
-    "2단": {"rows": 1, "cols": 2},
-    "4단": {"rows": 2, "cols": 2},
-    "6단": {"rows": 3, "cols": 3},
+    "세로 2단": {"rows": 1, "cols": 2},   # 기존 "2단" 명칭 변경 (REQ-C03)
+    "가로 2단": {"rows": 2, "cols": 1},   # 신규 (REQ-C04)
+    "4단":      {"rows": 2, "cols": 2},
+    "6단":      {"rows": 2, "cols": 3},   # 3×3(9) → 2×3(6) (REQ-C02)
 }
 
 # 기본 레이아웃 (ExtractV2Request.layout 미지정 시 사용)
-DEFAULT_LAYOUT = "2단"
+DEFAULT_LAYOUT = "세로 2단"
 
 
 def calc_cell_rect(layout_key: str, row: int, col: int) -> tuple[float, float, float, float]:
@@ -46,8 +53,6 @@ def calc_cell_rect(layout_key: str, row: int, col: int) -> tuple[float, float, f
     셀 시작점:
       cell_x = MARGIN + col × (cell_w + GAP)
       cell_y = MARGIN + row × (cell_h + GAP)
-
-    Canvas와 동일한 수식을 사용하여 Layout 오차 없이 일치한다.
 
     Returns:
         (cell_x, cell_y, cell_w, cell_h) — pt 단위
@@ -65,22 +70,21 @@ def calc_cell_rect(layout_key: str, row: int, col: int) -> tuple[float, float, f
     return (cell_x, cell_y, cell_w, cell_h)
 
 
-def contain_fit(
+def top_left_fit(
     src_w: float, src_h: float,
     cell_x: float, cell_y: float,
     cell_w: float, cell_h: float,
 ) -> tuple[float, float, float, float]:
     """
-    Contain(letterbox) 피팅: 원본 종횡비를 유지하면서 셀 안에 맞춘다.
+    좌측 상단 고정 피팅 (REQ-C06): 원본 종횡비를 유지하면서 셀 좌측 상단에 배치한다.
 
     ━━━ Canvas ↔ PDF 일치의 핵심 ━━━
-    이 함수의 수식은 frontend/src/utils/workbookLayout.js#containFit() 와 동일하다.
-    양쪽이 같은 수식을 쓰므로 Canvas 미리보기 = 실제 PDF 출력이 보장된다.
+    이 함수의 수식은 frontend/src/utils/workbookLayout.js#topLeftFit() 와 동일하다.
 
     동작:
-      - src_ratio > cell_ratio: 가로 기준으로 맞추고, 세로는 중앙 정렬
-      - src_ratio ≤ cell_ratio: 세로 기준으로 맞추고, 가로는 중앙 정렬
-      → 빈 여백(letterbox)이 생기지만 왜곡은 없음
+      - src_ratio > cell_ratio: 가로 기준으로 맞추고, 높이는 비율 계산 → 좌측 상단 고정
+      - src_ratio ≤ cell_ratio: 세로 기준으로 맞추고, 너비는 비율 계산 → 좌측 상단 고정
+      → letterbox 여백은 하단/우측에 생김 (가운데 아님)
 
     Args:
         src_w, src_h: 원본 문항 영역 크기 (pt)
@@ -90,7 +94,6 @@ def contain_fit(
         (dst_x, dst_y, dst_w, dst_h) — 셀 내 실제 배치 좌표 (pt)
     """
     if src_w <= 0 or src_h <= 0:
-        # 크기 0 이하는 비정상 데이터 — 셀 전체를 그대로 사용
         return (cell_x, cell_y, cell_w, cell_h)
 
     src_ratio  = src_w / src_h
@@ -101,17 +104,21 @@ def contain_fit(
         scale = cell_w / src_w
         dst_w = cell_w
         dst_h = src_h * scale
-        dst_x = cell_x
-        dst_y = cell_y + (cell_h - dst_h) / 2   # 세로 중앙 정렬
     else:
         # 세로 기준: 높이를 셀 높이에 맞추고, 너비는 비율로 계산
         scale = cell_h / src_h
         dst_w = src_w * scale
         dst_h = cell_h
-        dst_x = cell_x + (cell_w - dst_w) / 2   # 가로 중앙 정렬
-        dst_y = cell_y
+
+    # 좌측 상단 고정 (중앙 정렬 없음)
+    dst_x = cell_x
+    dst_y = cell_y
 
     return (dst_x, dst_y, dst_w, dst_h)
+
+
+# 하위 호환 별칭 (기존 contain_fit 호출부 대응)
+contain_fit = top_left_fit
 
 
 def questions_per_page(layout_key: str) -> int:

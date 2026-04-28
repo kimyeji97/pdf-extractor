@@ -52,7 +52,7 @@ import {
 } from "../api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
-const LAYOUTS  = ["2단", "4단", "6단"];
+const LAYOUTS  = ["세로 2단", "가로 2단", "4단", "6단"];
 
 // ── DnD 정렬 아이템 ───────────────────────────────────────
 function SortableItem({ item, index, onRemove }) {
@@ -134,7 +134,12 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
   const [basket, setBasket] = useState([]);
 
   // ── 레이아웃 ─────────────────────────────────────────
-  const [layout, setLayout] = useState("2단");
+  const [layout, setLayout] = useState("세로 2단");
+
+  // ── 파일명 (REQ-C01) ─────────────────────────────────
+  const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "-");
+  const [filename, setFilename]           = useState(`문제집_${todayStr}`);
+  const [filenameError, setFilenameError] = useState("");
 
   // ── 내보내기 상태 ─────────────────────────────────────
   const [generating, setGenerating]       = useState(false);
@@ -267,8 +272,19 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
   };
 
   // ── PDF 생성 ─────────────────────────────────────────
+  // 파일명 유효성: 공백 및 금지 문자 검사
+  const INVALID_CHARS = /[/\\:*?"<>|]/;
+  const validateFilename = () => {
+    const trimmed = filename.trim();
+    if (!trimmed) { setFilenameError("파일명을 입력해주세요."); return false; }
+    if (INVALID_CHARS.test(trimmed)) { setFilenameError('특수문자(/ \\ : * ? " < > |)는 사용할 수 없습니다.'); return false; }
+    setFilenameError("");
+    return true;
+  };
+
   const handleGenerate = async () => {
     if (basket.length === 0 || generating) return;
+    if (!validateFilename()) return;
     setGenerating(true);
     setGenerateStatus("processing");
     setGenerateError("");
@@ -308,6 +324,7 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
             try {
               await createWorkbookMeta({
                 layout,
+                filename:       filename.trim(),
                 question_count: basket.length,
                 result_job_id:  exportJobId,
                 selections: basket.map((b) => ({
@@ -456,6 +473,19 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
 
         {/* ④ 미리보기 + 레이아웃 + 생성 */}
         <div className="panel wbe-preview-panel" style={{ flex: 1, minWidth: 0 }}>
+          {/* 파일명 입력 (REQ-C01) */}
+          <div className="wbe-filename-bar">
+            <label className="wbe-filename-label">파일명</label>
+            <input
+              type="text"
+              className={`wbe-filename-input${filenameError ? " wbe-filename-input--error" : ""}`}
+              value={filename}
+              onChange={(e) => { setFilename(e.target.value); setFilenameError(""); }}
+              placeholder="문제집 파일명 입력"
+            />
+            {filenameError && <span className="wbe-filename-error">{filenameError}</span>}
+          </div>
+
           {/* 레이아웃 선택 + 생성 버튼 바 */}
           <div className="wbe-layout-bar">
             <span className="wbe-layout-label">레이아웃</span>

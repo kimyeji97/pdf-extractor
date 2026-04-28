@@ -150,3 +150,4 @@ class WorkbookMeta(BaseModel):
     selections: list[WorkbookSelectionItem]
     result_job_id: str                    # extract-v2가 반환한 export job UUID
     question_count: int
+    filename: Optional[str] = None        # 사용자 입력 파일명 (REQ-C01)

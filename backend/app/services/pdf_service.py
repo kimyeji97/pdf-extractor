@@ -494,14 +494,22 @@ def _build_grid_pdf(
       각 셀에는 contain_fit()으로 계산한 dst_rect에 show_pdf_page()로 벡터 크롭 삽입.
     """
     from app.utils.layout_spec import (
-        calc_cell_rect, contain_fit, questions_per_page, LAYOUTS,
-        A4_WIDTH_PT, A4_HEIGHT_PT,
+        calc_cell_rect, top_left_fit, questions_per_page, LAYOUTS,
+        A4_WIDTH_PT, A4_HEIGHT_PT, MARGIN_PT, GAP_PT,
+        DIVIDER_WIDTH_PT, DIVIDER_COLOR,
     )
 
     spec = LAYOUTS[layout_key]
     rows = spec["rows"]
     cols = spec["cols"]
     qpp  = questions_per_page(layout_key)   # 페이지당 문항 수
+
+    # 세로 구분선 x 좌표 사전 계산 (REQ-C05)
+    cell_w_base = (A4_WIDTH_PT - 2 * MARGIN_PT - (cols - 1) * GAP_PT) / cols
+    divider_xs = [
+        MARGIN_PT + (ci + 1) * (cell_w_base + GAP_PT) - GAP_PT / 2
+        for ci in range(cols - 1)
+    ] if cols > 1 else []
 
     src_cache: dict[str, fitz.Document] = {}
     dst = fitz.open()
@@ -531,20 +539,31 @@ def _build_grid_pdf(
         src_w = region.x1 - region.x0
         src_h = region.y1 - region.y0
 
-        # Contain(letterbox) 피팅 — 종횡비 유지, 셀 크기에 맞춤
+        # 좌측 상단 고정 피팅 (REQ-C06) — 종횡비 유지, 셀 좌측 상단에 배치
         # Canvas와 완전히 동일한 수식으로 미리보기 ↔ PDF 출력 일치 보장
-        dst_x, dst_y, dst_w, dst_h = contain_fit(src_w, src_h, cell_x, cell_y, cell_w, cell_h)
+        dst_x, dst_y, dst_w, dst_h = top_left_fit(src_w, src_h, cell_x, cell_y, cell_w, cell_h)
 
         dst_rect  = fitz.Rect(dst_x, dst_y, dst_x + dst_w, dst_y + dst_h)
         clip_rect = fitz.Rect(region.x0, region.y0, region.x1, region.y1)
 
         # 벡터 기반 크롭 삽입 (래스터화 없음)
         current_page.show_pdf_page(
-            dst_rect,                   # 출력 A4 페이지에서 그릴 위치
-            src_doc,                    # 원본 Document
-            region.page_index,          # 원본 페이지 번호
-            clip=clip_rect,             # 원본에서 가져올 영역 (문항 bbox)
+            dst_rect,
+            src_doc,
+            region.page_index,
+            clip=clip_rect,
         )
+
+    # 세로 구분선 그리기 — 마지막 페이지에만 아니라 모든 완성된 페이지에 적용 (REQ-C05)
+    if divider_xs:
+        for page in dst:
+            for x in divider_xs:
+                page.draw_line(
+                    fitz.Point(x, MARGIN_PT),
+                    fitz.Point(x, A4_HEIGHT_PT - MARGIN_PT),
+                    color=DIVIDER_COLOR,
+                    width=DIVIDER_WIDTH_PT,
+                )
 
     dst.save(dst_path, garbage=4, deflate=True)
     for doc in src_cache.values():
