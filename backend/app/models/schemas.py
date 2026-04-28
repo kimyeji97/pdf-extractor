@@ -70,6 +70,8 @@ class JobStatusFile(BaseModel):
     boundaries_status: Optional[BoundariesStatus] = None
     total_question_count: Optional[int] = None
     questions_per_page: Optional[dict] = None   # { "0": 5, "1": 3, ... }
+    workbook_name: Optional[str] = None          # 업로드 시 사용자 입력 문제집 이름
+    workbook_types: Optional[list[str]] = None   # 업로드 시 사용자 입력 문제집 유형 목록
 
 
 # ── v2 추출 요청 ──────────────────────────────────────────
@@ -85,15 +87,17 @@ class RegionCoord(BaseModel):
 class SelectionItem(BaseModel):
     """
     추출 단위 1건.
-    - 자동 감지 문항: question_num 필수, custom_region 없음
-    - 수동 지정 영역: custom_region 필수, question_num 없음
-    둘 중 하나는 반드시 있어야 한다.
+    - 자동 감지 문항: question_num 사용
+    - 수동 추가 문항: manual_id 사용 (v3 REQ-13)
+    - 구형 수동 지정: custom_region 사용
     """
     job_id: str
     page_num: int
+    question_id: Optional[str] = None   # 고유 식별자 (UI 표시용)
     question_num: Optional[int] = None
+    manual_id: Optional[str] = None     # 수동 추가 문항 UUID (v3 REQ-13)
     custom_region: Optional[RegionCoord] = None
-    label: Optional[str] = None  # UI 표시용 (예: "수동 선택")
+    label: Optional[str] = None
 
 
 class ExtractV2Request(BaseModel):
@@ -140,6 +144,7 @@ class WorkbookSelectionItem(BaseModel):
     question_num: Optional[int] = None    # 자동 감지 문항 번호
     manual_id: Optional[str] = None       # 수동 추가 문항 UUID
     title: Optional[str] = None           # 저장 당시 타이틀 스냅샷
+    workbook_name: Optional[str] = None   # 출처 문제집 이름 (출처 표시용)
 
 
 class WorkbookMeta(BaseModel):
@@ -151,3 +156,4 @@ class WorkbookMeta(BaseModel):
     result_job_id: str                    # extract-v2가 반환한 export job UUID
     question_count: int
     filename: Optional[str] = None        # 사용자 입력 파일명 (REQ-C01)
+    name: Optional[str] = None            # 문제집 이름 (이력 표시용)

@@ -24,12 +24,15 @@ export const GAP_PT    = 5;
 export const DIVIDER_WIDTH_PT = 0.5;
 export const DIVIDER_COLOR    = "#cccccc";
 
+// ── 출처 레이블 (layout_spec.py의 LABEL_HEIGHT_PT와 동일값 유지) ──
+export const LABEL_HEIGHT_PT  = 10;
+
 // ── 레이아웃 정의 (REQ-C02, C03, C04) ────────────────────
 export const LAYOUT_SPEC = {
   "세로 2단": { rows: 1, cols: 2 },   // 기존 "2단" 명칭 변경
   "가로 2단": { rows: 2, cols: 1 },   // 신규
   "4단":      { rows: 2, cols: 2 },
-  "6단":      { rows: 2, cols: 3 },   // 3×3(9) → 2×3(6)
+  "6단":      { rows: 3, cols: 2 },   // 행:3, 열:2
 };
 
 export const DEFAULT_LAYOUT = "세로 2단";

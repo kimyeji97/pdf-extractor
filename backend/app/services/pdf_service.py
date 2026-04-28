@@ -281,12 +281,13 @@ class SourcedCropRegion:
     v2 API는 여러 PDF에서 문항을 골라 하나의 PDF로 합치는 기능을 제공하므로
     각 크롭 영역이 어느 PDF에서 왔는지(src_path)도 함께 저장한다.
     """
-    src_path: str       # 원본 PDF 로컬 경로 (tmpdir 내 다운로드된 파일)
-    page_index: int     # 0-based 페이지 인덱스
+    src_path: str               # 원본 PDF 로컬 경로 (tmpdir 내 다운로드된 파일)
+    page_index: int             # 0-based 페이지 인덱스
     x0: float
     y0: float
     x1: float
     y1: float
+    source_label: str = ""      # 셀 상단에 표시할 출처 문자열 (예: "Q1 · 수학문제집 · p.3")
 
 
 def _build_pdf_from_multi_sources(
@@ -380,13 +381,16 @@ def extract_questions_v2(
         LAYOUTS, DEFAULT_LAYOUT, A4_WIDTH_PT, A4_HEIGHT_PT,
     )
 
-    # ── Step 1: 고유 job_id별 PDF 다운로드 ─────────────────
+    # ── Step 1: 고유 job_id별 PDF 다운로드 + 문제집 이름 조회 ─
     pdf_paths: dict[str, str] = {}
+    workbook_names: dict[str, str] = {}   # {job_id: workbook_name}
     for sel in selections:
         if sel.job_id not in pdf_paths:
             local_path = str(Path(tmpdir) / f"{sel.job_id}.pdf")
             storage.download_file(storage.original_key(sel.job_id), local_path)
             pdf_paths[sel.job_id] = local_path
+            job_status = storage.get_status(sel.job_id)
+            workbook_names[sel.job_id] = (job_status.workbook_name or "") if job_status else ""
 
     # ── Step 2: job_id별 문항 경계 데이터 확보 ─────────────
     boundaries_map: dict[str, list[QuestionBoundary]] = {}
@@ -403,41 +407,50 @@ def extract_questions_v2(
     # selections 순서가 곧 그리드 배치 순서가 된다 (REQ-19 DnD 순서 반영).
     all_regions: list[SourcedCropRegion] = []
     success_count = 0
+    q_global = 0  # 전체 문항 순번 (출처 레이블 "Q번호"용)
 
     for sel in selections:
+        q_global += 1
+        wb_name = workbook_names.get(sel.job_id, "")
+        page_label = f"p.{sel.page_num + 1}"
+        label_parts = [f"Q{q_global}"]
+        if wb_name:
+            label_parts.append(wb_name)
+        label_parts.append(page_label)
+        src_label = " · ".join(label_parts)
 
         # ── 구형 수동 지정 영역 (custom_region) ─────────────
-        # 구형 v2 API 호환: 사용자가 드래그로 직접 지정한 영역
         if getattr(sel, "custom_region", None) is not None:
             cr = sel.custom_region
             all_regions.append(SourcedCropRegion(
                 src_path=pdf_paths[sel.job_id],
                 page_index=sel.page_num,
                 x0=cr.x0, y0=cr.y0, x1=cr.x1, y1=cr.y1,
+                source_label=src_label,
             ))
             success_count += 1
             continue
 
         # ── v3 수동 추가 문항 (manual_id) ───────────────────
-        # REQ-13: manual_questions 스토리지에서 region 조회
         if getattr(sel, "manual_id", None) is not None:
             manual_list = storage.get_manual_questions(sel.job_id)
             target = next((m for m in manual_list if m.get("manual_id") == sel.manual_id), None)
             if target is None:
-                continue  # 존재하지 않는 manual_id → 스킵
+                q_global -= 1
+                continue
             r = target["region"]
             all_regions.append(SourcedCropRegion(
                 src_path=pdf_paths[sel.job_id],
                 page_index=sel.page_num,
                 x0=r["x0"], y0=r["y0"], x1=r["x1"], y1=r["y1"],
+                source_label=src_label,
             ))
             success_count += 1
             continue
 
         # ── 자동 감지 문항 (question_num) ───────────────────
-        # page_num으로 먼저 필터링 후 question_num 매칭
-        # — 다른 페이지에 동일 번호 문항이 있어도 혼동되지 않도록 함
         if getattr(sel, "question_num", None) is None:
+            q_global -= 1
             continue
 
         boundaries = boundaries_map.get(sel.job_id, [])
@@ -447,12 +460,14 @@ def extract_questions_v2(
             None,
         )
         if target is None:
+            q_global -= 1
             continue
 
         all_regions.append(SourcedCropRegion(
             src_path=pdf_paths[sel.job_id],
             page_index=target.page_index,
             x0=target.col_x0, y0=target.y_top, x1=target.col_x1, y1=target.y_bottom,
+            source_label=src_label,
         ))
         success_count += 1
 
@@ -496,13 +511,17 @@ def _build_grid_pdf(
     from app.utils.layout_spec import (
         calc_cell_rect, top_left_fit, questions_per_page, LAYOUTS,
         A4_WIDTH_PT, A4_HEIGHT_PT, MARGIN_PT, GAP_PT,
-        DIVIDER_WIDTH_PT, DIVIDER_COLOR,
+        DIVIDER_WIDTH_PT, DIVIDER_COLOR, LABEL_HEIGHT_PT,
     )
 
     spec = LAYOUTS[layout_key]
     rows = spec["rows"]
     cols = spec["cols"]
     qpp  = questions_per_page(layout_key)   # 페이지당 문항 수
+
+    # 출처 레이블 사용 여부 — 하나라도 source_label이 있으면 모든 셀에 레이블 영역 예약
+    has_labels = any(getattr(r, "source_label", "") for r in regions)
+    label_h    = LABEL_HEIGHT_PT if has_labels else 0
 
     # 세로 구분선 x 좌표 사전 계산 (REQ-C05)
     cell_w_base = (A4_WIDTH_PT - 2 * MARGIN_PT - (cols - 1) * GAP_PT) / cols
@@ -535,13 +554,17 @@ def _build_grid_pdf(
         # 셀 좌표 계산 (layout_spec.py 공식)
         cell_x, cell_y, cell_w, cell_h = calc_cell_rect(layout_key, row, col)
 
+        # 레이블 영역만큼 이미지 시작 y를 내림
+        img_cell_y = cell_y + label_h
+        img_cell_h = cell_h - label_h
+
         # 원본 문항 크기 (bbox 크기)
         src_w = region.x1 - region.x0
         src_h = region.y1 - region.y0
 
         # 좌측 상단 고정 피팅 (REQ-C06) — 종횡비 유지, 셀 좌측 상단에 배치
         # Canvas와 완전히 동일한 수식으로 미리보기 ↔ PDF 출력 일치 보장
-        dst_x, dst_y, dst_w, dst_h = top_left_fit(src_w, src_h, cell_x, cell_y, cell_w, cell_h)
+        dst_x, dst_y, dst_w, dst_h = top_left_fit(src_w, src_h, cell_x, img_cell_y, cell_w, img_cell_h)
 
         dst_rect  = fitz.Rect(dst_x, dst_y, dst_x + dst_w, dst_y + dst_h)
         clip_rect = fitz.Rect(region.x0, region.y0, region.x1, region.y1)
@@ -553,6 +576,18 @@ def _build_grid_pdf(
             region.page_index,
             clip=clip_rect,
         )
+
+        # 출처 레이블 렌더링 (이미지 위에 덮어쓰기)
+        label_text = getattr(region, "source_label", "")
+        if label_text and current_page is not None:
+            label_rect = fitz.Rect(cell_x, cell_y, cell_x + cell_w, cell_y + label_h)
+            current_page.draw_rect(label_rect, color=None, fill=(0.96, 0.96, 0.98), width=0)
+            current_page.insert_text(
+                fitz.Point(cell_x + 2, cell_y + label_h - 2),
+                label_text,
+                fontsize=7,
+                color=(0.25, 0.25, 0.35),
+            )
 
     # 세로 구분선 그리기 — 마지막 페이지에만 아니라 모든 완성된 페이지에 적용 (REQ-C05)
     if divider_xs:

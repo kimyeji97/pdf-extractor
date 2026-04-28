@@ -2,14 +2,14 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api
 
 /**
  * POST /api/upload
- * presigned URL(또는 로컬 direct upload URL)과 job_id 반환
- * @param {string} [filename] - 원본 파일명 (선택)
+ * @param {string} [filename]
+ * @param {{ workbook_name?: string, workbook_types?: string[] }} [meta]
  */
-export async function requestUploadUrl(filename) {
+export async function requestUploadUrl(filename, meta = {}) {
   const res = await fetch(`${BASE_URL}/upload`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filename: filename || null }),
+    body: JSON.stringify({ filename: filename || null, ...meta }),
   });
   if (!res.ok) throw new Error("업로드 URL 요청 실패");
   return res.json(); // { job_id, upload_url }

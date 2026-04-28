@@ -23,6 +23,8 @@ router = APIRouter()
 
 class UploadRequest(BaseModel):
     filename: Optional[str] = None
+    workbook_name: Optional[str] = None
+    workbook_types: Optional[list[str]] = None
 
 
 # ── presigned URL 요청 (모드 공통) ───────────────────────
@@ -48,6 +50,8 @@ def request_upload(body: UploadRequest = UploadRequest()):
             filename=body.filename or "unknown.pdf",
             uploaded_at=datetime.now(timezone.utc),
             original_key=key,
+            workbook_name=body.workbook_name,
+            workbook_types=body.workbook_types,
         )
     )
     return UploadResponse(job_id=job_id, upload_url=upload_url)

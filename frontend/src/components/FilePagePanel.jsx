@@ -1,27 +1,39 @@
 /**
  * 파일+페이지 통합 선택 패널 (REQ-D03, REQ-D04)
  *
- * 하나의 패널 안에서 두 가지 모드를 전환한다:
- *
- *   [파일 선택 모드] (초기)
- *     - 업로드된 PDF 파일 목록
- *     - [🔄 재감지] 버튼 (파일 선택 시 활성화)
- *     - 파일 클릭 → 페이지 선택 모드로 전환
- *
- *   [페이지 선택 모드] (파일 선택 후)
- *     - ← 뒤로가기  파일명 표시
- *     - 페이지 목록 (썸네일 없이 감지된 문항 수만 표시)
- *     - [🔄 재감지] 버튼 (파일 단위)
- *     - 페이지 클릭 → 부모에게 (jobId, pageNum, pageInfo) 전달
- *
- * Props:
- *   onPageSelect(jobId, pageNum, pageInfo)  — 페이지 선택 콜백
- *   onJobChange(jobId, filename)            — 파일 변경 콜백 (페이지/문항 초기화용)
- *   refreshTrigger                          — 파일 목록 새로고침 신호
- *   selectedPageNum                         — 현재 선택된 페이지 (하이라이트)
+ * 파일 선택 모드: FileListPanel과 동일한 디자인 (감지상태 배지, 문항 수, 업로드 시간)
+ * 페이지 선택 모드: 페이지 목록 + 재감지 버튼
  */
 import { useState, useEffect, useCallback } from "react";
 import { listJobs, getPages, refreshJobQuestions, getJobInfo } from "../api/client";
+
+function relativeTime(isoString) {
+  if (!isoString) return "";
+  const diff = Date.now() - new Date(isoString).getTime();
+  const sec  = Math.floor(diff / 1000);
+  if (sec < 60)  return `${sec}초 전`;
+  const min = Math.floor(sec / 60);
+  if (min < 60)  return `${min}분 전`;
+  const hour = Math.floor(min / 60);
+  if (hour < 24) return `${hour}시간 전`;
+  return `${Math.floor(hour / 24)}일 전`;
+}
+
+function BoundariesBadge({ boundariesStatus, totalQuestionCount }) {
+  const map = {
+    PENDING:    { text: "감지 대기",       color: "#b0b8c8" },
+    PROCESSING: { text: "감지 중...",      color: "#e6a817" },
+    DONE:       { text: `${totalQuestionCount ?? 0}문항`, color: "#4a90e2" },
+    FAILED:     { text: "감지 실패",       color: "#c0392b" },
+  };
+  const entry = map[boundariesStatus];
+  if (!entry) return null;
+  return (
+    <span className="fpp-badge" style={{ background: entry.color }}>
+      {entry.text}
+    </span>
+  );
+}
 
 export default function FilePagePanel({
   onPageSelect,
@@ -29,23 +41,19 @@ export default function FilePagePanel({
   refreshTrigger = 0,
   selectedPageNum = null,
 }) {
-  // ── 모드 ──────────────────────────────────────────────
-  const [mode, setMode]           = useState("file");   // "file" | "page"
+  const [mode, setMode]           = useState("file");
   const [jobId, setJobId]         = useState(null);
   const [jobFilename, setJobFilename] = useState("");
 
-  // ── 파일 목록 ─────────────────────────────────────────
-  const [jobs, setJobs]         = useState([]);
+  const [jobs, setJobs]               = useState([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsError, setJobsError]     = useState("");
 
-  // ── 페이지 목록 ───────────────────────────────────────
-  const [pages, setPages]           = useState([]);
+  const [pages, setPages]               = useState([]);
   const [pagesLoading, setPagesLoading] = useState(false);
   const [pagesError, setPagesError]     = useState("");
 
-  // ── 재감지 ────────────────────────────────────────────
-  const [refreshing, setRefreshing]   = useState(false);
+  const [refreshing, setRefreshing]     = useState(false);
   const [refreshError, setRefreshError] = useState("");
 
   // ── 파일 목록 로드 ────────────────────────────────────
@@ -79,7 +87,6 @@ export default function FilePagePanel({
     }
   }, []);
 
-  // ── 파일 선택 ─────────────────────────────────────────
   const handleJobClick = (job) => {
     setJobId(job.job_id);
     setJobFilename(job.filename || job.job_id);
@@ -90,7 +97,6 @@ export default function FilePagePanel({
     fetchPages(job.job_id);
   };
 
-  // ── 뒤로가기 ─────────────────────────────────────────
   const handleBack = () => {
     setMode("file");
     setJobId(null);
@@ -100,14 +106,12 @@ export default function FilePagePanel({
     onPageSelect?.(null, null, null);
   };
 
-  // ── 재감지 ────────────────────────────────────────────
   const handleRefresh = useCallback(async () => {
     if (!jobId || refreshing) return;
     setRefreshing(true);
     setRefreshError("");
     try {
       await refreshJobQuestions(jobId);
-      // 완료 폴링
       const poll = setInterval(async () => {
         try {
           const info = await getJobInfo(jobId);
@@ -116,7 +120,7 @@ export default function FilePagePanel({
             clearInterval(poll);
             setRefreshing(false);
             if (st === "FAILED") setRefreshError("재감지에 실패했습니다.");
-            else fetchPages(jobId);  // 페이지별 문항 수 갱신
+            else fetchPages(jobId);
           }
         } catch { /* 폴링 오류 무시 */ }
       }, 2000);
@@ -126,22 +130,24 @@ export default function FilePagePanel({
     }
   }, [jobId, refreshing, fetchPages]);
 
-  // ── 페이지 선택 ───────────────────────────────────────
   const handlePageClick = (page) => {
     onPageSelect?.(jobId, page.page_num, page);
   };
 
-  // ── 렌더: 파일 선택 모드 ─────────────────────────────
+  // ── 파일 선택 모드 ────────────────────────────────────
   if (mode === "file") {
     return (
       <div className="fpp-container">
         {jobsError && <p className="fpp-error">{jobsError}</p>}
-        {jobsLoading && <p className="fpp-hint">로딩 중...</p>}
 
         <div className="fpp-file-list">
-          {jobs.length === 0 && !jobsLoading && (
-            <p className="fpp-hint">업로드된 파일이 없습니다.</p>
+          {jobsLoading && (
+            <div className="fpp-hint">로딩 중...</div>
           )}
+          {!jobsLoading && jobs.length === 0 && (
+            <div className="fpp-hint">업로드된 파일이 없습니다.</div>
+          )}
+
           {jobs.map((job) => (
             <div
               key={job.job_id}
@@ -150,10 +156,18 @@ export default function FilePagePanel({
             >
               <span className="fpp-file-icon">📄</span>
               <div className="fpp-file-info">
-                <span className="fpp-file-name">{job.filename || job.job_id}</span>
-                {job.total_question_count != null && (
-                  <span className="fpp-file-count">{job.total_question_count}문항 감지됨</span>
-                )}
+                <span className="fpp-file-name" title={job.filename || job.job_id}>
+                  {job.filename || job.job_id}
+                </span>
+                <div className="fpp-file-meta">
+                  <BoundariesBadge
+                    boundariesStatus={job.boundaries_status}
+                    totalQuestionCount={job.total_question_count}
+                  />
+                  {job.uploaded_at && (
+                    <span className="fpp-file-time">{relativeTime(job.uploaded_at)}</span>
+                  )}
+                </div>
               </div>
               <span className="fpp-file-arrow">›</span>
             </div>
@@ -163,10 +177,9 @@ export default function FilePagePanel({
     );
   }
 
-  // ── 렌더: 페이지 선택 모드 ────────────────────────────
+  // ── 페이지 선택 모드 ──────────────────────────────────
   return (
     <div className="fpp-container">
-      {/* 헤더: 뒤로가기 + 파일명 + 재감지 */}
       <div className="fpp-page-header">
         <button className="fpp-back-btn" onClick={handleBack} title="파일 선택으로 돌아가기">
           ← 뒤로
@@ -184,11 +197,9 @@ export default function FilePagePanel({
 
       {refreshError && <p className="fpp-error">{refreshError}</p>}
       {refreshing   && <p className="fpp-hint">재감지 중... 잠시 기다려 주세요.</p>}
-
-      {pagesError && <p className="fpp-error">{pagesError}</p>}
+      {pagesError   && <p className="fpp-error">{pagesError}</p>}
       {pagesLoading && <p className="fpp-hint">페이지 목록 로딩 중...</p>}
 
-      {/* 페이지 목록 — 썸네일 없이 문항 수만 표시 */}
       <div className="fpp-page-list">
         {pages.map((page) => {
           const isSelected = selectedPageNum === page.page_num;
@@ -199,10 +210,14 @@ export default function FilePagePanel({
               onClick={() => handlePageClick(page)}
             >
               <span className="fpp-page-num">{page.page_num + 1}페이지</span>
-              <span className="fpp-page-qcount">
-                {page.question_count == null ? "—" : `${page.question_count}문항`}
-              </span>
-              {isSelected && <span className="fpp-page-check">✓</span>}
+              <div className="fpp-page-right">
+                {page.question_count != null && (
+                  <span className="fpp-badge fpp-badge--page" style={{ background: "#4a90e2" }}>
+                    {page.question_count}문항
+                  </span>
+                )}
+                {isSelected && <span className="fpp-page-check">✓</span>}
+              </div>
             </div>
           );
         })}

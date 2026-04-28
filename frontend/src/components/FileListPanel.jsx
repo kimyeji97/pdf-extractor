@@ -65,7 +65,7 @@ function JobCard({ job, isSelected, onSelect, isExport }) {
         ...styles.card,
         ...(isSelected ? styles.cardSelected : {}),
       }}
-      onClick={() => onSelect(job.job_id, job.filename)}
+      onClick={() => onSelect(job.job_id, job.filename, job.workbook_name)}
     >
       <div style={styles.cardMain}>
         <span style={styles.filename} title={job.filename || "unknown.pdf"}>

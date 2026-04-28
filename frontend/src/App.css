@@ -279,15 +279,16 @@ body {
   overflow: hidden;
 }
 
-/* ── 툴바 ──────────────────────────────────────────── */
+/* ── 툴바 (panel-header와 동일 스타일로 통일) ─────────── */
 .qap-toolbar {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 6px 14px;
   border-bottom: 1px solid #e4e8ef;
   background: #f8fafc;
   flex-shrink: 0;
+  min-height: 42px;
 }
 
 .qap-check-all {
@@ -344,6 +345,10 @@ body {
   border-color: #3b82f6;
   color: #2563eb;
   font-weight: 600;
+}
+.qap-btn--small {
+  padding: 2px 8px;
+  font-size: 11px;
 }
 .qap-btn--basket {
   padding: 2px 8px;
@@ -411,17 +416,17 @@ body {
 }
 .qap-page-img-wrap {
   position: relative;
-  display: inline-block;
-  max-width: 100%;
+  display: block;
+  width: 100%;
   border: 1px solid #e2e8f0;
   border-radius: 4px;
   overflow: hidden;
-  cursor: crosshair;
+  cursor: default;
 }
 .qap-page-img {
   display: block;
-  max-width: 100%;
-  max-height: 220px;
+  width: 100%;
+  height: auto;
   object-fit: contain;
   user-select: none;
   pointer-events: none;
@@ -440,8 +445,9 @@ body {
 }
 .qap-manual-input {
   flex: 1;
+  width: 100%;
   min-width: 120px;
-  padding: 4px 8px;
+  padding: 5px 10px;
   font-size: 12px;
   border: 1px solid #d0d6e0;
   border-radius: 4px;
@@ -490,7 +496,6 @@ body {
   border: 1px solid #e4e8ef;
   border-radius: 8px;
   background: #fff;
-  overflow: hidden;
   transition: border-color 0.12s, background 0.12s;
 }
 .qap-card:hover { border-color: #cbd5e1; background: #fafbfd; }
@@ -799,6 +804,58 @@ body {
   height: 100%;
   overflow: hidden;
 }
+
+/* 파일명 입력 바 */
+.wbe-filename-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #e4e8ef;
+  background: #f0f6ff;
+  flex-shrink: 0;
+  min-height: 48px;
+}
+.wbe-filename-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wbe-filename-ext {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wbe-filename-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid #c7d9f8;
+  border-radius: 6px;
+  outline: none;
+  color: #1e293b;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.wbe-filename-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.wbe-filename-input--error {
+  border-color: #ef4444;
+  box-shadow: none;
+}
+.wbe-filename-error {
+  font-size: 11px;
+  color: #ef4444;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .wbe-layout-bar {
   display: flex;
   align-items: center;
@@ -985,6 +1042,7 @@ body {
   transition: border-color 0.12s;
 }
 .wbh-item:hover { border-color: #cbd5e1; }
+.wbh-item--selected { border-color: #4a90e2; background: #f0f6ff; box-shadow: 0 0 0 2px rgba(74,144,226,0.15); }
 
 .wbh-item-info { flex: 1; min-width: 0; }
 .wbh-item-name {
@@ -1072,15 +1130,25 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 .fpp-file-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: #1e293b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.fpp-file-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.fpp-file-time {
+  font-size: 10px;
+  color: #aaa;
 }
 .fpp-file-count {
   font-size: 11px;
@@ -1090,6 +1158,20 @@ body {
   font-size: 16px;
   color: #94a3b8;
   flex-shrink: 0;
+}
+
+/* 배지 (감지 상태 / 문항 수) */
+.fpp-badge {
+  display: inline-block;
+  font-size: 10px;
+  color: #fff;
+  border-radius: 3px;
+  padding: 2px 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fpp-badge--page {
+  /* page-level badge: 색상은 인라인 스타일로 */
 }
 
 .fpp-hint {
@@ -1190,10 +1272,16 @@ body {
 }
 
 .fpp-page-num {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: #1e293b;
   flex: 1;
+}
+.fpp-page-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
 }
 .fpp-page-qcount {
   font-size: 11px;
@@ -1210,20 +1298,24 @@ body {
 
 .qav-layout {
   display: flex;
+  flex-direction: column;
   height: 100%;
   overflow: hidden;
 }
 
-/* Section A: 좌측 파일+페이지 패널 */
-.qav-section-a {
-  width: 240px;
-  min-width: 180px;
-  max-width: 320px;
-  flex-shrink: 0;
+/* 3패널 컨테이너 (wbe-panels와 동일 구조) */
+.qav-panels {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 섹션 공통: panel 클래스 사용, display/overflow는 panel 클래스에서 */
+.qav-section-1,
+.qav-section-2,
+.qav-section-3 {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #e4e8ef;
-  background: #f8fafc;
   overflow: hidden;
 }
 
@@ -1242,15 +1334,75 @@ body {
   color: #2563eb;
   margin-bottom: 4px;
 }
-
-/* Section B: 우측 문항 분석 패널 */
-.qav-section-b {
-  flex: 1;
-  min-width: 0;
+.qav-upload-meta {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.qav-meta-input {
+  width: 100%;
+  font-size: 11px;
+  padding: 4px 7px;
+  border: 1px solid #dde1ea;
+  border-radius: 4px;
+  outline: none;
   background: #fff;
+  color: #334155;
+  box-sizing: border-box;
+}
+.qav-meta-input:focus {
+  border-color: #4a90e2;
+}
+.qav-meta-input:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+/* Section 2: 페이지 미리보기 바디 */
+.qav-preview-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.qav-preview-body::-webkit-scrollbar { width: 4px; }
+.qav-preview-body::-webkit-scrollbar-thumb { background: #d8dce4; border-radius: 4px; }
+
+/* 페이지 이미지: 가로 꽉 차게, 비율 유지 */
+.qav-preview-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 드로우 모드 래퍼: 이미지 컨테이너 */
+.qap-page-img-wrap--draw {
+  cursor: crosshair;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* 수동 추가 폼 (Section 2 전용) */
+.qav-manual-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: #f0f6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.qav-manual-form-btns {
+  display: flex;
+  gap: 6px;
 }
 
 /* 빈 상태 */

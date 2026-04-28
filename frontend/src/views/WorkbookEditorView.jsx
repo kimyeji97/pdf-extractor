@@ -125,6 +125,7 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
   // ── 파일 선택 상태 ────────────────────────────────────
   const [jobId, setJobId]                             = useState(null);
   const [selectedJobFilename, setSelectedJobFilename] = useState(null);
+  const [selectedWorkbookName, setSelectedWorkbookName] = useState("");
   const [uploading, setUploading]                     = useState(false);
   const [uploadError, setUploadError]                 = useState("");
   const [refreshTrigger, setRefreshTrigger]           = useState(0);
@@ -211,9 +212,10 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
   };
 
   // ── 핸들러: 파일 선택 ────────────────────────────────
-  const handleJobSelect = (selectedJobId, filename) => {
+  const handleJobSelect = (selectedJobId, filename, workbookName) => {
     setJobId(selectedJobId);
     setSelectedJobFilename(filename || null);
+    setSelectedWorkbookName(workbookName || "");
   };
 
   // ── 핸들러: PDF 업로드 ───────────────────────────────
@@ -246,6 +248,7 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
           questionNum:  q.question_num,
           pageNum:      q._pageNum,
           jobId:        jobId,
+          workbookName: selectedWorkbookName,
           thumbnailUrl: q.thumbnail_url,
           isManual:     q.is_manual,
           manualId:     q.manual_id,
@@ -325,15 +328,17 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
               await createWorkbookMeta({
                 layout,
                 filename:       filename.trim(),
+                name:           filename.trim(),
                 question_count: basket.length,
                 result_job_id:  exportJobId,
                 selections: basket.map((b) => ({
-                  question_id:  b.questionId,
-                  job_id:       b.jobId,
-                  page_num:     b.pageNum,
-                  question_num: b.isManual ? undefined : b.questionNum,
-                  manual_id:    b.isManual ? b.manualId : undefined,
-                  title:        b.displayTitle,
+                  question_id:   b.questionId,
+                  job_id:        b.jobId,
+                  page_num:      b.pageNum,
+                  question_num:  b.isManual ? undefined : b.questionNum,
+                  manual_id:     b.isManual ? b.manualId : undefined,
+                  title:         b.displayTitle,
+                  workbook_name: b.workbookName || undefined,
                 })),
               });
             } catch { /* 저장 실패는 조용히 무시 */ }
@@ -475,14 +480,15 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
         <div className="panel wbe-preview-panel" style={{ flex: 1, minWidth: 0 }}>
           {/* 파일명 입력 (REQ-C01) */}
           <div className="wbe-filename-bar">
-            <label className="wbe-filename-label">파일명</label>
+            <label className="wbe-filename-label">📝 파일명</label>
             <input
               type="text"
               className={`wbe-filename-input${filenameError ? " wbe-filename-input--error" : ""}`}
               value={filename}
               onChange={(e) => { setFilename(e.target.value); setFilenameError(""); }}
-              placeholder="문제집 파일명 입력"
+              placeholder="문제집 파일명을 입력하세요"
             />
+            <span className="wbe-filename-ext">.pdf</span>
             {filenameError && <span className="wbe-filename-error">{filenameError}</span>}
           </div>
 

@@ -65,6 +65,7 @@ class WorkbookCreateRequest(BaseModel):
     result_job_id: str
     question_count: int
     filename: Optional[str] = None    # REQ-C01: 사용자 입력 파일명
+    name: Optional[str] = None        # 문제집 이름 (이력 표시용)
 
 
 @router.post("/workbooks", response_model=WorkbookMeta, status_code=201)
@@ -87,6 +88,7 @@ def create_workbook(body: WorkbookCreateRequest):
         result_job_id=body.result_job_id,
         question_count=body.question_count,
         filename=body.filename,
+        name=body.name,
     )
     storage.save_workbook(workbook_id, meta.model_dump(mode="json"))
     return meta
