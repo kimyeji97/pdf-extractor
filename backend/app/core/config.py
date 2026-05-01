@@ -6,11 +6,19 @@ class Settings(BaseSettings):
     # ── 스토리지 백엔드 선택 ──────────────────────────────
     STORAGE_BACKEND: Literal["local", "s3"] = "local"
 
-    # ── AWS (STORAGE_BACKEND=s3 일 때만 필요) ────────────
-    AWS_REGION: str = "ap-northeast-2"
-    AWS_ACCESS_KEY_ID: str = ""
-    AWS_SECRET_ACCESS_KEY: str = ""
-    S3_BUCKET_NAME: str = ""
+    # ── Cloudflare R2 (STORAGE_BACKEND=s3 일 때 사용) ────
+    # R2_ACCOUNT_ID: Cloudflare 계정 ID
+    # R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY: R2 API 토큰
+    # R2_BUCKET_NAME: 버킷 이름
+    # R2_PUBLIC_DOMAIN: 퍼블릭 버킷 도메인 (설정 시 다운로드 URL에 사용)
+    #   예) pub-xxxx.r2.dev  또는  files.example.com (커스텀 도메인)
+    # R2_ROOT_PREFIX: 버킷 내 루트 경로 (예: "dev", "prod"). 빈 값이면 버킷 루트에 저장
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = ""
+    R2_PUBLIC_DOMAIN: str = ""
+    R2_ROOT_PREFIX: str = ""
 
     # ── 로컬 스토리지 (STORAGE_BACKEND=local 일 때만 필요) ─
     LOCAL_STORAGE_DIR: str = "./local_storage"
@@ -24,7 +32,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
-        extra = "ignore"   # .env에 알 수 없는 키(TESSDATA_PREFIX 등)가 있어도 무시
+        extra = "ignore"
 
 
 settings = Settings()

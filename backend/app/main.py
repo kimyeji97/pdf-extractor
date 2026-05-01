@@ -1,6 +1,13 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import upload, extract, browse, workbook
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 app = FastAPI(
     title="PDF Question Extractor",
@@ -19,7 +26,7 @@ app.add_middleware(
 app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(extract.router, prefix="/api", tags=["extract"])
 app.include_router(browse.router, prefix="/api", tags=["browse"])
-app.include_router(workbook.router, prefix="/api", tags=["workbook"])  # v3 신규
+app.include_router(workbook.router, prefix="/api", tags=["workbook"])
 
 
 @app.get("/health")

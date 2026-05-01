@@ -1,9 +1,11 @@
 """
-POST /api/upload          - presigned URL 요청 (S3 모드 / 로컬 모드 공통)
+POST /api/upload          - presigned URL 요청 (R2 모드 / 로컬 모드 공통)
+POST /api/upload/notify   - R2 업로드 완료 알림 (R2 모드 전용)
 POST /api/upload/direct   - 파일 직접 수신    (로컬 모드 전용)
 GET  /api/files/{key:path} - 파일 서빙        (로컬 모드 전용)
 """
 import dataclasses
+import logging
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -18,6 +20,7 @@ from app.models.schemas import BoundariesStatus, UploadResponse, JobStatusFile, 
 from app.services import storage
 from app.utils.question_parser import detect_question_boundaries
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -32,15 +35,18 @@ class UploadRequest(BaseModel):
 @router.post("/upload", response_model=UploadResponse)
 def request_upload(body: UploadRequest = UploadRequest()):
     """
-    S3 모드: 클라이언트가 presigned URL로 직접 S3에 PUT
+    R2 모드: 클라이언트가 presigned URL로 직접 R2에 PUT
     로컬 모드: /api/upload/direct 엔드포인트 URL 반환 (multipart POST)
     """
     job_id = str(uuid.uuid4())
     key = storage.original_key(job_id)
 
+    logger.info("[upload] 요청 | job_id=%s filename=%s key=%s", job_id, body.filename, key)
+
     try:
         upload_url = storage.generate_upload_presigned_url(key)
     except Exception as e:
+        logger.error("[upload] presigned URL 생성 실패 | job_id=%s error=%s", job_id, e)
         raise HTTPException(status_code=500, detail=f"업로드 URL 생성 실패: {e}")
 
     storage.put_status(
@@ -54,7 +60,28 @@ def request_upload(body: UploadRequest = UploadRequest()):
             workbook_types=body.workbook_types,
         )
     )
+    logger.info("[upload] status 저장 완료 | job_id=%s", job_id)
     return UploadResponse(job_id=job_id, upload_url=upload_url)
+
+
+# ── R2 업로드 완료 알림 (R2 모드 전용) ───────────────────
+
+@router.post("/upload/notify")
+def notify_upload_complete(job_id: str, background_tasks: BackgroundTasks):
+    """
+    클라이언트가 R2 presigned URL로 파일 업로드를 완료한 뒤 호출한다.
+    백그라운드로 문항 경계 감지를 시작하고 즉시 응답을 반환한다.
+    """
+    if settings.STORAGE_BACKEND == "local":
+        raise HTTPException(status_code=404, detail="R2 모드에서만 사용 가능합니다.")
+
+    status_file = storage.get_status(job_id)
+    if status_file is None:
+        raise HTTPException(status_code=404, detail="job_id를 찾을 수 없습니다.")
+
+    logger.info("[upload] notify 수신 — 경계 감지 시작 | job_id=%s", job_id)
+    background_tasks.add_task(_trigger_boundary_detection, job_id)
+    return {"job_id": job_id, "message": "경계 감지 시작"}
 
 
 # ── 직접 업로드 (로컬 모드 전용) ─────────────────────────
@@ -83,20 +110,28 @@ async def direct_upload(key: str, file: UploadFile = File(...), background_tasks
 
 def _trigger_boundary_detection(job_id: str) -> None:
     """업로드 완료 직후 백그라운드 실행 — 문항 경계 감지 후 상태 업데이트"""
+    logger.info("[boundary] 감지 시작 | job_id=%s", job_id)
+
     status_file = storage.get_status(job_id)
     if status_file is None:
+        logger.warning("[boundary] status 없음 — 종료 | job_id=%s", job_id)
         return
 
     status_file.boundaries_status = BoundariesStatus.PROCESSING
     storage.put_status(status_file)
 
     try:
-        pdf_bytes = storage.read_file(storage.original_key(job_id))
+        original = storage.original_key(job_id)
+        logger.info("[boundary] R2에서 PDF 다운로드 | job_id=%s key=%s", job_id, original)
+        pdf_bytes = storage.read_file(original)
+        logger.info("[boundary] PDF 다운로드 완료 | job_id=%s size=%d bytes", job_id, len(pdf_bytes))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = str(Path(tmpdir) / "original.pdf")
             Path(pdf_path).write_bytes(pdf_bytes)
             boundaries = detect_question_boundaries(pdf_path)
+
+        logger.info("[boundary] 감지 완료 | job_id=%s count=%d", job_id, len(boundaries))
 
         storage.save_boundaries_cache(
             job_id, [dataclasses.asdict(b) for b in boundaries]
@@ -112,11 +147,13 @@ def _trigger_boundary_detection(job_id: str) -> None:
         status_file.questions_per_page = questions_per_page
 
     except Exception as e:
+        logger.error("[boundary] 감지 실패 | job_id=%s error=%s", job_id, e, exc_info=True)
         status_file.boundaries_status = BoundariesStatus.FAILED
         status_file.error = str(e)
 
     finally:
         storage.put_status(status_file)
+        logger.info("[boundary] status 저장 완료 | job_id=%s boundaries_status=%s", job_id, status_file.boundaries_status)
 
 
 # ── 파일 서빙 (로컬 모드 전용) ────────────────────────────

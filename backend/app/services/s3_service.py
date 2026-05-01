@@ -1,39 +1,130 @@
+"""
+Cloudflare R2 스토리지 서비스 (S3 호환 API 사용)
+
+STORAGE_BACKEND=s3 일 때 storage.py 팩토리가 이 모듈을 선택한다.
+R2 버킷 + R2_ROOT_PREFIX 조합으로 환경(dev/prod)을 구분한다.
+
+버킷 구조 ({root}/ 는 R2_ROOT_PREFIX, 빈 값이면 생략):
+  {root}/uploads/{job_id}/original.pdf
+  {root}/results/{job_id}/result.pdf
+  {root}/status/{job_id}.json
+  {root}/boundaries/{job_id}.json
+  {root}/thumbnails/{job_id}/page_{n}.png
+  {root}/thumbnails/{job_id}/q_{page}_{num}.png
+  {root}/thumbnails/{job_id}/manual_{page}_{manual_id}.png
+  {root}/manual_questions/{job_id}.json
+  {root}/workbooks/{workbook_id}.json
+"""
 import json
+import logging
 from typing import Optional, List
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from app.core.config import settings
 from app.models.schemas import JobStatusFile, JobStatus
 
-s3 = boto3.client(
+logger = logging.getLogger(__name__)
+
+_endpoint = f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+r2 = boto3.client(
     "s3",
-    region_name=settings.AWS_REGION,
-    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+    endpoint_url=_endpoint,
+    aws_access_key_id=settings.R2_ACCESS_KEY_ID,
+    aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
+    region_name="auto",
+    config=Config(signature_version="s3v4"),
 )
 
-BUCKET = settings.S3_BUCKET_NAME
+BUCKET = settings.R2_BUCKET_NAME
+_ROOT = settings.R2_ROOT_PREFIX.strip("/")
+
 STATUS_PREFIX = "status"
 UPLOADS_PREFIX = "uploads"
 RESULTS_PREFIX = "results"
 THUMBNAILS_PREFIX = "thumbnails"
 BOUNDARIES_PREFIX = "boundaries"
+MANUAL_QUESTIONS_PREFIX = "manual_questions"
+WORKBOOKS_PREFIX = "workbooks"
+
+# Cache-Control 정책
+# Cloudflare CDN이 커스텀 도메인으로 서빙할 때 이 헤더를 따른다.
+_CC_IMMUTABLE  = "public, max-age=31536000, immutable"  # 썸네일 — 내용 불변
+_CC_RESULT_PDF = "public, max-age=86400"                # 결과 PDF — 1일
+_CC_NO_CACHE   = "no-store"                             # status/boundaries — 캐싱 금지
 
 
-# ── Presigned URL ─────────────────────────────────────
+def _key(*parts: str) -> str:
+    """R2_ROOT_PREFIX를 포함한 전체 오브젝트 키를 반환한다."""
+    path = "/".join(p.strip("/") for p in parts if p)
+    return f"{_ROOT}/{path}" if _ROOT else path
+
+
+# ── 내부 헬퍼 ─────────────────────────────────────────────
+
+def _put_json(key: str, data, cache_control: str = _CC_NO_CACHE) -> None:
+    r2.put_object(
+        Bucket=BUCKET,
+        Key=key,
+        Body=json.dumps(data, ensure_ascii=False, default=str).encode("utf-8"),
+        ContentType="application/json",
+        CacheControl=cache_control,
+    )
+
+
+def _get_json(key: str):
+    resp = r2.get_object(Bucket=BUCKET, Key=key)
+    return json.loads(resp["Body"].read())
+
+
+def _get_json_or_none(key: str):
+    try:
+        return _get_json(key)
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            return None
+        raise
+
+
+def _delete(key: str) -> None:
+    try:
+        r2.delete_object(Bucket=BUCKET, Key=key)
+    except ClientError:
+        pass
+
+
+def _get_bytes_or_none(key: str) -> Optional[bytes]:
+    try:
+        resp = r2.get_object(Bucket=BUCKET, Key=key)
+        return resp["Body"].read()
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            return None
+        raise
+
+
+# ── Presigned / 다운로드 URL ──────────────────────────────
 
 def generate_upload_presigned_url(key: str, expires: int = 300) -> str:
-    """클라이언트가 S3에 직접 PUT 업로드할 수 있는 presigned URL 생성"""
-    return s3.generate_presigned_url(
+    """클라이언트가 R2에 직접 PUT 업로드할 수 있는 presigned URL 생성"""
+    url = r2.generate_presigned_url(
         "put_object",
         Params={"Bucket": BUCKET, "Key": key, "ContentType": "application/pdf"},
         ExpiresIn=expires,
     )
+    logger.info("[R2] upload presigned URL generated | bucket=%s key=%s expires=%ds", BUCKET, key, expires)
+    return url
 
 
 def generate_download_presigned_url(key: str, expires: int = 3600) -> str:
-    """결과 PDF 다운로드용 presigned URL 생성"""
-    return s3.generate_presigned_url(
+    """결과 PDF 다운로드 URL 생성.
+
+    R2_PUBLIC_DOMAIN 이 설정되면 퍼블릭 URL, 아니면 R2 presigned URL 반환.
+    """
+    if settings.R2_PUBLIC_DOMAIN:
+        return f"https://{settings.R2_PUBLIC_DOMAIN}/{key}"
+    return r2.generate_presigned_url(
         "get_object",
         Params={"Bucket": BUCKET, "Key": key},
         ExpiresIn=expires,
@@ -43,42 +134,35 @@ def generate_download_presigned_url(key: str, expires: int = 3600) -> str:
 # ── 상태 파일 (DB 대체) ────────────────────────────────
 
 def put_status(job_status: JobStatusFile) -> None:
-    key = f"{STATUS_PREFIX}/{job_status.job_id}.json"
-    s3.put_object(
+    r2.put_object(
         Bucket=BUCKET,
-        Key=key,
+        Key=_key(STATUS_PREFIX, f"{job_status.job_id}.json"),
         Body=job_status.model_dump_json(),
         ContentType="application/json",
+        CacheControl=_CC_NO_CACHE,
     )
 
 
 def get_status(job_id: str) -> Optional[JobStatusFile]:
-    key = f"{STATUS_PREFIX}/{job_id}.json"
-    try:
-        resp = s3.get_object(Bucket=BUCKET, Key=key)
-        data = json.loads(resp["Body"].read())
-        return JobStatusFile(**data)
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "NoSuchKey":
-            return None
-        raise
+    data = _get_json_or_none(_key(STATUS_PREFIX, f"{job_id}.json"))
+    return JobStatusFile(**data) if data is not None else None
 
 
 def list_jobs() -> List[JobStatusFile]:
-    """S3 status/ 접두사 아래 모든 상태 JSON을 읽어 uploaded_at 내림차순으로 반환"""
-    paginator = s3.get_paginator("list_objects_v2")
+    """status/ 접두사 아래 모든 상태 JSON을 읽어 uploaded_at 내림차순으로 반환"""
+    prefix = _key(STATUS_PREFIX) + "/"
+    paginator = r2.get_paginator("list_objects_v2")
     keys = []
-    for page in paginator.paginate(Bucket=BUCKET, Prefix=f"{STATUS_PREFIX}/"):
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
         for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith(".json"):
-                keys.append(key)
+            k = obj["Key"]
+            if k.endswith(".json"):
+                keys.append(k)
 
     jobs: List[JobStatusFile] = []
-    for key in keys:
+    for k in keys:
         try:
-            resp = s3.get_object(Bucket=BUCKET, Key=key)
-            data = json.loads(resp["Body"].read())
+            data = _get_json(k)
             jobs.append(JobStatusFile(**data))
         except Exception:
             continue
@@ -93,109 +177,148 @@ def list_jobs() -> List[JobStatusFile]:
 # ── 썸네일 캐시 ─────────────────────────────────────────
 
 def get_thumbnail_cache(job_id: str, page_num: int) -> Optional[bytes]:
-    key = f"{THUMBNAILS_PREFIX}/{job_id}/page_{page_num}.png"
-    try:
-        resp = s3.get_object(Bucket=BUCKET, Key=key)
-        return resp["Body"].read()
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "NoSuchKey":
-            return None
-        raise
+    return _get_bytes_or_none(_key(THUMBNAILS_PREFIX, job_id, f"page_{page_num}.png"))
 
 
 def save_thumbnail_cache(job_id: str, page_num: int, data: bytes) -> None:
-    key = f"{THUMBNAILS_PREFIX}/{job_id}/page_{page_num}.png"
-    s3.put_object(Bucket=BUCKET, Key=key, Body=data, ContentType="image/png")
+    r2.put_object(
+        Bucket=BUCKET,
+        Key=_key(THUMBNAILS_PREFIX, job_id, f"page_{page_num}.png"),
+        Body=data,
+        ContentType="image/png",
+        CacheControl=_CC_IMMUTABLE,
+    )
 
 
 # ── 경계 캐시 ─────────────────────────────────────────────
 
 def get_boundaries_cache(job_id: str) -> Optional[list]:
-    """저장된 문항 경계 JSON을 읽어 dict 리스트로 반환. 없으면 None."""
-    key = f"{BOUNDARIES_PREFIX}/{job_id}.json"
-    try:
-        resp = s3.get_object(Bucket=BUCKET, Key=key)
-        return json.loads(resp["Body"].read())
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "NoSuchKey":
-            return None
-        raise
+    return _get_json_or_none(_key(BOUNDARIES_PREFIX, f"{job_id}.json"))
 
 
 def save_boundaries_cache(job_id: str, data: list) -> None:
-    """문항 경계 dict 리스트를 JSON으로 저장."""
-    key = f"{BOUNDARIES_PREFIX}/{job_id}.json"
-    s3.put_object(
-        Bucket=BUCKET,
-        Key=key,
-        Body=json.dumps(data, ensure_ascii=False).encode("utf-8"),
-        ContentType="application/json",
-    )
+    _put_json(_key(BOUNDARIES_PREFIX, f"{job_id}.json"), data)
 
 
 def clear_boundaries_cache(job_id: str) -> None:
-    """
-    저장된 문항 경계 캐시를 삭제한다.
-    재감지 요청 시 호출하여 이전 감지 결과를 무효화한다.
-    문항 썸네일 캐시도 함께 삭제 — 경계가 바뀌면 썸네일 좌표도 달라지기 때문.
-    """
-    import boto3
-    from botocore.exceptions import ClientError as _ClientError
+    """경계 캐시와 연관 문항 썸네일 캐시를 삭제한다."""
+    _delete(_key(BOUNDARIES_PREFIX, f"{job_id}.json"))
 
-    # 경계 JSON 삭제
-    boundary_key = f"{BOUNDARIES_PREFIX}/{job_id}.json"
-    try:
-        s3.delete_object(Bucket=BUCKET, Key=boundary_key)
-    except _ClientError:
-        pass  # 없어도 무시
-
-    # 문항 썸네일 캐시 일괄 삭제 (q_*.png 접두사 필터)
-    prefix = f"{THUMBNAILS_PREFIX}/{job_id}/q_"
-    paginator = s3.get_paginator("list_objects_v2")
+    prefix = _key(THUMBNAILS_PREFIX, job_id, "q_")
+    paginator = r2.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
         objects = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
         if objects:
-            s3.delete_objects(Bucket=BUCKET, Delete={"Objects": objects})
+            r2.delete_objects(Bucket=BUCKET, Delete={"Objects": objects})
 
+
+# ── 자동 감지 문항 썸네일 ──────────────────────────────────
 
 def get_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) -> Optional[bytes]:
-    key = f"{THUMBNAILS_PREFIX}/{job_id}/q_{page_num}_{question_num}.png"
-    try:
-        resp = s3.get_object(Bucket=BUCKET, Key=key)
-        return resp["Body"].read()
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "NoSuchKey":
-            return None
-        raise
+    return _get_bytes_or_none(_key(THUMBNAILS_PREFIX, job_id, f"q_{page_num}_{question_num}.png"))
 
 
 def save_question_thumbnail_cache(job_id: str, page_num: int, question_num: int, data: bytes) -> None:
-    key = f"{THUMBNAILS_PREFIX}/{job_id}/q_{page_num}_{question_num}.png"
-    s3.put_object(Bucket=BUCKET, Key=key, Body=data, ContentType="image/png")
+    r2.put_object(
+        Bucket=BUCKET,
+        Key=_key(THUMBNAILS_PREFIX, job_id, f"q_{page_num}_{question_num}.png"),
+        Body=data,
+        ContentType="image/png",
+        CacheControl=_CC_IMMUTABLE,
+    )
+
+
+def delete_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) -> None:
+    _delete(_key(THUMBNAILS_PREFIX, job_id, f"q_{page_num}_{question_num}.png"))
+
+
+# ── 수동 문항 썸네일 ──────────────────────────────────────
+
+def get_manual_thumbnail_cache(job_id: str, page_num: int, manual_id: str) -> Optional[bytes]:
+    return _get_bytes_or_none(_key(THUMBNAILS_PREFIX, job_id, f"manual_{page_num}_{manual_id}.png"))
+
+
+def save_manual_thumbnail_cache(job_id: str, page_num: int, manual_id: str, data: bytes) -> None:
+    r2.put_object(
+        Bucket=BUCKET,
+        Key=_key(THUMBNAILS_PREFIX, job_id, f"manual_{page_num}_{manual_id}.png"),
+        Body=data,
+        ContentType="image/png",
+        CacheControl=_CC_IMMUTABLE,
+    )
+
+
+def delete_manual_thumbnail_cache(job_id: str, page_num: int, manual_id: str) -> None:
+    _delete(_key(THUMBNAILS_PREFIX, job_id, f"manual_{page_num}_{manual_id}.png"))
+
+
+# ── 수동 문항 영속 저장 ────────────────────────────────────
+
+def get_manual_questions(job_id: str) -> list:
+    return _get_json_or_none(_key(MANUAL_QUESTIONS_PREFIX, f"{job_id}.json")) or []
+
+
+def save_manual_questions(job_id: str, data: list) -> None:
+    _put_json(_key(MANUAL_QUESTIONS_PREFIX, f"{job_id}.json"), data)
+
+
+# ── 문제집 메타데이터 ──────────────────────────────────────
+
+def get_workbook(workbook_id: str) -> Optional[dict]:
+    return _get_json_or_none(_key(WORKBOOKS_PREFIX, f"{workbook_id}.json"))
+
+
+def save_workbook(workbook_id: str, data: dict) -> None:
+    _put_json(_key(WORKBOOKS_PREFIX, f"{workbook_id}.json"), data)
+
+
+def list_workbooks() -> list:
+    """workbooks/ 접두사 아래 모든 문제집 메타데이터를 created_at 내림차순으로 반환"""
+    prefix = _key(WORKBOOKS_PREFIX) + "/"
+    paginator = r2.get_paginator("list_objects_v2")
+    keys = []
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            k = obj["Key"]
+            if k.endswith(".json"):
+                keys.append(k)
+
+    workbooks = []
+    for k in keys:
+        try:
+            workbooks.append(_get_json(k))
+        except Exception:
+            continue
+
+    workbooks.sort(key=lambda w: w.get("created_at", ""), reverse=True)
+    return workbooks
 
 
 # ── 파일 읽기 (bytes 반환) ────────────────────────────────
 
 def read_file(key: str) -> bytes:
-    resp = s3.get_object(Bucket=BUCKET, Key=key)
+    resp = r2.get_object(Bucket=BUCKET, Key=key)
     return resp["Body"].read()
 
 
-# ── PDF 파일 다운로드 (처리용) ─────────────────────────
+# ── PDF 파일 다운로드/업로드 (백엔드 처리용) ──────────────
 
 def download_file(key: str, local_path: str) -> None:
-    s3.download_file(BUCKET, key, local_path)
+    r2.download_file(BUCKET, key, local_path)
 
 
 def upload_file(local_path: str, key: str) -> None:
-    s3.upload_file(local_path, BUCKET, key, ExtraArgs={"ContentType": "application/pdf"})
+    r2.upload_file(local_path, BUCKET, key, ExtraArgs={
+        "ContentType": "application/pdf",
+        "CacheControl": _CC_RESULT_PDF,
+    })
 
 
 # ── 키 헬퍼 ─────────────────────────────────────────
 
 def original_key(job_id: str) -> str:
-    return f"{UPLOADS_PREFIX}/{job_id}/original.pdf"
+    return _key(UPLOADS_PREFIX, job_id, "original.pdf")
 
 
 def result_key(job_id: str) -> str:
-    return f"{RESULTS_PREFIX}/{job_id}/result.pdf"
+    return _key(RESULTS_PREFIX, job_id, "result.pdf")

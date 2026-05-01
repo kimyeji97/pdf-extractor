@@ -51,11 +51,11 @@ export async function getPages(jobId) {
 /**
  * PDF 업로드
  *
- * S3 모드  : presigned URL로 PUT (Content-Type: application/pdf)
- * 로컬 모드 : /api/upload/direct 로 multipart POST
+ * R2 모드  : presigned URL로 PUT → 완료 후 /api/upload/notify 호출
+ * 로컬 모드 : /api/upload/direct 로 multipart POST (notify 불필요)
  *            upload_url 에 "upload/direct" 가 포함되면 로컬로 판단
  */
-export async function uploadPdf(uploadUrl, file) {
+export async function uploadPdf(uploadUrl, file, jobId) {
   const isLocal = uploadUrl.includes("upload/direct");
 
   if (isLocal) {
@@ -69,8 +69,21 @@ export async function uploadPdf(uploadUrl, file) {
       body: file,
       headers: { "Content-Type": "application/pdf" },
     });
-    if (!res.ok) throw new Error("S3 업로드 실패");
+    if (!res.ok) throw new Error("R2 업로드 실패");
+    await notifyUploadComplete(jobId);
   }
+}
+
+/**
+ * POST /api/upload/notify
+ * R2 업로드 완료 후 백엔드에 알려 문항 경계 감지를 시작한다.
+ */
+export async function notifyUploadComplete(jobId) {
+  const res = await fetch(`${BASE_URL}/upload/notify?job_id=${jobId}`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("업로드 완료 알림 실패");
+  return res.json();
 }
 
 /**

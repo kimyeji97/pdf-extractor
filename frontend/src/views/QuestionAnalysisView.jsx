@@ -107,8 +107,8 @@ export default function QuestionAnalysisView() {
       if (uploadWorkbookTypes.trim()) {
         meta.workbook_types = uploadWorkbookTypes.split(",").map((s) => s.trim()).filter(Boolean);
       }
-      const { upload_url } = await requestUploadUrl(selectedFile.name, meta);
-      await uploadPdf(upload_url, selectedFile);
+      const { job_id, upload_url } = await requestUploadUrl(selectedFile.name, meta);
+      await uploadPdf(upload_url, selectedFile, job_id);
       setRefreshTrigger((t) => t + 1);
       setJobId(null);
       setSelectedPage(null);
