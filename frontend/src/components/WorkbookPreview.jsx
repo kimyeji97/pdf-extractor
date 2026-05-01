@@ -80,11 +80,11 @@ export default function WorkbookPreview({ selections = [], layout = DEFAULT_LAYO
             const imgYpx   = cellYpx + labelHpx;
             const imgHpx   = cellHpx - labelHpx;
 
-            // 출처 레이블 텍스트: "Q번호 · 문제집이름 · p.페이지"
-            const labelParts = [`Q${globalIdx + 1}`];
+            // 출처 레이블 텍스트: "번호번. 문제집이름. p페이지"
+            const labelParts = [`${globalIdx + 1}번`];
             if (item.workbookName) labelParts.push(item.workbookName);
-            if (item.pageNum != null) labelParts.push(`p.${item.pageNum + 1}`);
-            const labelText = labelParts.join(" · ");
+            if (item.pageNum != null) labelParts.push(`p${item.pageNum + 1}`);
+            const labelText = labelParts.join(". ");
 
             if (!item.thumbnailUrl) {
               return (

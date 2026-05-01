@@ -267,6 +267,22 @@ export async function getWorkbook(workbookId) {
 }
 
 /**
+ * PATCH /api/jobs/{jobId}
+ * job의 문제집 이름/유형 수정
+ * @param {string} jobId
+ * @param {{ workbook_name?: string, workbook_types?: string[] }} meta
+ */
+export async function updateJobMeta(jobId, meta) {
+  const res = await fetch(`${BASE_URL}/jobs/${jobId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(meta),
+  });
+  if (!res.ok) throw new Error("메타데이터 수정 실패");
+  return res.json();
+}
+
+/**
  * POST /api/workbooks
  * 문제집 메타데이터 저장 (extract-v2 완료 후 호출)
  * @param {object} meta - WorkbookMeta 형식

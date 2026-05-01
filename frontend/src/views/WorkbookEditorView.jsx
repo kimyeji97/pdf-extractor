@@ -38,13 +38,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import FileListPanel from "../components/FileListPanel";
-import UploadForm from "../components/UploadForm";
 import QuestionListPanel from "../components/QuestionListPanel";
 import WorkbookPreview from "../components/WorkbookPreview";
 
 import {
-  requestUploadUrl,
-  uploadPdf,
   startExtractV2,
   getStatus,
   getWorkbook,
@@ -126,8 +123,6 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
   const [jobId, setJobId]                             = useState(null);
   const [selectedJobFilename, setSelectedJobFilename] = useState(null);
   const [selectedWorkbookName, setSelectedWorkbookName] = useState("");
-  const [uploading, setUploading]                     = useState(false);
-  const [uploadError, setUploadError]                 = useState("");
   const [refreshTrigger, setRefreshTrigger]           = useState(0);
 
   // ── workbook basket (선택 순서) ───────────────────────
@@ -216,23 +211,6 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
     setJobId(selectedJobId);
     setSelectedJobFilename(filename || null);
     setSelectedWorkbookName(workbookName || "");
-  };
-
-  // ── 핸들러: PDF 업로드 ───────────────────────────────
-  const handleFileSelected = async (file) => {
-    setUploading(true);
-    setUploadError("");
-    try {
-      const { job_id, upload_url } = await requestUploadUrl(file.name);
-      await uploadPdf(upload_url, file);
-      setJobId(job_id);
-      setSelectedJobFilename(file.name);
-      setRefreshTrigger((t) => t + 1);
-    } catch (e) {
-      setUploadError(e.message);
-    } finally {
-      setUploading(false);
-    }
   };
 
   // ── basket 조작 ──────────────────────────────────────
@@ -394,12 +372,6 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
               onSelect={handleJobSelect}
               refreshTrigger={refreshTrigger}
             />
-            <div className="upload-section">
-              <div className="upload-divider">새 PDF 업로드</div>
-              {uploadError && <p className="error-msg">{uploadError}</p>}
-              {uploading   && <p className="info-msg">업로드 중...</p>}
-              <UploadForm onFileSelected={handleFileSelected} disabled={uploading} />
-            </div>
           </div>
         </div>
 

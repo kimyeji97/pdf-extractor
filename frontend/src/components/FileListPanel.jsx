@@ -1,17 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
-import { listJobs } from "../api/client";
+import { listJobs, updateJobMeta } from "../api/client";
 
-// job.status (추출 작업 상태)
 const STATUS_LABEL = {
-  PENDING:    "준비됨",    // SOURCE PDF는 항상 PENDING (혼동 방지로 "준비됨"으로 변경)
-  PROCESSING: "처리 중",
-  DONE:       "완료",
-  FAILED:     "실패",
-};
-
-// EXPORT job은 PENDING = 실제로 대기 중
-const EXPORT_STATUS_LABEL = {
-  PENDING:    "대기",
+  PENDING:    null,
   PROCESSING: "처리 중",
   DONE:       "완료",
   FAILED:     "실패",
@@ -39,10 +30,10 @@ function relativeTime(isoString) {
 function BoundariesBadge({ boundariesStatus, totalQuestionCount }) {
   if (!boundariesStatus) return null;
   const map = {
-    PENDING:    { text: "문항 감지 대기",           bg: "#b0b8c8" },
-    PROCESSING: { text: "감지 중...",               bg: "#e6a817" },
+    PENDING:    { text: "문항 감지 대기", bg: "#b0b8c8" },
+    PROCESSING: { text: "감지 중...",     bg: "#e6a817" },
     DONE:       { text: `${totalQuestionCount ?? 0}문항`, bg: "#4a90e2" },
-    FAILED:     { text: "감지 실패",                bg: "#c0392b" },
+    FAILED:     { text: "감지 실패",      bg: "#c0392b" },
   };
   const entry = map[boundariesStatus];
   if (!entry) return null;
@@ -53,11 +44,43 @@ function BoundariesBadge({ boundariesStatus, totalQuestionCount }) {
   );
 }
 
-function JobCard({ job, isSelected, onSelect, isExport }) {
-  const statusLabel = isExport
-    ? (EXPORT_STATUS_LABEL[job.status] || job.status)
-    : (job.status === "PENDING" ? null : (STATUS_LABEL[job.status] || job.status));
-    // SOURCE + PENDING 뱃지는 숨김 (의미 없는 "준비됨" 뱃지 제거)
+function JobCard({ job, isSelected, onSelect, onMetaUpdated }) {
+  const statusLabel = job.status === "PENDING" ? null : (STATUS_LABEL[job.status] || job.status);
+
+  const [editing, setEditing]           = useState(false);
+  const [editName, setEditName]         = useState(job.workbook_name || "");
+  const [editTypes, setEditTypes]       = useState((job.workbook_types || []).join(", "));
+  const [saving, setSaving]             = useState(false);
+
+  const handleEditClick = (e) => {
+    e.stopPropagation();
+    setEditName(job.workbook_name || "");
+    setEditTypes((job.workbook_types || []).join(", "));
+    setEditing(true);
+  };
+
+  const handleSave = async (e) => {
+    e.stopPropagation();
+    setSaving(true);
+    try {
+      const types = editTypes.split(",").map((s) => s.trim()).filter(Boolean);
+      await updateJobMeta(job.job_id, {
+        workbook_name: editName.trim() || null,
+        workbook_types: types.length > 0 ? types : null,
+      });
+      setEditing(false);
+      onMetaUpdated();
+    } catch {
+      // 저장 실패 시 그대로 유지
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = (e) => {
+    e.stopPropagation();
+    setEditing(false);
+  };
 
   return (
     <li
@@ -65,7 +88,7 @@ function JobCard({ job, isSelected, onSelect, isExport }) {
         ...styles.card,
         ...(isSelected ? styles.cardSelected : {}),
       }}
-      onClick={() => onSelect(job.job_id, job.filename, job.workbook_name)}
+      onClick={() => !editing && onSelect(job.job_id, job.filename, job.workbook_name)}
     >
       <div style={styles.cardMain}>
         <span style={styles.filename} title={job.filename || "unknown.pdf"}>
@@ -77,17 +100,57 @@ function JobCard({ job, isSelected, onSelect, isExport }) {
               {statusLabel}
             </span>
           )}
-          {!isExport && (
-            <BoundariesBadge
-              boundariesStatus={job.boundaries_status}
-              totalQuestionCount={job.total_question_count}
-            />
-          )}
+          <BoundariesBadge
+            boundariesStatus={job.boundaries_status}
+            totalQuestionCount={job.total_question_count}
+          />
+          <button style={styles.editBtn} onClick={handleEditClick} title="이름/유형 편집">
+            ✎
+          </button>
         </div>
       </div>
-      {job.uploaded_at && (
+
+      {/* 문제집 이름 표시 */}
+      {!editing && job.workbook_name && (
+        <div style={styles.metaRow}>
+          <span style={styles.metaText}>{job.workbook_name}</span>
+          {job.workbook_types?.length > 0 && (
+            <span style={styles.metaText}> · {job.workbook_types.join(", ")}</span>
+          )}
+        </div>
+      )}
+
+      {/* 업로드 시간 */}
+      {!editing && job.uploaded_at && (
         <div style={styles.cardSub}>
           <span style={styles.time}>{relativeTime(job.uploaded_at)}</span>
+        </div>
+      )}
+
+      {/* 인라인 편집 폼 */}
+      {editing && (
+        <div style={styles.editForm} onClick={(e) => e.stopPropagation()}>
+          <input
+            style={styles.editInput}
+            placeholder="문제집 이름"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            autoFocus
+          />
+          <input
+            style={styles.editInput}
+            placeholder="문제집 유형 (쉼표로 구분)"
+            value={editTypes}
+            onChange={(e) => setEditTypes(e.target.value)}
+          />
+          <div style={styles.editActions}>
+            <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
+              {saving ? "저장 중..." : "저장"}
+            </button>
+            <button style={styles.cancelBtn} onClick={handleCancel} disabled={saving}>
+              취소
+            </button>
+          </div>
         </div>
       )}
     </li>
@@ -97,15 +160,14 @@ function JobCard({ job, isSelected, onSelect, isExport }) {
 /**
  * @param {{
  *   selectedJobId: string | null,
- *   onSelect: (jobId: string, filename: string) => void,
+ *   onSelect: (jobId: string, filename: string, workbookName?: string) => void,
  *   refreshTrigger: number
  * }} props
  */
 export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger = 0 }) {
   const [sourceJobs, setSourceJobs] = useState([]);
-  const [exportJobs, setExportJobs]  = useState([]);
-  const [loading, setLoading]        = useState(false);
-  const [error, setError]            = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState("");
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -113,7 +175,6 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
     try {
       const data = await listJobs();
       setSourceJobs(data.source_jobs ?? []);
-      setExportJobs(data.export_jobs  ?? []);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -121,14 +182,12 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
     }
   }, []);
 
-  // 최초 마운트 + refreshTrigger 변경 시 목록 재조회
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs, refreshTrigger]);
 
   return (
     <div style={styles.container}>
-      {/* 헤더 */}
       <div style={styles.header}>
         <span style={styles.sectionLabel}>📂 업로드된 파일</span>
         <button style={styles.refreshBtn} onClick={fetchJobs} disabled={loading}>
@@ -138,7 +197,6 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
 
       {error && <p style={styles.error}>{error}</p>}
 
-      {/* 원본 PDF 목록 */}
       {!loading && sourceJobs.length === 0 ? (
         <p style={styles.empty}>업로드된 파일 없음</p>
       ) : (
@@ -149,30 +207,10 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
               job={job}
               isSelected={selectedJobId === job.job_id}
               onSelect={onSelect}
-              isExport={false}
+              onMetaUpdated={fetchJobs}
             />
           ))}
         </ul>
-      )}
-
-      {/* 생성된 결과 파일 */}
-      {exportJobs.length > 0 && (
-        <>
-          <div style={{ ...styles.sectionLabel, marginTop: 16, marginBottom: 8 }}>
-            📄 생성된 파일
-          </div>
-          <ul style={styles.list}>
-            {exportJobs.map((job) => (
-              <JobCard
-                key={job.job_id}
-                job={job}
-                isSelected={selectedJobId === job.job_id}
-                onSelect={onSelect}
-                isExport={true}
-              />
-            ))}
-          </ul>
-        </>
       )}
     </div>
   );
@@ -253,12 +291,69 @@ const styles = {
     flexShrink: 0,
     whiteSpace: "nowrap",
   },
+  editBtn: {
+    fontSize: 11,
+    padding: "1px 5px",
+    cursor: "pointer",
+    borderRadius: 3,
+    border: "1px solid #ddd",
+    background: "#f5f5f5",
+    color: "#666",
+    flexShrink: 0,
+    lineHeight: 1.4,
+  },
+  metaRow: {
+    marginTop: 3,
+    fontSize: 10,
+    color: "#888",
+  },
+  metaText: {
+    fontSize: 10,
+    color: "#888",
+  },
   cardSub: {
     marginTop: 3,
   },
   time: {
     fontSize: 10,
     color: "#aaa",
+  },
+  editForm: {
+    marginTop: 6,
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  editInput: {
+    fontSize: 11,
+    padding: "4px 6px",
+    border: "1px solid #ccc",
+    borderRadius: 4,
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  editActions: {
+    display: "flex",
+    gap: 4,
+    justifyContent: "flex-end",
+  },
+  saveBtn: {
+    fontSize: 11,
+    padding: "3px 10px",
+    cursor: "pointer",
+    borderRadius: 4,
+    border: "none",
+    background: "#4a90e2",
+    color: "#fff",
+  },
+  cancelBtn: {
+    fontSize: 11,
+    padding: "3px 10px",
+    cursor: "pointer",
+    borderRadius: 4,
+    border: "1px solid #ddd",
+    background: "#fff",
+    color: "#555",
   },
   empty: {
     color: "#ccc",

@@ -1,6 +1,7 @@
 """
 GET    /api/jobs                                                         - 업로드된 파일 목록 조회
 GET    /api/jobs/{job_id}                                                - 단일 job 정보 조회
+PATCH  /api/jobs/{job_id}                                                - job 메타데이터 수정 (workbook_name, workbook_types)
 POST   /api/jobs/{job_id}/refresh                                        - 전체 문서 재감지 (비동기)
 GET    /api/jobs/{job_id}/pages                                          - 페이지 목록 + 썸네일 URL
 GET    /api/jobs/{job_id}/pages/{n}/thumbnail                            - 썸네일 PNG 반환
@@ -84,6 +85,36 @@ def get_job(job_id: str):
     job = storage.get_status(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    return JobSummary(
+        job_id=job.job_id,
+        filename=job.filename,
+        status=job.status,
+        uploaded_at=job.uploaded_at,
+        job_type=job.job_type,
+        boundaries_status=job.boundaries_status,
+        total_question_count=job.total_question_count,
+        workbook_name=job.workbook_name,
+    )
+
+
+# ── job 메타데이터 수정 ──────────────────────────────────────
+
+class JobMetaUpdate(BaseModel):
+    workbook_name: Optional[str] = None
+    workbook_types: Optional[list[str]] = None
+
+
+@router.patch("/jobs/{job_id}", response_model=JobSummary)
+def update_job_meta(job_id: str, body: JobMetaUpdate):
+    """job의 문제집 이름/유형 메타데이터를 수정한다."""
+    job = storage.get_status(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    if body.workbook_name is not None:
+        job.workbook_name = body.workbook_name or None
+    if body.workbook_types is not None:
+        job.workbook_types = body.workbook_types or None
+    storage.put_status(job)
     return JobSummary(
         job_id=job.job_id,
         filename=job.filename,

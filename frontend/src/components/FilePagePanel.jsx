@@ -5,7 +5,7 @@
  * 페이지 선택 모드: 페이지 목록 + 재감지 버튼
  */
 import { useState, useEffect, useCallback } from "react";
-import { listJobs, getPages, refreshJobQuestions, getJobInfo } from "../api/client";
+import { listJobs, getPages, refreshJobQuestions, getJobInfo, updateJobMeta } from "../api/client";
 
 function relativeTime(isoString) {
   if (!isoString) return "";
@@ -34,6 +34,150 @@ function BoundariesBadge({ boundariesStatus, totalQuestionCount }) {
     </span>
   );
 }
+
+function FppJobCard({ job, onJobClick, onMetaUpdated }) {
+  const [editing, setEditing]     = useState(false);
+  const [editName, setEditName]   = useState(job.workbook_name || "");
+  const [editTypes, setEditTypes] = useState((job.workbook_types || []).join(", "));
+  const [saving, setSaving]       = useState(false);
+
+  const handleEditClick = (e) => {
+    e.stopPropagation();
+    setEditName(job.workbook_name || "");
+    setEditTypes((job.workbook_types || []).join(", "));
+    setEditing(true);
+  };
+
+  const handleSave = async (e) => {
+    e.stopPropagation();
+    setSaving(true);
+    try {
+      const types = editTypes.split(",").map((s) => s.trim()).filter(Boolean);
+      await updateJobMeta(job.job_id, {
+        workbook_name: editName.trim() || null,
+        workbook_types: types.length > 0 ? types : null,
+      });
+      setEditing(false);
+      onMetaUpdated();
+    } catch {
+      // 저장 실패 시 그대로 유지
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = (e) => {
+    e.stopPropagation();
+    setEditing(false);
+  };
+
+  return (
+    <div className="fpp-file-item" onClick={() => !editing && onJobClick(job)}>
+      <span className="fpp-file-icon">📄</span>
+      <div className="fpp-file-info" style={{ flex: 1, minWidth: 0 }}>
+        <span className="fpp-file-name" title={job.filename || job.job_id}>
+          {job.filename || job.job_id}
+        </span>
+        {!editing && job.workbook_name && (
+          <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>
+            {job.workbook_name}
+            {job.workbook_types?.length > 0 && ` · ${job.workbook_types.join(", ")}`}
+          </div>
+        )}
+        <div className="fpp-file-meta">
+          <BoundariesBadge
+            boundariesStatus={job.boundaries_status}
+            totalQuestionCount={job.total_question_count}
+          />
+          {job.uploaded_at && (
+            <span className="fpp-file-time">{relativeTime(job.uploaded_at)}</span>
+          )}
+        </div>
+        {editing && (
+          <div style={{ marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
+            <input
+              style={fppEditStyle.input}
+              placeholder="문제집 이름"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              autoFocus
+            />
+            <input
+              style={{ ...fppEditStyle.input, marginTop: 4 }}
+              placeholder="문제집 유형 (쉼표로 구분)"
+              value={editTypes}
+              onChange={(e) => setEditTypes(e.target.value)}
+            />
+            <div style={fppEditStyle.actions}>
+              <button style={fppEditStyle.saveBtn} onClick={handleSave} disabled={saving}>
+                {saving ? "저장 중..." : "저장"}
+              </button>
+              <button style={fppEditStyle.cancelBtn} onClick={handleCancel} disabled={saving}>
+                취소
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+      {!editing && (
+        <button
+          style={fppEditStyle.editBtn}
+          onClick={handleEditClick}
+          title="이름/유형 편집"
+        >
+          ✎
+        </button>
+      )}
+      {!editing && <span className="fpp-file-arrow">›</span>}
+    </div>
+  );
+}
+
+const fppEditStyle = {
+  input: {
+    fontSize: 11,
+    padding: "4px 6px",
+    border: "1px solid #ccc",
+    borderRadius: 4,
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  actions: {
+    display: "flex",
+    gap: 4,
+    justifyContent: "flex-end",
+    marginTop: 4,
+  },
+  saveBtn: {
+    fontSize: 11,
+    padding: "3px 10px",
+    cursor: "pointer",
+    borderRadius: 4,
+    border: "none",
+    background: "#4a90e2",
+    color: "#fff",
+  },
+  cancelBtn: {
+    fontSize: 11,
+    padding: "3px 10px",
+    cursor: "pointer",
+    borderRadius: 4,
+    border: "1px solid #ddd",
+    background: "#fff",
+    color: "#555",
+  },
+  editBtn: {
+    fontSize: 11,
+    padding: "2px 6px",
+    cursor: "pointer",
+    borderRadius: 3,
+    border: "1px solid #ddd",
+    background: "#f5f5f5",
+    color: "#666",
+    flexShrink: 0,
+    marginRight: 4,
+  },
+};
 
 export default function FilePagePanel({
   onPageSelect,
@@ -86,6 +230,8 @@ export default function FilePagePanel({
       setPagesLoading(false);
     }
   }, []);
+
+  const handleJobMetaUpdated = useCallback(() => { fetchJobs(); }, [fetchJobs]);
 
   const handleJobClick = (job) => {
     setJobId(job.job_id);
@@ -149,28 +295,12 @@ export default function FilePagePanel({
           )}
 
           {jobs.map((job) => (
-            <div
+            <FppJobCard
               key={job.job_id}
-              className="fpp-file-item"
-              onClick={() => handleJobClick(job)}
-            >
-              <span className="fpp-file-icon">📄</span>
-              <div className="fpp-file-info">
-                <span className="fpp-file-name" title={job.filename || job.job_id}>
-                  {job.filename || job.job_id}
-                </span>
-                <div className="fpp-file-meta">
-                  <BoundariesBadge
-                    boundariesStatus={job.boundaries_status}
-                    totalQuestionCount={job.total_question_count}
-                  />
-                  {job.uploaded_at && (
-                    <span className="fpp-file-time">{relativeTime(job.uploaded_at)}</span>
-                  )}
-                </div>
-              </div>
-              <span className="fpp-file-arrow">›</span>
-            </div>
+              job={job}
+              onJobClick={handleJobClick}
+              onMetaUpdated={fetchJobs}
+            />
           ))}
         </div>
       </div>

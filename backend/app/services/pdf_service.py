@@ -412,12 +412,12 @@ def extract_questions_v2(
     for sel in selections:
         q_global += 1
         wb_name = workbook_names.get(sel.job_id, "")
-        page_label = f"p.{sel.page_num + 1}"
-        label_parts = [f"Q{q_global}"]
+        page_label = f"p{sel.page_num + 1}"
+        label_parts = [f"{q_global}번"]
         if wb_name:
             label_parts.append(wb_name)
         label_parts.append(page_label)
-        src_label = " · ".join(label_parts)
+        src_label = ". ".join(label_parts)
 
         # ── 구형 수동 지정 영역 (custom_region) ─────────────
         if getattr(sel, "custom_region", None) is not None:
