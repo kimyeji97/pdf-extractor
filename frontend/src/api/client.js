@@ -150,9 +150,10 @@ export async function refreshJobQuestions(jobId) {
  * }>} selections
  * @param {string} layout - 레이아웃: "2단" | "4단" | "6단" (기본 "2단")
  */
-export async function startExtractV2(selections, layout = "2단") {
+export async function startExtractV2(selections, layout = "2단", coverId = null) {
   const body = {
     layout,
+    ...(coverId ? { cover_id: coverId } : {}),
     selections: selections.map((s) => {
       const item = { job_id: s.jobId, page_num: s.pageNum };
       if (s.questionId != null)   item.question_id   = s.questionId;
@@ -311,4 +312,41 @@ export async function createWorkbookMeta(meta) {
     throw new Error(err.detail || "문제집 저장 실패");
   }
   return res.json(); // WorkbookMeta
+}
+
+// ── 표지 이미지 API ────────────────────────────────────────
+
+/**
+ * POST /api/covers
+ * 표지 이미지 업로드
+ */
+export async function uploadCover(file, name = "") {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("name", name);
+  const res = await fetch(`${BASE_URL}/covers`, { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "표지 업로드 실패");
+  }
+  return res.json(); // { cover_id, name, thumbnail_url, created_at }
+}
+
+/**
+ * GET /api/covers
+ * 표지 목록 조회
+ */
+export async function listCovers() {
+  const res = await fetch(`${BASE_URL}/covers`);
+  if (!res.ok) throw new Error("표지 목록 조회 실패");
+  return res.json(); // { covers: [...] }
+}
+
+/**
+ * DELETE /api/covers/{coverId}
+ */
+export async function deleteCover(coverId) {
+  const res = await fetch(`${BASE_URL}/covers/${coverId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("표지 삭제 실패");
+  return res.json();
 }

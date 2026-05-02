@@ -254,6 +254,61 @@ def list_workbooks() -> list:
     return workbooks
 
 
+# ── 표지 이미지 (covers) ─────────────────────────────────
+
+def list_covers() -> list:
+    """저장된 표지 메타데이터 전체를 created_at 내림차순으로 반환."""
+    covers_dir = _BASE / "covers"
+    if not covers_dir.exists():
+        return []
+    covers = []
+    for path in covers_dir.glob("*.json"):
+        try:
+            covers.append(json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    covers.sort(key=lambda c: c.get("created_at", ""), reverse=True)
+    return covers
+
+
+def get_cover_meta(cover_id: str) -> Optional[dict]:
+    path = _BASE / "covers" / f"{cover_id}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_cover(cover_id: str, meta: dict, image_bytes: bytes, ext: str = "jpg") -> None:
+    """표지 이미지 + 메타데이터를 저장한다."""
+    _ensure(_BASE / "covers" / f"{cover_id}.{ext}").write_bytes(image_bytes)
+    _ensure(_BASE / "covers" / f"{cover_id}.json").write_text(
+        json.dumps(meta, ensure_ascii=False, default=str), encoding="utf-8"
+    )
+
+
+def get_cover_image(cover_id: str) -> Optional[tuple[bytes, str]]:
+    """(이미지 bytes, content_type) 반환. 없으면 None."""
+    for ext, ct in [("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("png", "image/png")]:
+        path = _BASE / "covers" / f"{cover_id}.{ext}"
+        if path.exists():
+            return path.read_bytes(), ct
+    return None
+
+
+def delete_cover(cover_id: str) -> None:
+    covers_dir = _BASE / "covers"
+    for path in covers_dir.glob(f"{cover_id}.*"):
+        path.unlink(missing_ok=True)
+
+
+def cover_image_key(cover_id: str, ext: str = "jpg") -> str:
+    return f"covers/{cover_id}.{ext}"
+
+
+def cover_meta_key(cover_id: str) -> str:
+    return f"covers/{cover_id}.json"
+
+
 # ── 키 헬퍼 (s3_service 와 동일) ─────────────────────────
 
 def original_key(job_id: str) -> str:

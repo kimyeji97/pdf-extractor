@@ -350,6 +350,7 @@ def extract_questions_v2(
     export_job_id: str,
     tmpdir: str,
     layout: str = "2단",
+    cover_id: str | None = None,
 ) -> int:
     """
     복수 job/page/question 선택을 하나의 PDF로 추출하여 스토리지에 저장한다.
@@ -477,17 +478,75 @@ def extract_questions_v2(
     # ── Step 4: 레이아웃 그리드 PDF 빌드 ────────────────────
     # layout_spec.py의 상수와 contain_fit()을 사용하여
     # Canvas 미리보기와 동일한 그리드 레이아웃으로 PDF를 생성한다 (REQ-17).
-    output_path = str(Path(tmpdir) / "result.pdf")
+    grid_path = str(Path(tmpdir) / "grid.pdf")
 
     # layout 유효성 검증 — 지원하지 않는 값이면 기본값 사용
     effective_layout = layout if layout in LAYOUTS else DEFAULT_LAYOUT
-    _build_grid_pdf(all_regions, output_path, effective_layout)
+    _build_grid_pdf(all_regions, grid_path, effective_layout)
+
+    # ── Step 4-b: 표지 삽입 (cover_id 지정 시) ──────────────
+    output_path = str(Path(tmpdir) / "result.pdf")
+    if cover_id:
+        cover_result = storage.get_cover_image(cover_id)
+        if cover_result:
+            cover_bytes, _ = cover_result
+            cover_img_path = str(Path(tmpdir) / "cover_img")
+            Path(cover_img_path).write_bytes(cover_bytes)
+            _prepend_cover_image(cover_img_path, grid_path, output_path)
+        else:
+            # 표지 이미지를 찾을 수 없으면 표지 없이 진행
+            import shutil
+            shutil.copy2(grid_path, output_path)
+    else:
+        import shutil
+        shutil.copy2(grid_path, output_path)
 
     # ── Step 5: 결과 스토리지에 업로드 ──────────────────────
     res_key = storage.result_key(export_job_id)
     storage.upload_file(output_path, res_key)
 
     return success_count
+
+
+def _prepend_cover_image(
+    cover_img_path: str,
+    grid_pdf_path: str,
+    output_path: str,
+) -> None:
+    """
+    표지 이미지를 A4 PDF 페이지로 변환한 뒤 grid PDF 앞에 삽입한다.
+    """
+    from app.utils.layout_spec import A4_WIDTH_PT, A4_HEIGHT_PT
+
+    cover_doc = fitz.open()
+    cover_page = cover_doc.new_page(width=A4_WIDTH_PT, height=A4_HEIGHT_PT)
+
+    # 이미지를 A4에 가득 채우기 (contain 방식: 비율 유지, 중앙 배치)
+    img_bytes = Path(cover_img_path).read_bytes()
+    img_rect = fitz.Rect(0, 0, A4_WIDTH_PT, A4_HEIGHT_PT)
+    cover_page.insert_image(img_rect, stream=img_bytes, keep_proportion=True)
+
+    # 그리드 PDF를 표지 뒤에 붙이기
+    grid_doc = fitz.open(grid_pdf_path)
+    cover_doc.insert_pdf(grid_doc)
+    grid_doc.close()
+
+    cover_doc.save(output_path, garbage=4, deflate=True)
+    cover_doc.close()
+
+
+def _get_korean_font(dst: fitz.Document) -> str:
+    """
+    한글을 지원하는 폰트를 dst 문서에 등록하고 폰트 이름을 반환한다.
+    PyMuPDF 내장 korea 폰트를 사용한다.
+    등록 실패 시 기본 폰트 이름(helv)을 반환하여 무해하게 폴백한다.
+    """
+    try:
+        font = fitz.Font("korea")
+        dst.add_font("KOR", fontbuffer=font.buffer, subset=False)
+        return "KOR"
+    except Exception:
+        return "helv"
 
 
 def _build_grid_pdf(
@@ -532,6 +591,7 @@ def _build_grid_pdf(
 
     src_cache: dict[str, fitz.Document] = {}
     dst = fitz.open()
+    korean_font = _get_korean_font(dst)
     current_page: fitz.Page | None = None
 
     for idx, region in enumerate(regions):
@@ -583,9 +643,10 @@ def _build_grid_pdf(
             label_rect = fitz.Rect(cell_x, cell_y, cell_x + cell_w, cell_y + label_h)
             current_page.draw_rect(label_rect, color=None, fill=(0.96, 0.96, 0.98), width=0)
             current_page.insert_text(
-                fitz.Point(cell_x + 2, cell_y + label_h - 2),
+                fitz.Point(cell_x + 2, cell_y + label_h - 4),
                 label_text,
-                fontsize=7,
+                fontname=korean_font,
+                fontsize=14,
                 color=(0.25, 0.25, 0.35),
             )
 

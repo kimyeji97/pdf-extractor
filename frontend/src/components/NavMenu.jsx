@@ -15,6 +15,7 @@ export default function NavMenu({ activeMenu, onMenuChange }) {
     { id: "analysis", label: "문항 분석" },
     { id: "editor",   label: "문제집 생성" },
     { id: "history",  label: "생성된 문제집" },
+    { id: "format",   label: "문제집 포멧" },
   ];
 
   return (

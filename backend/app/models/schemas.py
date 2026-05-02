@@ -104,6 +104,8 @@ class ExtractV2Request(BaseModel):
     selections: list[SelectionItem] = Field(..., min_length=1)
     # REQ-18: 문제집 생성 시 레이아웃 지정 (미지정 시 2단 기본값)
     layout: Optional[str] = Field(default="2단", description="문제집 레이아웃: '2단', '4단', '6단'")
+    # 표지: 저장된 cover_id 지정 시 생성된 PDF 첫 페이지에 표지 삽입
+    cover_id: Optional[str] = Field(default=None, description="표지 cover_id (선택)")
 
 
 class ExtractV2Response(BaseModel):

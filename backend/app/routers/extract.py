@@ -111,11 +111,17 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
 
     # layout 파라미터를 백그라운드 태스크로 전달 (기본값 "2단")
     layout = req.layout or "2단"
-    background_tasks.add_task(_process_extraction_v2, req.selections, export_job_id, layout)
+    cover_id = req.cover_id
+    background_tasks.add_task(_process_extraction_v2, req.selections, export_job_id, layout, cover_id)
     return ExtractV2Response(job_id=export_job_id)
 
 
-def _process_extraction_v2(selections: list[SelectionItem], export_job_id: str, layout: str = "2단") -> None:
+def _process_extraction_v2(
+    selections: list[SelectionItem],
+    export_job_id: str,
+    layout: str = "2단",
+    cover_id: str | None = None,
+) -> None:
     export_status = storage.get_status(export_job_id)
     export_status.status = JobStatus.PROCESSING
     storage.put_status(export_status)
@@ -127,6 +133,7 @@ def _process_extraction_v2(selections: list[SelectionItem], export_job_id: str, 
                 export_job_id=export_job_id,
                 tmpdir=tmpdir,
                 layout=layout,
+                cover_id=cover_id,
             )
             export_status.status = JobStatus.DONE
             export_status.result_key = storage.result_key(export_job_id)

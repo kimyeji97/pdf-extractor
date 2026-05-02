@@ -103,7 +103,7 @@ export default function WorkbookPreview({ selections = [], layout = DEFAULT_LAYO
                       paddingLeft: 3,
                       overflow:   "hidden",
                       whiteSpace: "nowrap",
-                      fontSize:   Math.max(6, 7 * scale),
+                      fontSize:   Math.max(10, 14 * scale),
                       color:      "#64748b",
                       boxSizing:  "border-box",
                     }}
@@ -136,7 +136,7 @@ export default function WorkbookPreview({ selections = [], layout = DEFAULT_LAYO
                     paddingLeft: 3,
                     overflow:   "hidden",
                     whiteSpace: "nowrap",
-                    fontSize:   Math.max(6, 7 * scale),
+                    fontSize:   Math.max(10, 14 * scale),
                     color:      "#475569",
                     boxSizing:  "border-box",
                   }}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { listJobs, updateJobMeta } from "../api/client";
 
 const STATUS_LABEL = {
@@ -90,9 +90,10 @@ function JobCard({ job, isSelected, onSelect, onMetaUpdated }) {
       }}
       onClick={() => !editing && onSelect(job.job_id, job.filename, job.workbook_name)}
     >
+      {/* 상단: 문제집 이름 (메인) */}
       <div style={styles.cardMain}>
-        <span style={styles.filename} title={job.filename || "unknown.pdf"}>
-          {job.filename || "unknown.pdf"}
+        <span style={styles.workbookName} title={job.workbook_name || job.filename || "unknown.pdf"}>
+          {job.workbook_name || job.filename || "unknown.pdf"}
         </span>
         <div style={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 3 }}>
           {statusLabel && (
@@ -110,12 +111,12 @@ function JobCard({ job, isSelected, onSelect, onMetaUpdated }) {
         </div>
       </div>
 
-      {/* 문제집 이름 표시 */}
-      {!editing && job.workbook_name && (
+      {/* 파일명 + 유형 표시 */}
+      {!editing && (
         <div style={styles.metaRow}>
-          <span style={styles.metaText}>{job.workbook_name}</span>
+          <span style={styles.metaText} title={job.filename}>{job.filename || "unknown.pdf"}</span>
           {job.workbook_types?.length > 0 && (
-            <span style={styles.metaText}> · {job.workbook_types.join(", ")}</span>
+            <span style={styles.metaType}> · {job.workbook_types.join(", ")}</span>
           )}
         </div>
       )}
@@ -168,6 +169,8 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
   const [sourceJobs, setSourceJobs] = useState([]);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState("");
+  const [searchName, setSearchName] = useState("");
+  const [searchType, setSearchType] = useState("");
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -186,6 +189,22 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
     fetchJobs();
   }, [fetchJobs, refreshTrigger]);
 
+  const filteredJobs = useMemo(() => {
+    const nameLower = searchName.trim().toLowerCase();
+    const typeLower = searchType.trim().toLowerCase();
+    return sourceJobs.filter((job) => {
+      if (nameLower) {
+        const name = (job.workbook_name || job.filename || "").toLowerCase();
+        if (!name.includes(nameLower)) return false;
+      }
+      if (typeLower) {
+        const types = (job.workbook_types || []).join(" ").toLowerCase();
+        if (!types.includes(typeLower)) return false;
+      }
+      return true;
+    });
+  }, [sourceJobs, searchName, searchType]);
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -195,13 +214,31 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
         </button>
       </div>
 
+      {/* 검색 필터 */}
+      <div style={styles.searchBox}>
+        <input
+          style={styles.searchInput}
+          type="text"
+          placeholder="문제집 이름 검색"
+          value={searchName}
+          onChange={(e) => setSearchName(e.target.value)}
+        />
+        <input
+          style={styles.searchInput}
+          type="text"
+          placeholder="유형 검색"
+          value={searchType}
+          onChange={(e) => setSearchType(e.target.value)}
+        />
+      </div>
+
       {error && <p style={styles.error}>{error}</p>}
 
-      {!loading && sourceJobs.length === 0 ? (
-        <p style={styles.empty}>업로드된 파일 없음</p>
+      {!loading && filteredJobs.length === 0 ? (
+        <p style={styles.empty}>{sourceJobs.length === 0 ? "업로드된 파일 없음" : "검색 결과 없음"}</p>
       ) : (
         <ul style={styles.list}>
-          {sourceJobs.map((job) => (
+          {filteredJobs.map((job) => (
             <JobCard
               key={job.job_id}
               job={job}
@@ -275,13 +312,14 @@ const styles = {
     alignItems: "center",
     gap: 6,
   },
-  filename: {
+  workbookName: {
     fontSize: 12,
-    fontWeight: 500,
+    fontWeight: 600,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
     minWidth: 0,
+    color: "#222",
   },
   badge: {
     fontSize: 10,
@@ -303,13 +341,35 @@ const styles = {
     lineHeight: 1.4,
   },
   metaRow: {
-    marginTop: 3,
+    marginTop: 2,
     fontSize: 10,
-    color: "#888",
+    color: "#999",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   metaText: {
     fontSize: 10,
-    color: "#888",
+    color: "#999",
+  },
+  metaType: {
+    fontSize: 10,
+    color: "#aaa",
+  },
+  searchBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    marginBottom: 8,
+  },
+  searchInput: {
+    fontSize: 11,
+    padding: "4px 7px",
+    border: "1px solid #ddd",
+    borderRadius: 4,
+    width: "100%",
+    boxSizing: "border-box",
+    background: "#fafafa",
   },
   cardSub: {
     marginTop: 3,

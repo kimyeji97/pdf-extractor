@@ -26,6 +26,7 @@ export default function QuestionAnalysisView() {
   const [uploadError, setUploadError] = useState("");
   const [uploadWorkbookName, setUploadWorkbookName] = useState("");
   const [uploadWorkbookTypes, setUploadWorkbookTypes] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
   const [refreshTrigger, setRefreshTrigger]           = useState(0);
   const [panelRefreshTrigger, setPanelRefreshTrigger] = useState(0);
 
@@ -97,8 +98,15 @@ export default function QuestionAnalysisView() {
     setManualTitleError("");
   }, []);
 
-  // ── 핸들러: PDF 업로드 ───────────────────────────────────
-  const handleFileSelected = async (selectedFile) => {
+  // ── 핸들러: 파일 선택 (즉시 업로드 X) ──────────────────────
+  const handleFileSelected = (file) => {
+    setSelectedFile(file);
+    setUploadError("");
+  };
+
+  // ── 핸들러: 업로드 버튼 클릭 ────────────────────────────
+  const handleUploadClick = async () => {
+    if (!selectedFile || uploading) return;
     setUploading(true);
     setUploadError("");
     try {
@@ -116,6 +124,7 @@ export default function QuestionAnalysisView() {
       setSelectedJobFilename(null);
       setUploadWorkbookName("");
       setUploadWorkbookTypes("");
+      setSelectedFile(null);
     } catch (e) {
       setUploadError(e.message);
     } finally {
@@ -282,7 +291,18 @@ export default function QuestionAnalysisView() {
                   disabled={uploading}
                 />
               </div>
-              <UploadForm onFileSelected={handleFileSelected} disabled={uploading} />
+              <UploadForm
+                onFileSelected={handleFileSelected}
+                selectedFile={selectedFile}
+                disabled={uploading}
+              />
+              <button
+                className="qav-upload-btn"
+                onClick={handleUploadClick}
+                disabled={!selectedFile || uploading}
+              >
+                {uploading ? "업로드 중..." : "업로드"}
+              </button>
             </div>
             <FilePagePanel
               onPageSelect={handlePageSelect}

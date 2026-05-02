@@ -4,28 +4,22 @@
  * 선택된 PDF 파일의 모든 페이지에서 감지된 문항을 한 번에 조회하여
  * 체크박스 목록으로 보여준다.
  *
- * 동작 방식:
- *   1. GET /api/jobs/{jobId}/pages — 전체 페이지 목록 조회
- *   2. 각 페이지별 GET /api/jobs/{jobId}/pages/{n}/questions — 병렬 조회
- *   3. 페이지 그룹별로 렌더링, 각 문항에 체크박스 제공
- *
- * Props:
- *   jobId         — 대상 job
- *   selections    — 현재 workbook에 추가된 아이템 배열 (question_id 로 매핑)
- *   onToggle(q)   — 체크박스 클릭 시 호출 (추가/제거 결정은 부모가 담당)
+ * 페이지 필터: 체크박스로 여러 페이지 동시 선택 가능.
+ *             직접 페이지 번호를 입력하여 필터할 수도 있다.
+ * 썸네일: 로딩 시간 단축을 위해 표시하지 않는다.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getPages, getPageQuestions } from "../api/client";
-
-const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
 
 export default function QuestionListPanel({ jobId, selections = [], onToggle }) {
   // grouped: [{ pageNum, questions: [...] }, ...]
-  const [groups, setGroups]     = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
-  // 페이지 필터: null = 전체
-  const [filterPage, setFilterPage] = useState(null);
+  const [groups, setGroups]           = useState([]);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState("");
+  // 선택된 페이지 번호 Set (비어있으면 전체 표시)
+  const [selectedPages, setSelectedPages] = useState(new Set());
+  // 페이지 번호 직접 입력 필드
+  const [pageInput, setPageInput]     = useState("");
 
   useEffect(() => {
     if (!jobId) { setGroups([]); return; }
@@ -33,14 +27,14 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
     setLoading(true);
     setError("");
     setGroups([]);
-    setFilterPage(null);
+    setSelectedPages(new Set());
+    setPageInput("");
 
     (async () => {
       try {
         const pagesData = await getPages(jobId);
         const pages = pagesData.pages || [];
 
-        // 모든 페이지 문항 병렬 조회
         const results = await Promise.all(
           pages.map(async (pg) => {
             try {
@@ -53,7 +47,6 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
         );
 
         if (!cancelled) {
-          // 문항이 하나라도 있는 페이지만 표시
           setGroups(results.filter((g) => g.questions.length > 0));
         }
       } catch (e) {
@@ -66,12 +59,40 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
     return () => { cancelled = true; };
   }, [jobId]);
 
-  // selections에서 question_id Set 생성 (빠른 조회용)
-  const selectedIds = new Set(selections.map((s) => s.questionId));
+  const selectedIds = useMemo(
+    () => new Set(selections.map((s) => s.questionId)),
+    [selections]
+  );
 
-  const filteredGroups = filterPage === null
-    ? groups
-    : groups.filter((g) => g.pageNum === filterPage);
+  const filteredGroups = useMemo(() => {
+    if (selectedPages.size === 0) return groups;
+    return groups.filter((g) => selectedPages.has(g.pageNum));
+  }, [groups, selectedPages]);
+
+  const togglePageFilter = (pageNum) => {
+    setSelectedPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageNum)) next.delete(pageNum);
+      else next.add(pageNum);
+      return next;
+    });
+  };
+
+  const handlePageInputKeyDown = (e) => {
+    if (e.key !== "Enter") return;
+    const nums = pageInput.split(/[\s,]+/).map(Number).filter((n) => !isNaN(n) && n > 0);
+    if (nums.length === 0) return;
+    setSelectedPages((prev) => {
+      const next = new Set(prev);
+      nums.forEach((n) => {
+        const pageNum = n - 1; // 1-based → 0-based
+        const exists = groups.some((g) => g.pageNum === pageNum);
+        if (exists) next.add(pageNum);
+      });
+      return next;
+    });
+    setPageInput("");
+  };
 
   if (!jobId) {
     return (
@@ -83,19 +104,42 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
 
   return (
     <div className="qlist-container">
-      {/* 페이지 필터 */}
-      <div className="qlist-filter">
-        <select
-          value={filterPage ?? ""}
-          onChange={(e) => setFilterPage(e.target.value === "" ? null : Number(e.target.value))}
-        >
-          <option value="">전체 페이지</option>
-          {groups.map((g) => (
-            <option key={g.pageNum} value={g.pageNum}>
-              {g.pageNum + 1}페이지 ({g.questions.length}개)
-            </option>
-          ))}
-        </select>
+      {/* 페이지 필터 — 체크박스 방식 */}
+      <div className="qlist-filter-wrap">
+        <div className="qlist-filter-chips">
+          {groups.map((g) => {
+            const active = selectedPages.has(g.pageNum);
+            return (
+              <button
+                key={g.pageNum}
+                className={`qlist-page-chip${active ? " qlist-page-chip--active" : ""}`}
+                onClick={() => togglePageFilter(g.pageNum)}
+                title={`${g.pageNum + 1}페이지 (${g.questions.length}개)`}
+              >
+                {g.pageNum + 1}p
+              </button>
+            );
+          })}
+        </div>
+        <div className="qlist-filter-input-row">
+          <input
+            className="qlist-page-input"
+            type="text"
+            placeholder="페이지 번호 입력 후 Enter (예: 3, 5, 7)"
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            onKeyDown={handlePageInputKeyDown}
+          />
+          {selectedPages.size > 0 && (
+            <button
+              className="qlist-clear-filter"
+              onClick={() => setSelectedPages(new Set())}
+              title="필터 초기화"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="qlist-body">
@@ -123,12 +167,6 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => onToggle?.({ ...q, _pageNum: group.pageNum })}
-                  />
-                  <img
-                    src={`${API_ROOT}${q.thumbnail_url}`}
-                    alt={displayTitle}
-                    className="qlist-item-thumb"
-                    loading="lazy"
                   />
                   <span className="qlist-item-label">{displayTitle}</span>
                   {q.is_manual && <span className="qlist-badge-manual">수동</span>}

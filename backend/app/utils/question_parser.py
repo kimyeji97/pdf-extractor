@@ -537,7 +537,8 @@ def _fill_y_bottom(
 
     규칙:
       - 같은 (페이지, 컬럼) 그룹 내에서 현재 문항 y_bottom = 다음 문항 y_top
-      - 해당 그룹의 마지막 문항은 페이지 하단(page_height)까지
+      - 해당 그룹의 마지막 문항은 푸터 시작점(page_height * _FOOTER_PERCENT)까지
+        → 페이지 번호, 각주 등 하단 고정 요소를 크롭 영역에서 제외
 
     이 함수가 필요한 이유:
       감지 단계에서는 문항 번호의 y_top만 알 수 있고,
@@ -552,9 +553,14 @@ def _fill_y_bottom(
         # Y좌표 오름차순 정렬 (위에서 아래로)
         sorted_g = sorted(group, key=lambda b: b.y_top)
         page_h = page_heights[page_idx] if page_idx < len(page_heights) else 9999.0
+        # 마지막 문항의 상한: 푸터 영역 시작점(_FOOTER_PERCENT)으로 제한
+        footer_y = page_h * _FOOTER_PERCENT
         for i, b in enumerate(sorted_g):
-            # 다음 문항이 있으면 그 시작점까지, 없으면 페이지 하단까지
-            b.y_bottom = sorted_g[i + 1].y_top if i + 1 < len(sorted_g) else page_h
+            if i + 1 < len(sorted_g):
+                b.y_bottom = sorted_g[i + 1].y_top
+            else:
+                # 마지막 문항: 푸터 직전까지만 (페이지 번호/각주 제외)
+                b.y_bottom = footer_y
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

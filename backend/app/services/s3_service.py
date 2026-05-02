@@ -34,7 +34,7 @@ r2 = boto3.client(
     aws_access_key_id=settings.R2_ACCESS_KEY_ID,
     aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
     region_name="auto",
-    config=Config(signature_version="s3v4"),
+    config=Config(signature_version="s3v4", max_pool_connections=50),
 )
 
 BUCKET = settings.R2_BUCKET_NAME
@@ -312,6 +312,66 @@ def upload_file(local_path: str, key: str) -> None:
         "ContentType": "application/pdf",
         "CacheControl": _CC_RESULT_PDF,
     })
+
+
+# ── 표지 이미지 (covers) ─────────────────────────────────
+
+COVERS_PREFIX = "covers"
+
+
+def list_covers() -> list:
+    prefix = _key(COVERS_PREFIX) + "/"
+    paginator = r2.get_paginator("list_objects_v2")
+    keys = []
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".json"):
+                keys.append(obj["Key"])
+    covers = []
+    for k in keys:
+        try:
+            covers.append(_get_json(k))
+        except Exception:
+            continue
+    covers.sort(key=lambda c: c.get("created_at", ""), reverse=True)
+    return covers
+
+
+def get_cover_meta(cover_id: str) -> Optional[dict]:
+    return _get_json_or_none(_key(COVERS_PREFIX, f"{cover_id}.json"))
+
+
+def save_cover(cover_id: str, meta: dict, image_bytes: bytes, ext: str = "jpg") -> None:
+    ct = "image/png" if ext == "png" else "image/jpeg"
+    r2.put_object(
+        Bucket=BUCKET,
+        Key=_key(COVERS_PREFIX, f"{cover_id}.{ext}"),
+        Body=image_bytes,
+        ContentType=ct,
+        CacheControl=_CC_IMMUTABLE,
+    )
+    _put_json(_key(COVERS_PREFIX, f"{cover_id}.json"), meta)
+
+
+def get_cover_image(cover_id: str) -> Optional[tuple]:
+    for ext, ct in [("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("png", "image/png")]:
+        data = _get_bytes_or_none(_key(COVERS_PREFIX, f"{cover_id}.{ext}"))
+        if data is not None:
+            return data, ct
+    return None
+
+
+def delete_cover(cover_id: str) -> None:
+    for ext in ["jpg", "jpeg", "png", "json"]:
+        _delete(_key(COVERS_PREFIX, f"{cover_id}.{ext}"))
+
+
+def cover_image_key(cover_id: str, ext: str = "jpg") -> str:
+    return _key(COVERS_PREFIX, f"{cover_id}.{ext}")
+
+
+def cover_meta_key(cover_id: str) -> str:
+    return _key(COVERS_PREFIX, f"{cover_id}.json")
 
 
 # ── 키 헬퍼 ─────────────────────────────────────────

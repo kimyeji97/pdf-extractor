@@ -25,7 +25,7 @@ export const DIVIDER_WIDTH_PT = 0.5;
 export const DIVIDER_COLOR    = "#cccccc";
 
 // ── 출처 레이블 (layout_spec.py의 LABEL_HEIGHT_PT와 동일값 유지) ──
-export const LABEL_HEIGHT_PT  = 10;
+export const LABEL_HEIGHT_PT  = 20;
 
 // ── 레이아웃 정의 (REQ-C02, C03, C04) ────────────────────
 export const LAYOUT_SPEC = {

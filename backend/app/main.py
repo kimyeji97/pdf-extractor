@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import upload, extract, browse, workbook
+from app.routers import upload, extract, browse, workbook, cover
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +27,7 @@ app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(extract.router, prefix="/api", tags=["extract"])
 app.include_router(browse.router, prefix="/api", tags=["browse"])
 app.include_router(workbook.router, prefix="/api", tags=["workbook"])
+app.include_router(cover.router, prefix="/api", tags=["cover"])
 
 
 @app.get("/health")

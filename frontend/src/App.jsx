@@ -19,10 +19,11 @@ import NavMenu from "./components/NavMenu";
 import QuestionAnalysisView from "./views/QuestionAnalysisView";
 import WorkbookEditorView from "./views/WorkbookEditorView";
 import WorkbookHistoryView from "./views/WorkbookHistoryView";
+import CoverFormatView from "./views/CoverFormatView";
 import "./App.css";
 
 export default function App() {
-  // 현재 활성 탭: "analysis" | "editor" | "history"
+  // 현재 활성 탭: "analysis" | "editor" | "history" | "format"
   const [activeMenu, setActiveMenu] = useState("analysis");
 
   // 생성된 문제집 탭에서 "편집으로 불러오기" 클릭 시 전달되는 workbook_id (REQ-20)
@@ -67,6 +68,10 @@ export default function App() {
 
       <div style={{ display: activeMenu === "history" ? "contents" : "none" }}>
         <WorkbookHistoryView onLoadForEdit={handleLoadForEdit} />
+      </div>
+
+      <div style={{ display: activeMenu === "format" ? "contents" : "none" }}>
+        <CoverFormatView />
       </div>
 
     </div>

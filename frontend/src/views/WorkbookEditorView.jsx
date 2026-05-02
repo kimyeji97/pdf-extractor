@@ -46,6 +46,7 @@ import {
   getStatus,
   getWorkbook,
   createWorkbookMeta,
+  listCovers,
 } from "../api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
@@ -136,6 +137,10 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
   const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "-");
   const [filename, setFilename]           = useState(`문제집_${todayStr}`);
   const [filenameError, setFilenameError] = useState("");
+
+  // ── 표지 선택 ─────────────────────────────────────────
+  const [covers, setCovers]           = useState([]);
+  const [selectedCoverId, setSelectedCoverId] = useState(null);
 
   // ── 내보내기 상태 ─────────────────────────────────────
   const [generating, setGenerating]       = useState(false);
@@ -281,7 +286,7 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
         label:       b.displayTitle,
       }));
 
-      const { job_id: exportJobId } = await startExtractV2(selections, layout);
+      const { job_id: exportJobId } = await startExtractV2(selections, layout, selectedCoverId);
 
       exportPollRef.current = setInterval(async () => {
         try {
@@ -335,6 +340,13 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
       setGenerateError(e.message || "PDF 생성 요청 실패");
     }
   };
+
+  // ── 표지 목록 로드 ───────────────────────────────────
+  useEffect(() => {
+    listCovers()
+      .then((data) => setCovers(data.covers || []))
+      .catch(() => {});
+  }, []);
 
   // ── 정리 ─────────────────────────────────────────────
   useEffect(() => () => {
@@ -504,6 +516,37 @@ export default function WorkbookEditorView({ initialWorkbookId = null }) {
           {generateStatus === "error" && (
             <div className="wbe-status-bar wbe-status-bar--error">
               ❌ {generateError}
+            </div>
+          )}
+
+          {/* 표지 선택 */}
+          {covers.length > 0 && (
+            <div className="wbe-cover-bar">
+              <span className="wbe-cover-label">표지</span>
+              <div className="wbe-cover-list">
+                <button
+                  className={`wbe-cover-item wbe-cover-none${!selectedCoverId ? " wbe-cover-item--active" : ""}`}
+                  onClick={() => setSelectedCoverId(null)}
+                  title="표지 없음"
+                >
+                  없음
+                </button>
+                {covers.map((c) => (
+                  <button
+                    key={c.cover_id}
+                    className={`wbe-cover-item${selectedCoverId === c.cover_id ? " wbe-cover-item--active" : ""}`}
+                    onClick={() => setSelectedCoverId(c.cover_id)}
+                    title={c.name}
+                  >
+                    <img
+                      src={`${API_ROOT}${c.thumbnail_url}`}
+                      alt={c.name}
+                      className="wbe-cover-thumb"
+                    />
+                    <span className="wbe-cover-name">{c.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
