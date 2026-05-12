@@ -1,0 +1,182 @@
+/**
+ * 생성 이력 페이지 (Aurora MUI 레이아웃 적용)
+ */
+import { useState, useEffect, useCallback } from "react";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import Chip from "@mui/material/Chip";
+import Alert from "@mui/material/Alert";
+import CircularProgress from "@mui/material/CircularProgress";
+import List from "@mui/material/List";
+import ListItemButton from "@mui/material/ListItemButton";
+import ListItemText from "@mui/material/ListItemText";
+import Divider from "@mui/material/Divider";
+import Tooltip from "@mui/material/Tooltip";
+import { Icon } from "@iconify/react";
+
+import WorkbookPreview from "components/WorkbookPreview";
+import { getWorkbooks, getStatus } from "api/client";
+
+function fmtDate(iso) {
+  if (!iso) return "-";
+  try {
+    return new Date(iso).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  } catch { return iso; }
+}
+
+function toPreviewItems(selections) {
+  return (selections || []).map((sel, i) => ({
+    questionId:   sel.question_id || sel.manual_id || String(sel.question_num ?? i),
+    questionNum:  sel.question_num,
+    pageNum:      sel.page_num,
+    jobId:        sel.job_id,
+    workbookName: sel.workbook_name || "",
+    isManual:     Boolean(sel.manual_id),
+    manualId:     sel.manual_id,
+    displayTitle: sel.title,
+    thumbnailUrl: sel.manual_id
+      ? `/api/jobs/${sel.job_id}/pages/${sel.page_num}/questions/manual/${sel.manual_id}/thumbnail`
+      : `/api/jobs/${sel.job_id}/pages/${sel.page_num}/questions/${sel.question_num}/thumbnail`,
+  }));
+}
+
+export default function HistoryPage({ onLoadForEdit }) {
+  const [workbooks, setWorkbooks]         = useState([]);
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState("");
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [selectedWb, setSelectedWb]       = useState(null);
+
+  const fetchWorkbooks = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const data = await getWorkbooks();
+      setWorkbooks([...(data || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+    } catch (e) { setError(e.message || "목록 조회 실패"); }
+    finally     { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchWorkbooks(); }, [fetchWorkbooks]);
+
+  const handleDownload = async (wb) => {
+    if (!wb.result_job_id) return;
+    setDownloadingId(wb.workbook_id);
+    try {
+      const data = await getStatus(wb.result_job_id);
+      if (data.download_url) {
+        const a = document.createElement("a"); a.href = data.download_url;
+        a.download = `${wb.filename || wb.name || "workbook"}.pdf`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      } else { alert("다운로드 URL을 가져올 수 없습니다."); }
+    } catch (e) { alert("다운로드 실패: " + e.message); }
+    finally     { setDownloadingId(null); }
+  };
+
+  const previewItems = selectedWb ? toPreviewItems(selectedWb.selections) : [];
+
+  return (
+    <Box sx={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden" }}>
+
+      {/* ── 목록 패널 ───────────────────────────────── */}
+      <Paper elevation={0} sx={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}>
+        <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography variant="subtitle2" fontWeight={700}>생성된 문제집 이력</Typography>
+          <Tooltip title="새로고침">
+            <IconButton size="small" onClick={fetchWorkbooks} disabled={loading}>
+              {loading ? <CircularProgress size={16} /> : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 20 }} />}
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        <Box sx={{ flex: 1, overflowY: "auto" }}>
+          {error && <Alert severity="error" sx={{ m: 1.5 }}>{error}</Alert>}
+          {!loading && !error && workbooks.length === 0 && (
+            <Box sx={{ p: 4, textAlign: "center", color: "text.disabled" }}>
+              <Icon icon="material-symbols:history-rounded" style={{ fontSize: 40 }} />
+              <Typography variant="body2" mt={1} color="text.secondary">
+                아직 생성된 문제집이 없습니다.<br />
+                <Typography component="span" variant="caption" color="text.disabled">
+                  문제집 편집 탭에서 PDF를 생성하면<br />여기에 기록됩니다.
+                </Typography>
+              </Typography>
+            </Box>
+          )}
+
+          <List disablePadding>
+            {workbooks.map((wb, idx) => (
+              <Box key={wb.workbook_id ?? idx}>
+                <ListItemButton
+                  selected={selectedWb?.workbook_id === wb.workbook_id}
+                  onClick={() => setSelectedWb(selectedWb?.workbook_id === wb.workbook_id ? null : wb)}
+                  sx={{ px: 2, py: 1.5, alignItems: "flex-start" }}
+                >
+                  <ListItemText
+                    primary={
+                      <Typography variant="body2" fontWeight={600} noWrap>
+                        {wb.name || wb.filename || `문제집 #${idx + 1}`}
+                      </Typography>
+                    }
+                    secondary={
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                        <Chip label={wb.layout || "-"} size="small" variant="outlined" sx={{ fontSize: 11 }} />
+                        <Chip label={`${wb.question_count ?? "?"}문항`} size="small" variant="outlined" sx={{ fontSize: 11 }} />
+                        <Typography variant="caption" color="text.disabled" sx={{ alignSelf: "center" }}>{fmtDate(wb.created_at)}</Typography>
+                      </Box>
+                    }
+                  />
+                  <Box sx={{ display: "flex", gap: 0.5, ml: 1, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                    <Tooltip title="PDF 재다운로드">
+                      <span>
+                        <IconButton
+                          size="small" color="primary"
+                          disabled={!wb.result_job_id || downloadingId === wb.workbook_id}
+                          onClick={() => handleDownload(wb)}
+                        >
+                          {downloadingId === wb.workbook_id
+                            ? <CircularProgress size={16} />
+                            : <Icon icon="material-symbols:download-rounded" style={{ fontSize: 18 }} />}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="편집으로 불러오기">
+                      <IconButton size="small" onClick={() => onLoadForEdit?.(wb.workbook_id)}>
+                        <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 18 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </ListItemButton>
+                <Divider />
+              </Box>
+            ))}
+          </List>
+        </Box>
+      </Paper>
+
+      {/* ── 미리보기 패널 ──────────────────────────── */}
+      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {selectedWb ? (
+          <>
+            <Box sx={{ px: 2.5, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0 }}>
+              <Typography variant="subtitle2" fontWeight={700}>
+                {selectedWb.name || selectedWb.filename || "문제집 미리보기"}
+              </Typography>
+              <Chip label={selectedWb.layout} size="small" variant="outlined" />
+              <Chip label={`${selectedWb.question_count}문항`} size="small" variant="outlined" />
+            </Box>
+            <Box sx={{ flex: 1, overflowY: "auto", p: 3, display: "flex", justifyContent: "center" }}>
+              <WorkbookPreview selections={previewItems} layout={selectedWb.layout || "세로 2단"} previewWidth={320} />
+            </Box>
+          </>
+        ) : (
+          <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "text.disabled", gap: 2 }}>
+            <Icon icon="material-symbols:picture-as-pdf-outline-rounded" style={{ fontSize: 56 }} />
+            <Typography variant="body2" color="text.secondary">목록에서 문제집을 클릭하면 미리보기가 표시됩니다.</Typography>
+          </Box>
+        )}
+      </Box>
+    </Box>
+  );
+}
