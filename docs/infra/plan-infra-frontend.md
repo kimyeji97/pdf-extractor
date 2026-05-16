@@ -2,19 +2,19 @@
 
 ## 주요 내용
 
-- **선행 조건**: API Gateway 커스텀 도메인 구성 완료 (`api.dailystudy-dev.yejicraft-cf.com` 응답 확인)
+- **선행 조건**: API Gateway 커스텀 도메인 구성 완료 (`api.dailystudy-workbook-dev.yejicraft-cf.com` 응답 확인)
 - **Phase 1**: `npm run build` 로컬 빌드 확인 (`frontend/dist/` 생성 및 환경변수 사용 여부)
 - **Phase 2**: Cloudflare Pages → GitHub 연결, `main` 브랜치 push 시 자동 빌드 트리거
 - **Phase 3**: 빌드 설정 (루트 디렉토리 `frontend`, 출력 `dist`) + 환경변수 `VITE_API_BASE_URL` 설정
-- **Phase 4**: 커스텀 도메인 `dailystudy-dev.yejicraft-cf.com` 연결 (같은 Cloudflare 계정 — DNS 자동 추가)
+- **Phase 4**: 커스텀 도메인 `dailystudy-workbook-dev.yejicraft-cf.com` 연결 (같은 Cloudflare 계정 — DNS 자동 추가)
 - **Phase 5**: HTTPS 접속, CORS 응답 헤더, E2E 기능(업로드→추출→문제집) 확인
 - **브랜치 프리뷰**: `main` 외 브랜치 push 시 자동 프리뷰 URL 생성
 
 ---
 
-> **버전**: 1.0 | **작성일**: 2026-05-04
+> **버전**: 2.0 | **작성일**: 2026-05-16
 > **관련 spec**: [spec-infra.md](spec-infra.md)
-> **선행 조건**: API Gateway 커스텀 도메인 구성 완료 (`api.dailystudy-dev.yejicraft-cf.com` 응답 확인)
+> **선행 조건**: 백엔드 ECS + Cloudflare Tunnel 구성 완료 (`dailystudy-workbook-api-dev.yejicraft-cf.com` 응답 확인)
 > **목표**: React 프론트엔드를 Cloudflare Pages에 배포하고 커스텀 도메인을 연결한다.
 
 ---
@@ -89,7 +89,7 @@ Cloudflare 대시보드 → Workers & Pages → Pages → 새 프로젝트 생�
 
 | 키 | 값 |
 |----|-----|
-| `VITE_API_BASE_URL` | `https://api.dailystudy-dev.yejicraft-cf.com` |
+| `VITE_API_BASE_URL` | `https://dailystudy-workbook-api-dev.yejicraft-cf.com/api` |
 
 > Cloudflare Pages → 설정 → 환경 변수 → 프로덕션에 추가.
 > 프리뷰 배포에는 별도 dev API URL을 사용하거나 동일 URL을 사용한다.
@@ -113,7 +113,7 @@ Cloudflare Pages → 해당 프로젝트 → 커스텀 도메인 → 커스텀 �
 
 | 항목 | 값 |
 |------|-----|
-| 도메인 | `dailystudy-dev.yejicraft-cf.com` |
+| 도메인 | `dailystudy-workbook-dev.yejicraft-cf.com` |
 
 > 동일 Cloudflare 계정의 도메인이므로 DNS 레코드가 자동으로 추가된다.
 > (CNAME `dailystudy-dev` → Cloudflare Pages 도메인, 프록시 ON)
@@ -121,7 +121,7 @@ Cloudflare Pages → 해당 프로젝트 → 커스텀 도메인 → 커스텀 �
 ### 4-2. DNS 전파 확인
 
 ```bash
-dig dailystudy-dev.yejicraft-cf.com
+dig dailystudy-workbook-dev.yejicraft-cf.com
 # Cloudflare IP 응답 확인
 ```
 
@@ -132,7 +132,7 @@ dig dailystudy-dev.yejicraft-cf.com
 ### 5-1. 기본 접속 확인
 
 ```
-https://dailystudy-dev.yejicraft-cf.com
+https://dailystudy-workbook-dev.yejicraft-cf.com
 ```
 
 **확인 항목:**
@@ -154,7 +154,7 @@ https://dailystudy-dev.yejicraft-cf.com
 브라우저 개발자 도구 → Network 탭에서 API 요청의 응답 헤더 확인:
 
 ```
-Access-Control-Allow-Origin: https://dailystudy-dev.yejicraft-cf.com
+Access-Control-Allow-Origin: https://dailystudy-workbook-dev.yejicraft-cf.com
 ```
 
 > CORS 오류 발생 시 API Gateway CORS 설정의 허용 오리진을 확인한다.
@@ -168,7 +168,7 @@ Access-Control-Allow-Origin: https://dailystudy-dev.yejicraft-cf.com
 - [ ] 빌드 설정 (루트 디렉토리 `frontend`, 출력 `dist`)
 - [ ] 환경변수 `VITE_API_BASE_URL` 설정
 - [ ] 첫 배포 성공 확인 (빌드 로그)
-- [ ] 커스텀 도메인 `dailystudy-dev.yejicraft-cf.com` 연결
+- [ ] 커스텀 도메인 `dailystudy-workbook-dev.yejicraft-cf.com` 연결
 - [ ] HTTPS 접속 확인
 - [ ] API 연동 E2E 확인 (업로드 → 추출 → 문제집)
 
@@ -181,7 +181,7 @@ Access-Control-Allow-Origin: https://dailystudy-dev.yejicraft-cf.com
 ```bash
 git push origin main
 # → Cloudflare Pages 자동 빌드 시작 (1–3분)
-# → 완료 후 https://dailystudy-dev.yejicraft-cf.com 에 반영
+# → 완료 후 https://dailystudy-workbook-dev.yejicraft-cf.com 에 반영
 ```
 
 **브랜치 프리뷰:**
@@ -195,5 +195,5 @@ dev 안정화 후 동일 절차로 진행. 차이점:
 
 | 항목 | dev | prod |
 |------|-----|------|
-| 커스텀 도메인 | `dailystudy-dev.yejicraft-cf.com` | `dailystudy.yejicraft-cf.com` |
-| `VITE_API_BASE_URL` | `https://api.dailystudy-dev.yejicraft-cf.com` | `https://api.dailystudy.yejicraft-cf.com` |
+| 커스텀 도메인 | `dailystudy-workbook-dev.yejicraft-cf.com` | `dailystudy.yejicraft-cf.com` |
+| `VITE_API_BASE_URL` | `https://dailystudy-workbook-api-dev.yejicraft-cf.com/api` | `https://api.dailystudy.yejicraft-cf.com` |
