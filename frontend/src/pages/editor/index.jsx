@@ -2,6 +2,7 @@
  * 문제집 편집 페이지 (Aurora MUI 레이아웃 적용)
  */
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useLocation } from "react-router";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
 } from "@dnd-kit/core";
@@ -73,7 +74,9 @@ function SortableItem({ item, index, onRemove }) {
 }
 
 
-export default function EditorPage({ initialWorkbookId = null }) {
+export default function EditorPage() {
+  const { state } = useLocation();
+  const initialWorkbookId = state?.initialWorkbookId ?? null;
   const [jobId, setJobId]                               = useState(null);
   const [selectedJobFilename, setSelectedJobFilename]   = useState(null);
   const [selectedWorkbookName, setSelectedWorkbookName] = useState("");
@@ -211,7 +214,7 @@ export default function EditorPage({ initialWorkbookId = null }) {
   useEffect(() => () => { if (exportPollRef.current) clearInterval(exportPollRef.current); }, []);
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "calc(100vh - 64px)", overflow: "hidden" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
 
       {/* 컨텍스트 바 */}
       {selectedJobFilename && (

@@ -8,9 +8,7 @@ import { RESET } from 'reducers/SettingsReducer';
 import { blue, green } from 'theme/palette/colors';
 import IconifyIcon from 'components/base/IconifyIcon';
 import SimpleBar from 'components/base/SimpleBar';
-import PromoCard from 'components/common/PromoCard';
 import FontFamilyTab from './FontFamilyPanel';
-import promo from '/assets/images/illustrations/4.webp';
 
 const SettingsPanel = () => {
   const { configDispatch } = useSettingsContext();
@@ -114,15 +112,6 @@ const SettingsPanel = () => {
                     <FontFamilyTab />
                   </Section>
                 </Stack>
-              </Box>
-              <Box sx={{ p: 3 }}>
-                <PromoCard
-                  showFeatures={false}
-                  title="All Advanced Features"
-                  subTitle="Available at"
-                  img={promo}
-                  imgStyles={{ maxWidth: 80 }}
-                />
               </Box>
             </Stack>
           </SimpleBar>

@@ -2,6 +2,7 @@
  * 생성 이력 페이지 (Aurora MUI 레이아웃 적용)
  */
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -43,7 +44,8 @@ function toPreviewItems(selections) {
   }));
 }
 
-export default function HistoryPage({ onLoadForEdit }) {
+export default function HistoryPage() {
+  const navigate = useNavigate();
   const [workbooks, setWorkbooks]         = useState([]);
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState("");
@@ -78,7 +80,7 @@ export default function HistoryPage({ onLoadForEdit }) {
   const previewItems = selectedWb ? toPreviewItems(selectedWb.selections) : [];
 
   return (
-    <Box sx={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden" }}>
+    <Box sx={{ display: "flex", height: "100%", overflow: "hidden" }}>
 
       {/* ── 목록 패널 ───────────────────────────────── */}
       <Paper elevation={0} sx={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}>
@@ -142,7 +144,7 @@ export default function HistoryPage({ onLoadForEdit }) {
                       </span>
                     </Tooltip>
                     <Tooltip title="편집으로 불러오기">
-                      <IconButton size="small" onClick={() => onLoadForEdit?.(wb.workbook_id)}>
+                      <IconButton size="small" onClick={() => navigate('/editor', { state: { initialWorkbookId: wb.workbook_id } })}>
                         <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 18 }} />
                       </IconButton>
                     </Tooltip>

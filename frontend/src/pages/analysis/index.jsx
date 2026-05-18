@@ -209,7 +209,7 @@ export default function AnalysisPage() {
     ? `${API_ROOT}${selectedPageInfo.thumbnail_url}` : null;
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "calc(100vh - 64px)", overflow: "hidden" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
 
       {/* 컨텍스트 바 */}
       {selectedJobFilename && (

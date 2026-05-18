@@ -54,26 +54,26 @@ const MainLayout = ({ children }: PropsWithChildren) => {
             sx={{
               flexGrow: 1,
               p: 0,
-              minHeight: '100vh',
+              height: '100vh',
               width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
               display: 'flex',
               flexDirection: 'column',
               ml: { md: `${mainDrawerWidth.collapsed}px`, lg: 0 },
+              overflow: 'hidden',
             }}
           >
             <Toolbar variant="appbar" />
 
-            <Box sx={{ flex: 1 }}>
-              <Box
-                sx={[
-                  {
-                    height: 1,
-                    bgcolor: 'background.default',
-                  },
-                ]}
-              >
-                {children}
-              </Box>
+            <Box
+              sx={{
+                flex: '1 1 0',
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                bgcolor: 'background.default',
+              }}
+            >
+              {children}
             </Box>
             <Footer />
           </Box>
