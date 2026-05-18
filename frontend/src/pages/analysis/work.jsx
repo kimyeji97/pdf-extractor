@@ -1,0 +1,428 @@
+/**
+ * 문항 분석 - 작업 페이지 (/analysis/:jobId)
+ *
+ * 파일 선택 페이지(/)에서 파일을 고른 뒤 진입.
+ * ① 페이지 목록  ② 페이지 미리보기  ③ 문항 목록  3패널 구성.
+ * 뒤로 가기 → 파일 선택 페이지로 복귀 (사이드바 메뉴 유지).
+ */
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useParams, useLocation, useNavigate } from "react-router";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import Chip from "@mui/material/Chip";
+import Alert from "@mui/material/Alert";
+import IconButton from "@mui/material/IconButton";
+import CircularProgress from "@mui/material/CircularProgress";
+import Tooltip from "@mui/material/Tooltip";
+import Stack from "@mui/material/Stack";
+import { Icon } from "@iconify/react";
+
+import QuestionAnalysisPanel from "components/QuestionAnalysisPanel";
+import { getPages, refreshJobQuestions, getJobInfo, addManualQuestion } from "api/client";
+
+const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
+
+const ResizeHandle = ({ onMouseDown }) => (
+  <Box
+    onMouseDown={onMouseDown}
+    sx={{
+      width: 4, flexShrink: 0, cursor: "col-resize", bgcolor: "divider",
+      transition: "background-color 0.15s",
+      "&:hover": { bgcolor: "primary.main" },
+    }}
+  />
+);
+
+export default function AnalysisWorkPage() {
+  const { jobId } = useParams();
+  const { state } = useLocation();
+  const navigate  = useNavigate();
+
+  const filename    = state?.filename    || jobId;
+  const workbookName = state?.workbookName || "";
+
+  // ── 페이지 목록 ───────────────────────────────────────
+  const [pages, setPages]               = useState([]);
+  const [pagesLoading, setPagesLoading] = useState(false);
+  const [pagesError, setPagesError]     = useState("");
+  const [refreshing, setRefreshing]     = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+
+  // ── 선택 상태 ─────────────────────────────────────────
+  const [selectedPage, setSelectedPage]       = useState(null);
+  const [selectedPageInfo, setSelectedPageInfo] = useState(null);
+  const [panelRefreshTrigger, setPanelRefreshTrigger] = useState(0);
+
+  // ── 패널 너비 ─────────────────────────────────────────
+  const [panelWidths, setPanelWidths] = useState({ section1: 200, section2: 320 });
+  const resizingRef = useRef(null);
+
+  // ── 수동 추가 ─────────────────────────────────────────
+  const [drawMode, setDrawMode]               = useState(false);
+  const [isDragging, setIsDragging]           = useState(false);
+  const [dragStart, setDragStart]             = useState(null);
+  const [dragCurrent, setDragCurrent]         = useState(null);
+  const [pendingRegionPx, setPendingRegionPx] = useState(null);
+  const [pendingRegionPt, setPendingRegionPt] = useState(null);
+  const [manualTitle, setManualTitle]         = useState("");
+  const [manualTitleError, setManualTitleError] = useState("");
+  const [addingManual, setAddingManual]       = useState(false);
+  const imgRef     = useRef(null);
+  const overlayRef = useRef(null);
+
+  // ── 페이지 로드 ───────────────────────────────────────
+  const fetchPages = useCallback(async (jid) => {
+    if (!jid) return;
+    setPagesLoading(true);
+    setPagesError("");
+    try {
+      const data = await getPages(jid);
+      setPages(data.pages || []);
+    } catch (e) {
+      setPagesError(e.message);
+    } finally {
+      setPagesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchPages(jobId); }, [jobId, fetchPages]);
+
+  // ── 재감지 ────────────────────────────────────────────
+  const handleRefresh = useCallback(async () => {
+    if (!jobId || refreshing) return;
+    setRefreshing(true);
+    setRefreshError("");
+    try {
+      await refreshJobQuestions(jobId);
+      const poll = setInterval(async () => {
+        try {
+          const info = await getJobInfo(jobId);
+          const st   = info.boundaries_status;
+          if (st === "DONE" || st === "FAILED") {
+            clearInterval(poll);
+            setRefreshing(false);
+            if (st === "FAILED") setRefreshError("재감지에 실패했습니다.");
+            else fetchPages(jobId);
+          }
+        } catch { /* 폴링 오류 무시 */ }
+      }, 2000);
+    } catch (e) {
+      setRefreshError(e.message || "재감지 요청 실패");
+      setRefreshing(false);
+    }
+  }, [jobId, refreshing, fetchPages]);
+
+  // ── 페이지 선택 ───────────────────────────────────────
+  const handlePageClick = useCallback((page) => {
+    setSelectedPage(page.page_num);
+    setSelectedPageInfo(page);
+    setPanelRefreshTrigger((t) => t + 1);
+    setPendingRegionPx(null);
+    setPendingRegionPt(null);
+    setManualTitle("");
+    setManualTitleError("");
+  }, []);
+
+  // ── 패널 리사이즈 ─────────────────────────────────────
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!resizingRef.current) return;
+      const { panel, startX, startWidth } = resizingRef.current;
+      const newWidth = Math.max(160, Math.min(480, startWidth + (e.clientX - startX)));
+      setPanelWidths((prev) => ({ ...prev, [panel]: newWidth }));
+    };
+    const onUp = () => {
+      resizingRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, []);
+
+  const startResize = (panel, e) => {
+    e.preventDefault();
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    resizingRef.current = { panel, startX: e.clientX, startWidth: panelWidths[panel] };
+  };
+
+  // ── 수동 문항 드로우 ──────────────────────────────────
+  const toPdfCoords = useCallback((px) => {
+    const img = imgRef.current;
+    if (!img || !selectedPageInfo) return null;
+    const scaleX = selectedPageInfo.width / img.clientWidth;
+    const scaleY = selectedPageInfo.height / img.clientHeight;
+    return {
+      x0: Math.max(0, px.x0 * scaleX), y0: Math.max(0, px.y0 * scaleY),
+      x1: Math.min(selectedPageInfo.width, px.x1 * scaleX),
+      y1: Math.min(selectedPageInfo.height, px.y1 * scaleY),
+    };
+  }, [selectedPageInfo]);
+
+  const getPos = (e) => {
+    const rect = overlayRef.current.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(e.clientX - rect.left, rect.width)),
+      y: Math.max(0, Math.min(e.clientY - rect.top, rect.height)),
+    };
+  };
+
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    setPendingRegionPx(null); setPendingRegionPt(null);
+    setManualTitle(""); setManualTitleError("");
+    setIsDragging(true);
+    const p = getPos(e);
+    setDragStart(p); setDragCurrent(p);
+  };
+  const handleMouseMove = (e) => { if (isDragging) setDragCurrent(getPos(e)); };
+  const handleMouseUp   = (e) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const p  = getPos(e);
+    const x0 = Math.min(dragStart.x, p.x), y0 = Math.min(dragStart.y, p.y);
+    const x1 = Math.max(dragStart.x, p.x), y1 = Math.max(dragStart.y, p.y);
+    if (x1 - x0 > 8 && y1 - y0 > 8) {
+      const pxRegion = { x0, y0, x1, y1 };
+      setPendingRegionPx(pxRegion);
+      setPendingRegionPt(toPdfCoords(pxRegion));
+    }
+    setDragStart(null); setDragCurrent(null);
+  };
+
+  const dragBox = useMemo(() => {
+    if (!dragStart || !dragCurrent) return null;
+    return {
+      left: Math.min(dragStart.x, dragCurrent.x), top: Math.min(dragStart.y, dragCurrent.y),
+      width: Math.abs(dragCurrent.x - dragStart.x), height: Math.abs(dragCurrent.y - dragStart.y),
+    };
+  }, [dragStart, dragCurrent]);
+
+  const handleAddManual = async () => {
+    if (!manualTitle.trim()) { setManualTitleError("타이틀을 입력해주세요."); return; }
+    if (!pendingRegionPt || jobId == null || selectedPage == null) return;
+    setAddingManual(true); setManualTitleError("");
+    try {
+      await addManualQuestion(jobId, selectedPage, { title: manualTitle.trim(), region: pendingRegionPt });
+      setPendingRegionPx(null); setPendingRegionPt(null); setManualTitle(""); setDrawMode(false);
+      setPanelRefreshTrigger((t) => t + 1);
+    } catch (e) { setManualTitleError(e.message || "추가에 실패했습니다."); }
+    finally     { setAddingManual(false); }
+  };
+
+  const handleCancelManual = () => {
+    setPendingRegionPx(null); setPendingRegionPt(null);
+    setManualTitle(""); setManualTitleError("");
+  };
+  const toggleDrawMode = () => { setDrawMode((v) => !v); handleCancelManual(); };
+
+  const pageThumbUrl = selectedPageInfo?.thumbnail_url
+    ? `${API_ROOT}${selectedPageInfo.thumbnail_url}` : null;
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+
+      {/* ── 컨텍스트 바 ─────────────────────────────── */}
+      <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0, bgcolor: "background.paper" }}>
+        <Button
+          size="small" variant="text" color="inherit"
+          onClick={() => navigate(-1)}
+          startIcon={<Icon icon="material-symbols:arrow-back-rounded" style={{ fontSize: 16 }} />}
+          sx={{ fontSize: 12, minWidth: 0, px: 1 }}
+        >
+          파일 선택
+        </Button>
+        <Box sx={{ width: 1, height: 16, bgcolor: "divider" }} />
+        <Icon icon="material-symbols:description-outline-rounded" style={{ fontSize: 15, flexShrink: 0 }} />
+        <Typography variant="caption" fontWeight={600} noWrap sx={{ maxWidth: 240 }} title={filename}>
+          {workbookName || filename}
+        </Typography>
+        {selectedPage !== null && (
+          <Chip label={`${selectedPage + 1}페이지`} size="small" variant="outlined" color="primary" />
+        )}
+      </Box>
+
+      {/* ── 3패널 ───────────────────────────────────── */}
+      <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
+
+        {/* ① 페이지 목록 */}
+        <Paper
+          elevation={0}
+          sx={{ width: panelWidths.section1, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}
+        >
+          <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+            <Typography variant="subtitle2" fontWeight={700}>① 페이지</Typography>
+            <Tooltip title="전체 재감지">
+              <IconButton size="small" onClick={handleRefresh} disabled={refreshing}>
+                {refreshing ? <CircularProgress size={14} /> : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 16 }} />}
+              </IconButton>
+            </Tooltip>
+          </Box>
+
+          {refreshError && <Alert severity="error" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>{refreshError}</Alert>}
+          {pagesError   && <Alert severity="error" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>{pagesError}</Alert>}
+
+          <Box sx={{ flex: 1, overflowY: "auto" }}>
+            {pagesLoading && (
+              <Box sx={{ p: 2, display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={20} />
+              </Box>
+            )}
+            {!pagesLoading && pages.length === 0 && (
+              <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
+                <Typography variant="caption">페이지 없음</Typography>
+              </Box>
+            )}
+            {pages.map((page) => {
+              const isSelected = selectedPage === page.page_num;
+              return (
+                <Box
+                  key={page.page_num}
+                  onClick={() => handlePageClick(page)}
+                  sx={{
+                    px: 2, py: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
+                    borderBottom: 1, borderColor: "divider",
+                    bgcolor: isSelected ? "primary.lighter" : "transparent",
+                    "&:hover": { bgcolor: isSelected ? "primary.lighter" : "action.hover" },
+                  }}
+                >
+                  <Typography variant="caption" fontWeight={isSelected ? 700 : 400} color={isSelected ? "primary.main" : "text.primary"}>
+                    {page.page_num + 1}페이지
+                  </Typography>
+                  {page.question_count != null && (
+                    <Chip label={`${page.question_count}문항`} size="small" variant="outlined" color={isSelected ? "primary" : "default"} sx={{ fontSize: 10, height: 18 }} />
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
+        </Paper>
+
+        <ResizeHandle onMouseDown={(e) => startResize("section1", e)} />
+
+        {/* ② 페이지 미리보기 */}
+        <Paper
+          elevation={0}
+          sx={{ width: panelWidths.section2, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}
+        >
+          <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+            <Typography variant="subtitle2" fontWeight={700}>② 페이지 미리보기</Typography>
+            {pageThumbUrl && (
+              <Button
+                size="small" variant={drawMode ? "contained" : "outlined"}
+                color={drawMode ? "error" : "primary"}
+                onClick={toggleDrawMode}
+                startIcon={<Icon icon={drawMode ? "material-symbols:close" : "material-symbols:edit-outline-rounded"} />}
+                sx={{ minWidth: 0, px: 1.5, fontSize: 12 }}
+              >
+                {drawMode ? "종료" : "수동 추가"}
+              </Button>
+            )}
+          </Box>
+
+          <Box sx={{ flex: 1, overflowY: "auto", p: 1.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
+            {pageThumbUrl ? (
+              <>
+                {drawMode && (
+                  <Alert severity="info" sx={{ py: 0, fontSize: 12 }}>
+                    이미지 위에서 드래그하여 영역을 지정하세요.
+                  </Alert>
+                )}
+
+                <Box sx={{ position: "relative", width: "100%", cursor: drawMode ? "crosshair" : "default" }}>
+                  <Box
+                    component="img"
+                    ref={imgRef}
+                    src={pageThumbUrl}
+                    alt={`${(selectedPage ?? 0) + 1}페이지`}
+                    draggable={false}
+                    sx={{ width: "100%", display: "block", userSelect: "none" }}
+                  />
+                  {drawMode && (
+                    <Box
+                      ref={overlayRef}
+                      sx={{ position: "absolute", inset: 0 }}
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={() => isDragging && handleMouseUp({ clientX: 0, clientY: 0 })}
+                    >
+                      {dragBox && (
+                        <Box sx={{ position: "absolute", left: dragBox.left, top: dragBox.top, width: dragBox.width, height: dragBox.height, border: "2px dashed", borderColor: "primary.main", bgcolor: "primary.lighter", opacity: 0.6, pointerEvents: "none" }} />
+                      )}
+                      {pendingRegionPx && !isDragging && (
+                        <Box sx={{ position: "absolute", left: pendingRegionPx.x0, top: pendingRegionPx.y0, width: pendingRegionPx.x1 - pendingRegionPx.x0, height: pendingRegionPx.y1 - pendingRegionPx.y0, border: "2px solid", borderColor: "primary.main", bgcolor: "primary.lighter", opacity: 0.5, pointerEvents: "none" }} />
+                      )}
+                    </Box>
+                  )}
+                </Box>
+
+                {drawMode && pendingRegionPt && (
+                  <Paper variant="outlined" sx={{ p: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <TextField
+                      size="small" fullWidth autoFocus
+                      placeholder="문항 타이틀 (필수)"
+                      value={manualTitle}
+                      onChange={(e) => setManualTitle(e.target.value)}
+                      error={!!manualTitleError}
+                      helperText={manualTitleError}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter")  handleAddManual();
+                        if (e.key === "Escape") handleCancelManual();
+                      }}
+                    />
+                    <Stack direction="row" spacing={1}>
+                      <Button variant="contained" size="small" onClick={handleAddManual} disabled={addingManual} fullWidth>
+                        {addingManual ? "추가 중..." : "추가"}
+                      </Button>
+                      <Button variant="outlined" size="small" onClick={handleCancelManual} fullWidth>취소</Button>
+                    </Stack>
+                  </Paper>
+                )}
+              </>
+            ) : (
+              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "text.disabled", gap: 1.5, py: 6 }}>
+                <Icon icon="material-symbols:image-outline-rounded" style={{ fontSize: 48 }} />
+                <Typography variant="body2" textAlign="center" color="text.secondary">
+                  페이지를 선택하면<br />미리보기가 표시됩니다.
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </Paper>
+
+        <ResizeHandle onMouseDown={(e) => startResize("section2", e)} />
+
+        {/* ③ 문항 목록 */}
+        <Paper elevation={0} sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0 }}>
+          {selectedPage !== null && jobId ? (
+            <QuestionAnalysisPanel
+              key={`${jobId}-${selectedPage}`}
+              jobId={jobId}
+              pageNum={selectedPage}
+              pageInfo={selectedPageInfo}
+              refreshTrigger={panelRefreshTrigger}
+            />
+          ) : (
+            <>
+              <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
+                <Typography variant="subtitle2" fontWeight={700}>③ 문항 목록</Typography>
+              </Box>
+              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "text.disabled", gap: 1.5 }}>
+                <Icon icon="material-symbols:list-alt-outline-rounded" style={{ fontSize: 48 }} />
+                <Typography variant="body2" textAlign="center" color="text.secondary">
+                  페이지를 선택하면<br />문항 목록이 표시됩니다.
+                </Typography>
+              </Box>
+            </>
+          )}
+        </Paper>
+      </Box>
+    </Box>
+  );
+}

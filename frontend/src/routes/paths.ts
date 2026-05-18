@@ -4,6 +4,7 @@ export const rootPaths = {
 
 const paths = {
   analysis: '/',
+  analysisWork: '/analysis/:jobId',
   editor: '/editor',
   history: '/history',
   format: '/format',

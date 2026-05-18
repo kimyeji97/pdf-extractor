@@ -32,6 +32,7 @@ const sitemap: MenuItem[] = [
         name: '문항 분석',
         path: paths.analysis,
         pathName: 'analysis',
+        selectionPrefix: '/analysis',
         icon: 'material-symbols:document-scanner-outline-rounded',
         active: true,
       },
