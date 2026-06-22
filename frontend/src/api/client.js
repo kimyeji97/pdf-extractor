@@ -1,12 +1,34 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
+// ── API 로딩 상태 (전역 딤 처리용) ─────────────────────────
+let _activeCount = 0;
+let _onLoadingChange = null;
+
+export function setLoadingCallback(fn) {
+  _onLoadingChange = fn;
+}
+
+function _setLoading(delta) {
+  _activeCount = Math.max(0, _activeCount + delta);
+  _onLoadingChange?.(_activeCount > 0);
+}
+
+async function apiFetch(url, options) {
+  _setLoading(+1);
+  try {
+    return await fetch(url, options);
+  } finally {
+    _setLoading(-1);
+  }
+}
+
 /**
  * POST /api/upload
  * @param {string} [filename]
  * @param {{ workbook_name?: string, workbook_types?: string[] }} [meta]
  */
 export async function requestUploadUrl(filename, meta = {}) {
-  const res = await fetch(`${BASE_URL}/upload`, {
+  const res = await apiFetch(`${BASE_URL}/upload`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename: filename || null, ...meta }),
@@ -20,7 +42,7 @@ export async function requestUploadUrl(filename, meta = {}) {
  * 업로드된 파일 목록 반환
  */
 export async function listJobs() {
-  const res = await fetch(`${BASE_URL}/jobs`);
+  const res = await apiFetch(`${BASE_URL}/jobs`);
   if (!res.ok) throw new Error("파일 목록 조회 실패");
   return res.json(); // { source_jobs: [...], export_jobs: [...] }
 }
@@ -43,7 +65,7 @@ export async function getJobInfo(jobId) {
  * 썸네일 이미지는 <img src={page.thumbnail_url} /> 로 직접 사용
  */
 export async function getPages(jobId) {
-  const res = await fetch(`${BASE_URL}/jobs/${jobId}/pages`);
+  const res = await apiFetch(`${BASE_URL}/jobs/${jobId}/pages`);
   if (!res.ok) throw new Error("페이지 목록 조회 실패");
   return res.json(); // { job_id, page_count, pages: [{page_num, thumbnail_url, width, height}] }
 }
@@ -79,7 +101,7 @@ export async function uploadPdf(uploadUrl, file, jobId) {
  * R2 업로드 완료 후 백엔드에 알려 문항 경계 감지를 시작한다.
  */
 export async function notifyUploadComplete(jobId) {
-  const res = await fetch(`${BASE_URL}/upload/notify?job_id=${jobId}`, {
+  const res = await apiFetch(`${BASE_URL}/upload/notify?job_id=${jobId}`, {
     method: "POST",
   });
   if (!res.ok) throw new Error("업로드 완료 알림 실패");
@@ -90,7 +112,7 @@ export async function notifyUploadComplete(jobId) {
  * POST /api/extract
  */
 export async function startExtract(jobId, questionNumbers) {
-  const res = await fetch(`${BASE_URL}/extract`, {
+  const res = await apiFetch(`${BASE_URL}/extract`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ job_id: jobId, question_numbers: questionNumbers }),
@@ -117,7 +139,7 @@ export async function getStatus(jobId) {
  * 해당 페이지의 감지된 문항 목록 반환
  */
 export async function getPageQuestions(jobId, pageNum) {
-  const res = await fetch(`${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions`);
+  const res = await apiFetch(`${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions`);
   if (!res.ok) throw new Error("문항 목록 조회 실패");
   return res.json();
   // { job_id, page_num, questions: [{question_num, question_id, thumbnail_url, bbox, col}] }
@@ -130,7 +152,7 @@ export async function getPageQuestions(jobId, pageNum) {
  * 완료 여부는 getJobInfo(jobId).boundaries_status 를 폴링하여 확인.
  */
 export async function refreshJobQuestions(jobId) {
-  const res = await fetch(`${BASE_URL}/jobs/${jobId}/refresh`, {
+  const res = await apiFetch(`${BASE_URL}/jobs/${jobId}/refresh`, {
     method: "POST",
   });
   if (!res.ok) throw new Error("문항 재감지 요청 실패");
@@ -164,7 +186,7 @@ export async function startExtractV2(selections, layout = "2단", coverId = null
       return item;
     }),
   };
-  const res = await fetch(`${BASE_URL}/extract-v2`, {
+  const res = await apiFetch(`${BASE_URL}/extract-v2`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -187,7 +209,7 @@ export async function startExtractV2(selections, layout = "2단", coverId = null
  * @param {{ title: string, region: {x0, y0, x1, y1} }} param
  */
 export async function addManualQuestion(jobId, pageNum, { title, region }) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/manual`,
     {
       method: "POST",
@@ -207,7 +229,7 @@ export async function addManualQuestion(jobId, pageNum, { title, region }) {
  * 자동 감지 문항 타이틀 수정 (REQ-12)
  */
 export async function updateQuestionTitle(jobId, pageNum, questionNum, title) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/${questionNum}`,
     {
       method: "PATCH",
@@ -224,7 +246,7 @@ export async function updateQuestionTitle(jobId, pageNum, questionNum, title) {
  * 수동 추가 문항 타이틀 수정 (REQ-12)
  */
 export async function updateManualQuestionTitle(jobId, pageNum, manualId, title) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/manual/${manualId}`,
     {
       method: "PATCH",
@@ -241,7 +263,7 @@ export async function updateManualQuestionTitle(jobId, pageNum, manualId, title)
  * 자동 감지 문항 삭제 (REQ-14)
  */
 export async function deleteQuestion(jobId, pageNum, questionNum) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/${questionNum}`,
     { method: "DELETE" }
   );
@@ -253,7 +275,7 @@ export async function deleteQuestion(jobId, pageNum, questionNum) {
  * 수동 추가 문항 삭제 (REQ-14)
  */
 export async function deleteManualQuestion(jobId, pageNum, manualId) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/manual/${manualId}`,
     { method: "DELETE" }
   );
@@ -265,7 +287,7 @@ export async function deleteManualQuestion(jobId, pageNum, manualId) {
  * 생성된 문제집 이력 목록 (REQ-21)
  */
 export async function getWorkbooks() {
-  const res = await fetch(`${BASE_URL}/workbooks`);
+  const res = await apiFetch(`${BASE_URL}/workbooks`);
   if (!res.ok) throw new Error("문제집 이력 조회 실패");
   return res.json(); // WorkbookMeta[]
 }
@@ -275,7 +297,7 @@ export async function getWorkbooks() {
  * 문제집 메타데이터 단건 조회 (REQ-20 편집 복원)
  */
 export async function getWorkbook(workbookId) {
-  const res = await fetch(`${BASE_URL}/workbooks/${workbookId}`);
+  const res = await apiFetch(`${BASE_URL}/workbooks/${workbookId}`);
   if (!res.ok) throw new Error("문제집 조회 실패");
   return res.json(); // WorkbookMeta
 }
@@ -287,7 +309,7 @@ export async function getWorkbook(workbookId) {
  * @param {{ workbook_name?: string, workbook_types?: string[] }} meta
  */
 export async function updateJobMeta(jobId, meta) {
-  const res = await fetch(`${BASE_URL}/jobs/${jobId}`, {
+  const res = await apiFetch(`${BASE_URL}/jobs/${jobId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(meta),
@@ -302,7 +324,7 @@ export async function updateJobMeta(jobId, meta) {
  * @param {object} meta - WorkbookMeta 형식
  */
 export async function createWorkbookMeta(meta) {
-  const res = await fetch(`${BASE_URL}/workbooks`, {
+  const res = await apiFetch(`${BASE_URL}/workbooks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(meta),
@@ -337,7 +359,7 @@ export async function uploadCover(file, name = "") {
  * 표지 목록 조회
  */
 export async function listCovers() {
-  const res = await fetch(`${BASE_URL}/covers`);
+  const res = await apiFetch(`${BASE_URL}/covers`);
   if (!res.ok) throw new Error("표지 목록 조회 실패");
   return res.json(); // { covers: [...] }
 }
@@ -346,7 +368,7 @@ export async function listCovers() {
  * DELETE /api/covers/{coverId}
  */
 export async function deleteCover(coverId) {
-  const res = await fetch(`${BASE_URL}/covers/${coverId}`, { method: "DELETE" });
+  const res = await apiFetch(`${BASE_URL}/covers/${coverId}`, { method: "DELETE" });
   if (!res.ok) throw new Error("표지 삭제 실패");
   return res.json();
 }

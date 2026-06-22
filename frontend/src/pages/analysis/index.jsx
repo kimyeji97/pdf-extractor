@@ -65,11 +65,13 @@ function isAnalyzing(job) {
 }
 
 function JobCard({ job, onClick }) {
-  const [thumbUrl, setThumbUrl] = useState(null);
+  const [thumbUrl, setThumbUrl]       = useState(null);
+  const [thumbLoaded, setThumbLoaded] = useState(false);
   const hasTypes = job.workbook_types?.length > 0;
   const dimmed   = isAnalyzing(job);
 
   useEffect(() => {
+    setThumbLoaded(false);
     getPages(job.job_id)
       .then((data) => {
         const url = data.pages?.[0]?.thumbnail_url;
@@ -103,17 +105,26 @@ function JobCard({ job, onClick }) {
       <Box
         sx={{
           height: THUMB_H, flexShrink: 0, position: "relative",
-          bgcolor: "action.hover",
-          backgroundImage: thumbUrl ? `url(${thumbUrl})` : "none",
-          backgroundSize: "cover",
-          backgroundPosition: "top center",
+          bgcolor: "action.hover", overflow: "hidden",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
-        {!thumbUrl && (
-          <Icon
-            icon="material-symbols:description-outline-rounded"
-            style={{ fontSize: 40, color: "#ccc" }}
+        {(!thumbUrl || !thumbLoaded) && (
+          thumbUrl
+            ? <Box className="img-skeleton" sx={{ position: "absolute", inset: 0 }} />
+            : <Icon icon="material-symbols:description-outline-rounded" style={{ fontSize: 40, color: "#ccc" }} />
+        )}
+        {thumbUrl && (
+          <Box
+            component="img"
+            src={thumbUrl}
+            onLoad={() => setThumbLoaded(true)}
+            sx={{
+              position: "absolute", inset: 0,
+              width: "100%", height: "100%",
+              objectFit: "cover", objectPosition: "top center",
+              display: thumbLoaded ? "block" : "none",
+            }}
           />
         )}
 

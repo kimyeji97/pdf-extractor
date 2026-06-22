@@ -57,7 +57,7 @@ export default function AnalysisWorkPage() {
   const [panelRefreshTrigger, setPanelRefreshTrigger] = useState(0);
 
   // ── 패널 너비 ─────────────────────────────────────────
-  const [panelWidths, setPanelWidths] = useState({ section1: 200, section2: 320 });
+  const [panelWidths, setPanelWidths] = useState({ section1: 200 });
   const resizingRef = useRef(null);
 
   // ── 수동 추가 ─────────────────────────────────────────
@@ -131,7 +131,7 @@ export default function AnalysisWorkPage() {
     const onMove = (e) => {
       if (!resizingRef.current) return;
       const { panel, startX, startWidth } = resizingRef.current;
-      const newWidth = Math.max(160, Math.min(480, startWidth + (e.clientX - startX)));
+      const newWidth = Math.max(160, Math.min(400, startWidth + (e.clientX - startX)));
       setPanelWidths((prev) => ({ ...prev, [panel]: newWidth }));
     };
     const onUp = () => {
@@ -224,6 +224,9 @@ export default function AnalysisWorkPage() {
   const pageThumbUrl = selectedPageInfo?.thumbnail_url
     ? `${API_ROOT}${selectedPageInfo.thumbnail_url}` : null;
 
+  const [previewLoaded, setPreviewLoaded] = useState(false);
+  useEffect(() => { setPreviewLoaded(false); }, [pageThumbUrl]);
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
 
@@ -253,8 +256,17 @@ export default function AnalysisWorkPage() {
         {/* ① 페이지 목록 */}
         <Paper
           elevation={0}
-          sx={{ width: panelWidths.section1, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}
+          sx={{
+            width: panelWidths.section1, flexShrink: 0,
+            display: "flex", flexDirection: "column", overflow: "hidden",
+            borderRadius: 0, borderRight: 1, borderColor: "divider",
+            position: "relative",
+            ...(drawMode && { pointerEvents: "none" }),
+          }}
         >
+          {drawMode && (
+            <Box sx={{ position: "absolute", inset: 0, bgcolor: "rgba(255,255,255,0.55)", zIndex: 10, pointerEvents: "all" }} />
+          )}
           <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <Typography variant="subtitle2" fontWeight={700}>① 페이지</Typography>
             <Tooltip title="전체 재감지">
@@ -308,7 +320,7 @@ export default function AnalysisWorkPage() {
         {/* ② 페이지 미리보기 */}
         <Paper
           elevation={0}
-          sx={{ width: panelWidths.section2, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}
+          sx={{ flex: 1, minWidth: 160, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}
         >
           <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <Typography variant="subtitle2" fontWeight={700}>② 페이지 미리보기</Typography>
@@ -335,13 +347,17 @@ export default function AnalysisWorkPage() {
                 )}
 
                 <Box sx={{ position: "relative", width: "100%", cursor: drawMode ? "crosshair" : "default" }}>
+                  {!previewLoaded && (
+                    <Box className="img-skeleton" sx={{ width: "100%", paddingTop: "141%" }} />
+                  )}
                   <Box
                     component="img"
                     ref={imgRef}
                     src={pageThumbUrl}
                     alt={`${(selectedPage ?? 0) + 1}페이지`}
                     draggable={false}
-                    sx={{ width: "100%", display: "block", userSelect: "none" }}
+                    onLoad={() => setPreviewLoaded(true)}
+                    sx={{ width: "100%", display: previewLoaded ? "block" : "none", userSelect: "none" }}
                   />
                   {drawMode && (
                     <Box
@@ -396,10 +412,20 @@ export default function AnalysisWorkPage() {
           </Box>
         </Paper>
 
-        <ResizeHandle onMouseDown={(e) => startResize("section2", e)} />
-
         {/* ③ 문항 목록 */}
-        <Paper elevation={0} sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            width: panelWidths.section1 * 2.5, flexShrink: 0,
+            display: "flex", flexDirection: "column", overflow: "hidden",
+            borderRadius: 0, borderLeft: 1, borderColor: "divider",
+            position: "relative",
+            ...(drawMode && { pointerEvents: "none" }),
+          }}
+        >
+          {drawMode && (
+            <Box sx={{ position: "absolute", inset: 0, bgcolor: "rgba(255,255,255,0.55)", zIndex: 10, pointerEvents: "all" }} />
+          )}
           {selectedPage !== null && jobId ? (
             <QuestionAnalysisPanel
               key={`${jobId}-${selectedPage}`}

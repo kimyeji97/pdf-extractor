@@ -21,6 +21,22 @@ import {
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 const API_ROOT = BASE_URL.replace(/\/api$/, "");
 
+function CardImg({ src, alt }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div className="qap-card-img">
+      {!loaded && <div className="qap-img-skeleton" />}
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        style={{ display: loaded ? "block" : "none" }}
+      />
+    </div>
+  );
+}
+
 export default function QuestionAnalysisPanel({
   jobId,
   pageNum,
@@ -254,18 +270,12 @@ export default function QuestionAnalysisPanel({
                 )}
               </div>
 
-              {/* 문항 이미지: 가로 꽉 차게, 비율 유지, 오버플로우 스크롤 */}
-              <div className="qap-card-img">
-                <img
-                  src={`${API_ROOT}${q.thumbnail_url}`}
-                  alt={displayTitle}
-                  loading="lazy"
-                />
-              </div>
+              {/* 문항 이미지 */}
+              <CardImg src={`${API_ROOT}${q.thumbnail_url}`} alt={displayTitle} />
 
               {q.is_false_positive && (
                 <p className="qap-fp-note">
-                  이 문항은 페이지 전체 크기와 경계가 일치합니다. 오탐지일 수 있습니다.
+                  오탐지일 수 있습니다. 문항 이미지를 확인 후 필요하면 삭제하세요.
                 </p>
               )}
             </div>

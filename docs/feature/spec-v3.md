@@ -210,6 +210,28 @@ Phase 7  생성된 문제집 메뉴 UI (프론트엔드)
 
 ---
 
+## 추가 요구사항 (v3.2)
+
+> 로컬 테스트 완료(2026-06-01) 후 도출된 UX 개선 사항.  
+> 상세 설계는 `docs/feature/2026-06-01/plan.md` 참고.
+
+### 공통 로딩 UX
+
+| ID | 요구사항 | 관련 파일 |
+|----|----------|----------|
+| REQ-F01 | 데이터 API 통신 중 전체 화면 딤 오버레이 표시 (스피너 포함) | `App.jsx`, `client.js`, `GlobalDim.jsx` (신규) |
+| REQ-F02 | 이미지 로딩 중 해당 영역에 스켈레톤 딤 처리 — 대상: ①문항 분석 문제집 썸네일, ②페이지 미리보기, ③문항 이미지 카드 | `FileListPanel.jsx`, `QuestionAnalysisView.jsx`, `QuestionAnalysisPanel.jsx` |
+
+### 문항 분석 레이아웃 개선
+
+| ID | 요구사항 | 관련 파일 |
+|----|----------|----------|
+| REQ-F03 | 섹션 비율 조정: 1섹션 너비 고정 유지, 3섹션 최소 너비 = 1섹션 너비 × 2.5, 2섹션 나머지 flex | `QuestionAnalysisView.jsx` |
+| REQ-F04 | 3섹션 문항 카드 영역(`qap-list`) 상하 스크롤 추가 (컨테이너 height 고정 + overflow-y: auto) | `QuestionAnalysisView.jsx`, `QuestionAnalysisPanel.jsx` |
+| REQ-F05 | 수동 추가 모드([수동 추가] 버튼 활성화 ~ [종료] 클릭 전) 동안 1섹션·3섹션 인터랙션 비활성화 (포인터 이벤트 차단 + 시각적 딤) | `QuestionAnalysisView.jsx` |
+
+---
+
 ## 추가 요구사항 (v3.1)
 
 > 구현 완료 후 발견된 버그 및 UX 개선 사항.  

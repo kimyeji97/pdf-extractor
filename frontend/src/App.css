@@ -460,6 +460,7 @@ body {
 /* ── 문항 목록 ──────────────────────────────────────── */
 .qap-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px 10px;
   display: flex;
@@ -1746,4 +1747,45 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
+}
+
+
+/* ━━━ 전역 API 딤 오버레이 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.global-dim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.global-dim-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+
+/* ━━━ 이미지 스켈레톤 (shimmer) ━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.img-skeleton {
+  background: linear-gradient(90deg, #e8edf5 25%, #f2f5fa 50%, #e8edf5 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  border-radius: 4px;
+}
+
+/* 문항 카드 이미지 스켈레톤 */
+.qap-img-skeleton {
+  width: 100%;
+  min-height: 80px;
+  background: linear-gradient(90deg, #f0f2f5 25%, #e4e8ef 50%, #f0f2f5 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
 }
