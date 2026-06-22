@@ -8,7 +8,7 @@
 cd backend
 
 # 가상환경
-python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
+python3.13 -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # 의존성
 pip install -r requirements.txt
@@ -28,7 +28,7 @@ uvicorn app.main:app --reload
 cd backend
 
 # 가상환경
-python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
+python3.13 -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # 의존성
 pip install -r requirements.txt
@@ -43,8 +43,6 @@ cp .env.dev .env
 # 서버 실행
 uvicorn app.main:app --reload
 ```
-
-
 
 ### 2. 프론트엔드 세팅
 
