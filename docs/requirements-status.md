@@ -92,21 +92,54 @@
 
 ---
 
-## 인프라 (docs/infra/) — 🔴 계획/부분 구성
+## 인프라 (docs/infra/)
 
-> REQ 번호 없는 배포 계획 문서. 배포 플랫폼 결정은 [ADR 0001](adr/0001-backend-deploy-ecs-fargate.md)로 승격.
-> dev 환경은 구성됐으나(커밋 `f5e64fa`, 2026-05-16) IaC 산출물은 레포에 `backend/Dockerfile` 외 없음.
+> REQ 번호 없는 배포 영역. 배포 플랫폼 결정은 [ADR 0001](adr/0001-backend-deploy-ecs-fargate.md)로 승격.
+> 배포 방식은 **전부 수동(AWS CLI + Cloudflare 콘솔)** — IaC(Terraform 등)·CI/CD 없음. 레포 산출물은 `backend/Dockerfile`뿐.
+> 범례: 📄 명세만 · 🟡 부분/수동 · ✅ 구축 완료 · 🔴 계획/미착수
+
+### 아키텍처
+
+```
+브라우저 → Cloudflare(DNS+CDN+WAF)
+  ├─ dailystudy-dev.yejicraft-cf.com               → Cloudflare Pages (프론트)
+  └─ dailystudy-workbook-api-dev.yejicraft-cf.com  → Cloudflare Tunnel(pdf-extractor-dev)
+        → ECS Fargate Task (0.5 vCPU / 1GB)
+             ├─ backend (FastAPI :8000)
+             └─ cloudflared (Tunnel)   ← 인바운드 미개방, 아웃바운드 터널만
+        → Cloudflare R2 (스토리지)
+```
+
+### dev 환경 — ✅ 구축 완료 (수동)
+
+| 영역 | 구성된 리소스 | 상태 |
+|------|--------------|:----:|
+| AWS 계정/리전 | `504233295989` / `ap-northeast-2` | ✅ |
+| ECR | `pdf-extractor-backend` | ✅ |
+| ECS 클러스터/서비스 | `pdf-extractor-cluster` / `pdf-extractor-backend-dev-svc` (태스크 1) | ✅ |
+| 태스크 정의 | `pdf-extractor-backend-dev` (backend + cloudflared) | ✅ |
+| 보안그룹 | `sg-07d2336bbf0ec09ea` (인바운드 없음) | ✅ |
+| Secrets Manager | `pdf-extractor/dev` (R2 자격증명 + Tunnel 토큰) | ✅ |
+| IAM 역할 | `pdf-extractor-ecs-execution-role` | ✅ |
+| CloudWatch Logs | `/ecs/pdf-extractor-dev` (30일) | ✅ |
+| Cloudflare Tunnel | `pdf-extractor-dev` (ID `5793d4b8-…169a`) | ✅ |
+| Cloudflare R2 | 버킷 `dailystudy-dev`, prefix `pdf-extractor` | ✅ |
+| 프론트 (Cloudflare Pages) | `pdf-extractor-frontend` — `dist` 수동 업로드 | 🟡 수동 |
+
+> 상시 운영 ~$23/월, 미사용 시 `desired-count 0`으로 ~$2/월. 수동 배포·운영 절차는 `QUICKSTART.md` / [plan-infra-backend.md](infra/plan-infra-backend.md) 참고.
+
+### 계획 문서 / 미착수
 
 | 항목 | 문서 | 추가일 | 상태 |
 |------|------|--------|:----:|
-| 인프라 구성 명세 (ECS Fargate + Cloudflare Tunnel) | [spec-infra.md](infra/spec-infra.md) | 2026-05-16 | 📄 명세 |
-| 백엔드 배포 (ECS) | [plan-infra-backend.md](infra/plan-infra-backend.md) | 2026-05-16 | 🟡 dev 구성 |
-| 프론트엔드 배포 (Cloudflare Pages) | [plan-infra-frontend.md](infra/plan-infra-frontend.md) | 2026-05-16 | 🔴 계획 |
-| 관리 서버 API (Lambda 검토) | [plan-infra-backend-api.md](infra/plan-infra-backend-api.md) | 2026-05-04 | 🔴 계획 |
-| 추출 서버 (Lambda 검토) | [plan-infra-backend-extractor.md](infra/plan-infra-backend-extractor.md) | 2026-05-04 | 🔴 계획 |
+| 인프라 구성 명세 (ECS + Cloudflare Tunnel) | [spec-infra.md](infra/spec-infra.md) | 2026-05-16 | ✅ dev 반영 |
+| 백엔드 배포 절차 (ECS) | [plan-infra-backend.md](infra/plan-infra-backend.md) | 2026-05-16 | ✅ dev 구축 |
+| 프론트엔드 배포 (Cloudflare Pages) | [plan-infra-frontend.md](infra/plan-infra-frontend.md) | 2026-05-16 | 🟡 수동 배포 |
+| 관리 서버 API 분리 (Lambda 검토) | [plan-infra-backend-api.md](infra/plan-infra-backend-api.md) | 2026-05-04 | 🔴 계획(ADR 0001로 ECS 채택) |
+| 추출 서버 분리 (Lambda 검토) | [plan-infra-backend-extractor.md](infra/plan-infra-backend-extractor.md) | 2026-05-04 | 🔴 계획(ADR 0001로 ECS 채택) |
 | Java 전환 + DynamoDB 마이그레이션 | [plan-infra-backend-migration.md](infra/plan-infra-backend-migration.md) | 2026-05-16 | 🔴 향후 |
-
-> 범례(인프라): 📄 명세만 · 🟡 dev 부분 구성 · 🔴 계획/미배포
+| **prod 환경** | (도메인·구성 추후 결정) | — | 🔴 미착수 |
+| **IaC / CI·CD 자동화** | (Terraform·파이프라인 없음) | — | 🔴 미착수 |
 
 ---
 
