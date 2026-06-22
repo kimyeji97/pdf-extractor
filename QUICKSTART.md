@@ -24,6 +24,28 @@ cp .env.local .env
 uvicorn app.main:app --reload
 ```
 
+```bash
+cd backend
+
+# 가상환경
+python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 의존성
+pip install -r requirements.txt
+
+# 로컬용 .env 복사
+cp .env.dev .env
+
+# Tesseract 설치 (OCR fallback용)
+# macOS:  brew install tesseract tesseract-lang
+# Ubuntu: sudo apt install tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng
+
+# 서버 실행
+uvicorn app.main:app --reload
+```
+
+
+
 ### 2. 프론트엔드 세팅
 
 ```bash

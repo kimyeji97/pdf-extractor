@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import pdfplumber
+import fitz   # PyMuPDF — 배경색 픽셀 분석용
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 적응형 감지 버전
@@ -462,6 +463,10 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     # x 좌표 정밀화, y_bottom 조임, 오탐지 마킹을 순서대로 수행.
     _apply_precision_improvements(raw, pages_data)
 
+    # ── Step 5-c: 배경색 필터 — 비백색 배경 오탐지 마킹 ────────
+    # x/y 정밀화가 완료된 최종 bbox로 픽셀을 렌더링해야 정확하므로 5-b 이후에 실행.
+    _apply_bg_color_filter(raw, pdf_path)
+
     ## ── Step 6: 중복 제거 + Step 7: 정렬 ────────────────────
     # unique = _deduplicate_boundaries(raw)
     # return sorted(unique, key=lambda b: b.number)
@@ -571,6 +576,10 @@ def _fill_y_bottom(
 # 페이지 전체 크기와 ±2pt 이내로 일치하면 오탐지로 간주한다.
 _FALSE_POSITIVE_TOLERANCE = 2.0
 
+# 배경색 필터 임계값
+_BG_WHITE_MIN_RGB   = 230    # R/G/B 각각 이 값 이상인 픽셀을 "흰색"으로 판정 (0~255)
+_BG_WHITE_THRESHOLD = 0.60   # bbox 픽셀 중 흰색 비율이 이 값 미만이면 오탐지로 마킹
+
 
 def _calc_tight_y_bottom(
     question_words: list[dict],
@@ -622,6 +631,48 @@ def _is_false_positive(
         and abs(boundary.col_x1 - page_width) < _FALSE_POSITIVE_TOLERANCE
         and abs(boundary.y_bottom - page_height) < _FALSE_POSITIVE_TOLERANCE
     )
+
+
+def _is_white_background(page: fitz.Page, bbox: fitz.Rect) -> bool:
+    """bbox 영역을 렌더링하여 흰색 픽셀 비율을 계산한다.
+    흰색 픽셀: R, G, B 모두 _BG_WHITE_MIN_RGB 이상인 픽셀.
+    비율이 _BG_WHITE_THRESHOLD 이상이면 True(흰 배경), 미만이면 False(컬러 배경).
+    """
+    pix = page.get_pixmap(clip=bbox, colorspace=fitz.csRGB, alpha=False)
+    total = pix.width * pix.height
+    if total == 0:
+        return True
+    samples = pix.samples
+    white_count = sum(
+        1
+        for i in range(0, len(samples), 3)
+        if samples[i] >= _BG_WHITE_MIN_RGB
+        and samples[i + 1] >= _BG_WHITE_MIN_RGB
+        and samples[i + 2] >= _BG_WHITE_MIN_RGB
+    )
+    return (white_count / total) >= _BG_WHITE_THRESHOLD
+
+
+def _apply_bg_color_filter(
+    boundaries: list,
+    pdf_path: str,
+) -> None:
+    """배경이 흰색이 아닌 문항을 is_false_positive=True로 마킹한다.
+    이미 is_false_positive=True인 항목은 건너뛴다.
+    """
+    doc = fitz.open(pdf_path)
+    try:
+        for b in boundaries:
+            if b.is_false_positive:
+                continue
+            if b.page_index >= len(doc):
+                continue
+            page = doc[b.page_index]
+            bbox = fitz.Rect(b.col_x0, b.y_top, b.col_x1, b.y_bottom)
+            if not _is_white_background(page, bbox):
+                b.is_false_positive = True
+    finally:
+        doc.close()
 
 
 def _apply_precision_improvements(

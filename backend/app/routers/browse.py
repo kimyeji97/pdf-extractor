@@ -48,6 +48,7 @@ class JobSummary(BaseModel):
     boundaries_status: Optional[BoundariesStatus] = None
     total_question_count: Optional[int] = None
     workbook_name: Optional[str] = None
+    workbook_types: Optional[list[str]] = None
 
 
 class JobListResponse(BaseModel):
@@ -71,6 +72,7 @@ def list_jobs():
             boundaries_status=j.boundaries_status,
             total_question_count=j.total_question_count,
             workbook_name=j.workbook_name,
+            workbook_types=j.workbook_types,
         )
 
     source_jobs = [to_summary(j) for j in job_files if j.job_type == JobType.SOURCE]
@@ -94,6 +96,7 @@ def get_job(job_id: str):
         boundaries_status=job.boundaries_status,
         total_question_count=job.total_question_count,
         workbook_name=job.workbook_name,
+        workbook_types=job.workbook_types,
     )
 
 
@@ -124,6 +127,7 @@ def update_job_meta(job_id: str, body: JobMetaUpdate):
         boundaries_status=job.boundaries_status,
         total_question_count=job.total_question_count,
         workbook_name=job.workbook_name,
+        workbook_types=job.workbook_types,
     )
 
 
