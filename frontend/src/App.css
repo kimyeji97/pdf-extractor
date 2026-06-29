@@ -1110,6 +1110,128 @@ body {
 .wbh-btn--primary:hover { background: #1d4ed8; }
 .wbh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.wbh-preview-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid #e4e8ef;
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  flex-shrink: 0;
+}
+.wbh-preview-meta {
+  margin-left: 10px;
+  font-weight: 400;
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* ━━━ PdfPreviewPanel (pdf-*) ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.pdf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid #e4e8ef;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.pdf-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pdf-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: #d0d6e0;
+  margin: 0 6px;
+}
+.pdf-toolbar-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d0d6e0;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: #334155;
+  transition: all 0.1s;
+}
+.pdf-toolbar-btn:hover:not(:disabled) { background: #f0f4fb; border-color: #4a90e2; color: #2563eb; }
+.pdf-toolbar-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.pdf-toolbar-scale {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  min-width: 40px;
+  text-align: center;
+}
+.pdf-page-input {
+  width: 36px;
+  padding: 3px 4px;
+  font-size: 12px;
+  text-align: center;
+  border: 1px solid #d0d6e0;
+  border-radius: 4px;
+  outline: none;
+  color: #334155;
+}
+.pdf-page-input:focus { border-color: #4a90e2; }
+.pdf-toolbar-page-total {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.pdf-scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  background: #e5e7eb;
+}
+.pdf-scroll-container::-webkit-scrollbar { width: 6px; }
+.pdf-scroll-container::-webkit-scrollbar-thumb { background: #bcc3ce; border-radius: 4px; }
+
+.pdf-page-wrapper {
+  margin-bottom: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  background: #fff;
+  line-height: 0;
+}
+
+.pdf-loading, .pdf-error {
+  text-align: center;
+  padding: 40px 16px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+.pdf-error { color: #dc2626; }
+.pdf-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  gap: 8px;
+}
+.pdf-empty-icon { font-size: 36px; }
+.pdf-empty p { margin: 0; font-size: 13px; }
 
 /* ━━━ FilePagePanel (fpp-*) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
@@ -1467,34 +1589,14 @@ body {
 .qav-empty-icon { font-size: 36px; }
 
 
-/* ━━━ CoverFormatView (cfv-*) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* ━━━ CoverFormatView (cfv-*) — 2패널 수평 레이아웃 (REQ-D05) ━━━ */
 
-.cfv-layout {
+.cfv-panels {
   display: flex;
-  flex-direction: column;
-  height: 100%;
+  flex: 1;
   overflow: hidden;
 }
-.cfv-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-  max-width: 800px;
-  width: 100%;
-  margin: 0 auto;
-}
-.cfv-content::-webkit-scrollbar { width: 5px; }
-.cfv-content::-webkit-scrollbar-thumb { background: #d8dce4; border-radius: 4px; }
 
-.cfv-section-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 6px;
-}
 .cfv-section-desc {
   font-size: 12px;
   color: #64748b;
@@ -1502,13 +1604,6 @@ body {
   line-height: 1.6;
 }
 
-/* 업로드 섹션 */
-.cfv-upload-section {
-  background: #f8fafc;
-  border: 1px solid #e4e8ef;
-  border-radius: 10px;
-  padding: 18px 20px;
-}
 .cfv-upload-form {
   display: flex;
   flex-direction: column;
@@ -1516,8 +1611,9 @@ body {
 }
 
 .cfv-dropzone {
-  width: 200px;
-  height: 140px;
+  width: 100%;
+  max-width: 240px;
+  height: 160px;
   border: 2px dashed #d0d6e0;
   border-radius: 8px;
   cursor: pointer;
@@ -1588,37 +1684,6 @@ body {
   border: 1px solid #fca5a5;
   border-radius: 5px;
   padding: 6px 10px;
-}
-
-/* 목록 섹션 */
-.cfv-list-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.cfv-list-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.cfv-refresh-btn {
-  padding: 4px 10px;
-  font-size: 14px;
-  border: 1px solid #d0d6e0;
-  border-radius: 5px;
-  background: #fff;
-  cursor: pointer;
-  color: #64748b;
-  transition: background 0.1s;
-}
-.cfv-refresh-btn:hover:not(:disabled) { background: #f0f4fb; border-color: #4a90e2; color: #2563eb; }
-.cfv-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.cfv-empty {
-  color: #94a3b8;
-  font-size: 13px;
-  text-align: center;
-  padding: 32px 0;
 }
 
 .cfv-grid {

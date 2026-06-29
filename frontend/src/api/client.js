@@ -146,6 +146,17 @@ export async function getPageQuestions(jobId, pageNum) {
 }
 
 /**
+ * GET /api/jobs/{jobId}/questions
+ * 전체 페이지 문항 일괄 조회 (REQ-P01)
+ */
+export async function getAllQuestions(jobId) {
+  const res = await apiFetch(`${BASE_URL}/jobs/${jobId}/questions`);
+  if (!res.ok) throw new Error("전체 문항 조회 실패");
+  return res.json();
+  // { job_id, total_count, pages: [{ page_num, questions: [...] }] }
+}
+
+/**
  * POST /api/jobs/{jobId}/refresh
  * 전체 문서 재감지 요청 (비동기).
  * 즉시 { job_id, boundaries_status: "PROCESSING" } 를 반환.

@@ -29,7 +29,6 @@ function CardImg({ src, alt }) {
       <img
         src={src}
         alt={alt}
-        loading="lazy"
         onLoad={() => setLoaded(true)}
         style={{ display: loaded ? "block" : "none" }}
       />

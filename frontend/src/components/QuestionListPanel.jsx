@@ -1,53 +1,62 @@
 /**
- * 문항 목록 패널 (REQ-16)
+ * 문항 목록 패널 (REQ-16, REQ-P01)
  *
- * 선택된 PDF 파일의 모든 페이지에서 감지된 문항을 한 번에 조회하여
+ * 선택된 PDF 파일의 모든 페이지에서 감지된 문항을 일괄 조회 API 1회로 가져와
  * 체크박스 목록으로 보여준다.
  *
- * 페이지 필터: 체크박스로 여러 페이지 동시 선택 가능.
- *             직접 페이지 번호를 입력하여 필터할 수도 있다.
+ * 페이지 필터: 텍스트 입력으로 구간(3-10) 또는 개별(1,3,5) 지정.
  * 썸네일: 로딩 시간 단축을 위해 표시하지 않는다.
  */
 import { useEffect, useState, useMemo } from "react";
-import { getPages, getPageQuestions } from "../api/client";
+import { getAllQuestions } from "../api/client";
+
+/**
+ * 페이지 입력 파싱 (1-based → 0-based Set)
+ * 지원 형식: "3-10" (구간), "1,3,5" (개별), "1-5,8,10-12" (혼합)
+ */
+function parsePageInput(input) {
+  const pages = new Set();
+  input.split(",").forEach((token) => {
+    const trimmed = token.trim();
+    if (!trimmed) return;
+    const range = trimmed.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (range) {
+      const start = parseInt(range[1], 10);
+      const end = parseInt(range[2], 10);
+      for (let i = start; i <= end; i++) pages.add(i - 1);
+    } else {
+      const n = parseInt(trimmed, 10);
+      if (!isNaN(n) && n > 0) pages.add(n - 1);
+    }
+  });
+  return pages;
+}
 
 export default function QuestionListPanel({ jobId, selections = [], onToggle }) {
-  // grouped: [{ pageNum, questions: [...] }, ...]
-  const [groups, setGroups]           = useState([]);
-  const [loading, setLoading]         = useState(false);
-  const [error, setError]             = useState("");
-  // 선택된 페이지 번호 Set (비어있으면 전체 표시)
-  const [selectedPages, setSelectedPages] = useState(new Set());
-  // 페이지 번호 직접 입력 필드
-  const [pageInput, setPageInput]     = useState("");
+  const [groups, setGroups]       = useState([]);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
+  const [pageInput, setPageInput] = useState("");
+  const [filterPages, setFilterPages] = useState(new Set());
 
   useEffect(() => {
-    if (!jobId) { setGroups([]); return; }
+    if (!jobId) { setGroups([]); setTotalPages(0); return; }
     let cancelled = false;
     setLoading(true);
     setError("");
     setGroups([]);
-    setSelectedPages(new Set());
     setPageInput("");
+    setFilterPages(new Set());
 
     (async () => {
       try {
-        const pagesData = await getPages(jobId);
-        const pages = pagesData.pages || [];
-
-        const results = await Promise.all(
-          pages.map(async (pg) => {
-            try {
-              const d = await getPageQuestions(jobId, pg.page_num);
-              return { pageNum: pg.page_num, questions: d.questions || [] };
-            } catch {
-              return { pageNum: pg.page_num, questions: [] };
-            }
-          })
-        );
-
+        const data = await getAllQuestions(jobId);
         if (!cancelled) {
-          setGroups(results.filter((g) => g.questions.length > 0));
+          const pages = (data.pages || []).filter((g) => g.questions.length > 0);
+          setGroups(pages.map((g) => ({ pageNum: g.page_num, questions: g.questions })));
+          const maxPage = pages.reduce((max, g) => Math.max(max, g.page_num), 0);
+          setTotalPages(maxPage + 1);
         }
       } catch (e) {
         if (!cancelled) setError(e.message);
@@ -65,33 +74,29 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
   );
 
   const filteredGroups = useMemo(() => {
-    if (selectedPages.size === 0) return groups;
-    return groups.filter((g) => selectedPages.has(g.pageNum));
-  }, [groups, selectedPages]);
-
-  const togglePageFilter = (pageNum) => {
-    setSelectedPages((prev) => {
-      const next = new Set(prev);
-      if (next.has(pageNum)) next.delete(pageNum);
-      else next.add(pageNum);
-      return next;
-    });
-  };
+    if (filterPages.size === 0) return groups;
+    return groups.filter((g) => filterPages.has(g.pageNum));
+  }, [groups, filterPages]);
 
   const handlePageInputKeyDown = (e) => {
     if (e.key !== "Enter") return;
-    const nums = pageInput.split(/[\s,]+/).map(Number).filter((n) => !isNaN(n) && n > 0);
-    if (nums.length === 0) return;
-    setSelectedPages((prev) => {
-      const next = new Set(prev);
-      nums.forEach((n) => {
-        const pageNum = n - 1; // 1-based → 0-based
-        const exists = groups.some((g) => g.pageNum === pageNum);
-        if (exists) next.add(pageNum);
-      });
-      return next;
+    const trimmed = pageInput.trim();
+    if (!trimmed) {
+      setFilterPages(new Set());
+      return;
+    }
+    const parsed = parsePageInput(trimmed);
+    // 존재하는 페이지만 필터
+    const valid = new Set();
+    parsed.forEach((p) => {
+      if (groups.some((g) => g.pageNum === p)) valid.add(p);
     });
+    setFilterPages(valid);
+  };
+
+  const handleClearFilter = () => {
     setPageInput("");
+    setFilterPages(new Set());
   };
 
   if (!jobId) {
@@ -104,36 +109,21 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
 
   return (
     <div className="qlist-container">
-      {/* 페이지 필터 — 체크박스 방식 */}
+      {/* 페이지 필터 — 텍스트 입력 */}
       <div className="qlist-filter-wrap">
-        <div className="qlist-filter-chips">
-          {groups.map((g) => {
-            const active = selectedPages.has(g.pageNum);
-            return (
-              <button
-                key={g.pageNum}
-                className={`qlist-page-chip${active ? " qlist-page-chip--active" : ""}`}
-                onClick={() => togglePageFilter(g.pageNum)}
-                title={`${g.pageNum + 1}페이지 (${g.questions.length}개)`}
-              >
-                {g.pageNum + 1}p
-              </button>
-            );
-          })}
-        </div>
         <div className="qlist-filter-input-row">
           <input
             className="qlist-page-input"
             type="text"
-            placeholder="페이지 번호 입력 후 Enter (예: 3, 5, 7)"
+            placeholder={totalPages > 0 ? `페이지 입력 (1-${totalPages}) — 예: 1-5,8,10` : "페이지 입력 — 예: 1-5,8,10"}
             value={pageInput}
             onChange={(e) => setPageInput(e.target.value)}
             onKeyDown={handlePageInputKeyDown}
           />
-          {selectedPages.size > 0 && (
+          {filterPages.size > 0 && (
             <button
               className="qlist-clear-filter"
-              onClick={() => setSelectedPages(new Set())}
+              onClick={handleClearFilter}
               title="필터 초기화"
             >
               ✕

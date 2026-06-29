@@ -5,6 +5,7 @@ PATCH  /api/jobs/{job_id}                                                - job �
 POST   /api/jobs/{job_id}/refresh                                        - 전체 문서 재감지 (비동기)
 GET    /api/jobs/{job_id}/pages                                          - 페이지 목록 + 썸네일 URL
 GET    /api/jobs/{job_id}/pages/{n}/thumbnail                            - 썸네일 PNG 반환
+GET    /api/jobs/{job_id}/questions                                      - 전체 페이지 문항 일괄 조회 (REQ-P01)
 GET    /api/jobs/{job_id}/pages/{n}/questions                            - 문항 목록 (자동+수동 병합)
 GET    /api/jobs/{job_id}/pages/{n}/questions/{q}/thumbnail              - 자동 문항 크롭 썸네일
 PATCH  /api/jobs/{job_id}/pages/{n}/questions/{q}                        - 자동 문항 타이틀 수정 (REQ-12)
@@ -321,6 +322,114 @@ class QuestionListResponse(BaseModel):
     job_id: str
     page_num: int
     questions: List[QuestionInfo]
+
+
+# ── 전체 문항 일괄 조회 (REQ-P01) ─────────────────────────────
+
+class PageQuestions(BaseModel):
+    page_num: int
+    questions: List[QuestionInfo]
+
+
+class AllQuestionsResponse(BaseModel):
+    job_id: str
+    total_count: int
+    pages: List[PageQuestions]
+
+
+@router.get("/jobs/{job_id}/questions", response_model=AllQuestionsResponse)
+def list_all_questions(job_id: str):
+    """
+    전체 페이지의 문항을 한 번에 반환한다 (REQ-P01).
+    boundaries 캐시·수동 문항·상태 파일을 각 1회만 읽어 N+1 문제를 해결한다.
+    """
+    job = storage.get_status(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+
+    if job.boundaries_status == BoundariesStatus.PROCESSING:
+        return AllQuestionsResponse(job_id=job_id, total_count=0, pages=[])
+
+    # 경계 캐시 — 1회 읽기
+    cached = storage.get_boundaries_cache(job_id)
+    if cached is not None:
+        boundaries = [QuestionBoundary(**b) for b in cached]
+    else:
+        pdf_bytes = storage.read_file(storage.original_key(job_id))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = str(Path(tmpdir) / "original.pdf")
+            Path(pdf_path).write_bytes(pdf_bytes)
+            boundaries = detect_question_boundaries(pdf_path)
+        storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
+
+        qpp: dict[str, int] = {}
+        for b in boundaries:
+            key = str(b.page_index)
+            qpp[key] = qpp.get(key, 0) + 1
+        job.boundaries_status = BoundariesStatus.DONE
+        job.total_question_count = len(boundaries)
+        job.questions_per_page = qpp
+        storage.put_status(job)
+
+    # 수동 문항 — 1회 읽기
+    manual_list = storage.get_manual_questions(job_id)
+
+    # 페이지별 그룹핑
+    page_indices: dict[int, list] = {}
+    for b in boundaries:
+        page_indices.setdefault(b.page_index, []).append(b)
+
+    manual_by_page: dict[int, list] = {}
+    for m in manual_list:
+        manual_by_page.setdefault(m.get("page_num"), []).append(m)
+
+    all_page_nums = sorted(set(list(page_indices.keys()) + list(manual_by_page.keys())))
+
+    result_pages = []
+    total_count = 0
+    for page_num in all_page_nums:
+        # 자동 감지 문항
+        page_boundaries = sorted(page_indices.get(page_num, []), key=lambda x: (x.col, x.y_top))
+        auto_questions = [
+            QuestionInfo(
+                question_num=b.number,
+                manual_id=None,
+                question_id=f"{job_id}:{page_num}:{b.number}",
+                thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/{b.number}/thumbnail",
+                bbox=BBox(x0=b.col_x0, y0=b.y_top, x1=b.col_x1, y1=b.y_bottom),
+                col=b.col,
+                title=b.title,
+                is_false_positive=b.is_false_positive,
+                is_manual=False,
+            )
+            for b in page_boundaries
+        ]
+
+        # 수동 추가 문항
+        page_manual = sorted(manual_by_page.get(page_num, []), key=lambda m: m["region"]["y0"])
+        manual_questions = [
+            QuestionInfo(
+                question_num=None,
+                manual_id=m["manual_id"],
+                question_id=f"{job_id}:{page_num}:manual:{m['manual_id']}",
+                thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/manual/{m['manual_id']}/thumbnail",
+                bbox=BBox(
+                    x0=m["region"]["x0"], y0=m["region"]["y0"],
+                    x1=m["region"]["x1"], y1=m["region"]["y1"],
+                ),
+                col=0,
+                title=m.get("title"),
+                is_false_positive=False,
+                is_manual=True,
+            )
+            for m in page_manual
+        ]
+
+        questions = auto_questions + manual_questions
+        total_count += len(questions)
+        result_pages.append(PageQuestions(page_num=page_num, questions=questions))
+
+    return AllQuestionsResponse(job_id=job_id, total_count=total_count, pages=result_pages)
 
 
 @router.get("/jobs/{job_id}/pages/{page_num}/questions", response_model=QuestionListResponse)

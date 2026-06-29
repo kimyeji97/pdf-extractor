@@ -1,14 +1,14 @@
 /**
- * 생성된 문제집 이력 뷰 (REQ-21~22)
+ * 생성된 문제집 이력 뷰 (REQ-21~22, REQ-F06)
  *
  * 기능:
  *   - 목록 조회 + 재다운로드
- *   - 문제집 클릭 → 오른쪽에 WorkbookPreview 미리보기 표시
+ *   - 문제집 클릭 → 오른쪽에 PDF 미리보기 (확대/축소/페이지 이동/스크롤)
  *   - 편집으로 불러오기
  */
 import { useState, useEffect, useCallback } from "react";
 import { getWorkbooks, getStatus } from "../api/client";
-import WorkbookPreview from "../components/WorkbookPreview";
+import PdfPreviewPanel from "../components/PdfPreviewPanel";
 
 function fmtDate(iso) {
   if (!iso) return "-";
@@ -20,29 +20,14 @@ function fmtDate(iso) {
   } catch { return iso; }
 }
 
-/** WorkbookSelectionItem[] → WorkbookPreview 용 basket 배열로 변환 */
-function toPreviewItems(selections) {
-  return (selections || []).map((sel, i) => ({
-    questionId:   sel.question_id || sel.manual_id || String(sel.question_num ?? i),
-    questionNum:  sel.question_num,
-    pageNum:      sel.page_num,
-    jobId:        sel.job_id,
-    workbookName: sel.workbook_name || "",
-    isManual:     Boolean(sel.manual_id),
-    manualId:     sel.manual_id,
-    displayTitle: sel.title,
-    thumbnailUrl: sel.manual_id
-      ? `/api/jobs/${sel.job_id}/pages/${sel.page_num}/questions/manual/${sel.manual_id}/thumbnail`
-      : `/api/jobs/${sel.job_id}/pages/${sel.page_num}/questions/${sel.question_num}/thumbnail`,
-  }));
-}
-
 export default function WorkbookHistoryView({ onLoadForEdit }) {
   const [workbooks, setWorkbooks]         = useState([]);
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState("");
   const [downloadingId, setDownloadingId] = useState(null);
   const [selectedWb, setSelectedWb]       = useState(null);
+  const [pdfUrl, setPdfUrl]               = useState(null);
+  const [pdfLoading, setPdfLoading]       = useState(false);
 
   const fetchWorkbooks = useCallback(async () => {
     setLoading(true);
@@ -61,6 +46,30 @@ export default function WorkbookHistoryView({ onLoadForEdit }) {
   }, []);
 
   useEffect(() => { fetchWorkbooks(); }, [fetchWorkbooks]);
+
+  // ── 문제집 선택 시 PDF URL 조회 ─────────────────────────
+  const handleSelectWb = useCallback(async (wb) => {
+    if (selectedWb?.workbook_id === wb.workbook_id) {
+      setSelectedWb(null);
+      setPdfUrl(null);
+      return;
+    }
+    setSelectedWb(wb);
+    setPdfUrl(null);
+
+    if (!wb.result_job_id) return;
+    setPdfLoading(true);
+    try {
+      const data = await getStatus(wb.result_job_id);
+      if (data.download_url) {
+        setPdfUrl(data.download_url);
+      }
+    } catch {
+      // PDF URL 조회 실패 — PdfPreviewPanel이 에러 표시
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [selectedWb]);
 
   const handleDownload = async (wb) => {
     if (!wb.result_job_id) return;
@@ -87,8 +96,6 @@ export default function WorkbookHistoryView({ onLoadForEdit }) {
   const handleLoadForEdit = (wb) => {
     onLoadForEdit?.(wb.workbook_id);
   };
-
-  const previewItems = selectedWb ? toPreviewItems(selectedWb.selections) : [];
 
   return (
     <div className="wbh-container view-layout" style={{ display: "flex", flexDirection: "row", gap: 0, overflow: "hidden" }}>
@@ -119,7 +126,7 @@ export default function WorkbookHistoryView({ onLoadForEdit }) {
               <div
                 key={wb.workbook_id ?? idx}
                 className={`wbh-item${selectedWb?.workbook_id === wb.workbook_id ? " wbh-item--selected" : ""}`}
-                onClick={() => setSelectedWb(selectedWb?.workbook_id === wb.workbook_id ? null : wb)}
+                onClick={() => handleSelectWb(wb)}
                 style={{ cursor: "pointer" }}
               >
                 <div className="wbh-item-info">
@@ -158,24 +165,29 @@ export default function WorkbookHistoryView({ onLoadForEdit }) {
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {selectedWb ? (
           <>
-            <div style={{ padding: "10px 16px", borderBottom: "1px solid #e2e8f0", fontSize: 13, fontWeight: 600, color: "#334155" }}>
+            <div className="wbh-preview-header">
               {selectedWb.name || selectedWb.filename || "문제집 미리보기"}
-              <span style={{ marginLeft: 10, fontWeight: 400, color: "#64748b", fontSize: 12 }}>
+              <span className="wbh-preview-meta">
                 {selectedWb.layout} · {selectedWb.question_count}문항
               </span>
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
-              <WorkbookPreview
-                selections={previewItems}
-                layout={selectedWb.layout || "세로 2단"}
-                previewWidth={320}
-              />
-            </div>
+            {pdfLoading ? (
+              <div className="qav-empty-state">
+                <p>PDF 로딩 중...</p>
+              </div>
+            ) : pdfUrl ? (
+              <PdfPreviewPanel pdfUrl={pdfUrl} />
+            ) : (
+              <div className="qav-empty-state">
+                <div className="qav-empty-icon">📄</div>
+                <p>PDF를 불러올 수 없습니다.<br />PDF가 아직 생성 중이거나 만료되었을 수 있습니다.</p>
+              </div>
+            )}
           </>
         ) : (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", flexDirection: "column", gap: 8 }}>
-            <div style={{ fontSize: 32 }}>📄</div>
-            <p style={{ margin: 0, fontSize: 13 }}>목록에서 문제집을 클릭하면 미리보기가 표시됩니다.</p>
+          <div className="qav-empty-state">
+            <div className="qav-empty-icon">📄</div>
+            <p>목록에서 문제집을 클릭하면<br />미리보기가 표시됩니다.</p>
           </div>
         )}
       </div>
