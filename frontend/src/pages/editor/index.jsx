@@ -214,7 +214,7 @@ export default function EditorPage() {
   useEffect(() => () => { if (exportPollRef.current) clearInterval(exportPollRef.current); }, []);
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
       {/* 컨텍스트 바 */}
       {selectedJobFilename && (
@@ -225,7 +225,7 @@ export default function EditorPage() {
         </Box>
       )}
 
-      <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
         {/* ① 파일 목록 */}
         <Paper elevation={0} sx={{ width: panelWidths.files, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}>

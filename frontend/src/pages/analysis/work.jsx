@@ -228,7 +228,7 @@ export default function AnalysisWorkPage() {
   useEffect(() => { setPreviewLoaded(false); }, [pageThumbUrl]);
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
       {/* ── 컨텍스트 바 ─────────────────────────────── */}
       <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0, bgcolor: "background.paper" }}>
@@ -251,7 +251,7 @@ export default function AnalysisWorkPage() {
       </Box>
 
       {/* ── 3패널 ───────────────────────────────────── */}
-      <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
         {/* ① 페이지 목록 */}
         <Paper

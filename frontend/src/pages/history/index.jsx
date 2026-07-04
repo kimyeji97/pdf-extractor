@@ -81,7 +81,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <Box sx={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
       {/* ── 목록 패널 ───────────────────────────────── */}
       <Paper elevation={0} sx={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}>
