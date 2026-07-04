@@ -57,7 +57,10 @@ export default function AnalysisWorkPage() {
   const [panelRefreshTrigger, setPanelRefreshTrigger] = useState(0);
 
   // ── 패널 너비 ─────────────────────────────────────────
-  const [panelWidths, setPanelWidths] = useState({ section1: 200 });
+  // section1(페이지 목록)은 고정, section3(문항 목록)만 리사이즈 (200~800px, 기본 420px)
+  // section2(미리보기)는 남는 공간을 채움
+  const SECTION1_WIDTH = 200;
+  const [panelWidths, setPanelWidths] = useState({ section3: 420 });
   const resizingRef = useRef(null);
 
   // ── 수동 추가 ─────────────────────────────────────────
@@ -130,8 +133,9 @@ export default function AnalysisWorkPage() {
   useEffect(() => {
     const onMove = (e) => {
       if (!resizingRef.current) return;
-      const { panel, startX, startWidth } = resizingRef.current;
-      const newWidth = Math.max(160, Math.min(400, startWidth + (e.clientX - startX)));
+      const { panel, startX, startWidth, dir } = resizingRef.current;
+      // 드래그 시작 시점의 너비(startWidth)를 기준으로 마우스 이동량만큼 상대 증감
+      const newWidth = Math.max(200, Math.min(800, startWidth + (e.clientX - startX) * dir));
       setPanelWidths((prev) => ({ ...prev, [panel]: newWidth }));
     };
     const onUp = () => {
@@ -144,11 +148,11 @@ export default function AnalysisWorkPage() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
-  const startResize = (panel, e) => {
+  const startResize = (panel, dir, e) => {
     e.preventDefault();
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-    resizingRef.current = { panel, startX: e.clientX, startWidth: panelWidths[panel] };
+    resizingRef.current = { panel, dir, startX: e.clientX, startWidth: panelWidths[panel] };
   };
 
   // ── 수동 문항 드로우 ──────────────────────────────────
@@ -257,7 +261,7 @@ export default function AnalysisWorkPage() {
         <Paper
           elevation={0}
           sx={{
-            width: panelWidths.section1, flexShrink: 0,
+            width: SECTION1_WIDTH, flexShrink: 0,
             display: "flex", flexDirection: "column", overflow: "hidden",
             borderRadius: 0, borderRight: 1, borderColor: "divider",
             position: "relative",
@@ -315,12 +319,10 @@ export default function AnalysisWorkPage() {
           </Box>
         </Paper>
 
-        <ResizeHandle onMouseDown={(e) => startResize("section1", e)} />
-
-        {/* ② 페이지 미리보기 */}
+        {/* ② 페이지 미리보기 (남는 공간 채움) */}
         <Paper
           elevation={0}
-          sx={{ flex: 1, minWidth: 160, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}
+          sx={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}
         >
           <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <Typography variant="subtitle2" fontWeight={700}>② 페이지 미리보기</Typography>
@@ -412,11 +414,13 @@ export default function AnalysisWorkPage() {
           </Box>
         </Paper>
 
-        {/* ③ 문항 목록 */}
+        <ResizeHandle onMouseDown={(e) => startResize("section3", -1, e)} />
+
+        {/* ③ 문항 목록 (리사이즈 대상, 200~800px) */}
         <Paper
           elevation={0}
           sx={{
-            width: panelWidths.section1 * 2.5, flexShrink: 0,
+            width: panelWidths.section3, flexShrink: 0,
             display: "flex", flexDirection: "column", overflow: "hidden",
             borderRadius: 0, borderLeft: 1, borderColor: "divider",
             position: "relative",
