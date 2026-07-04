@@ -1,12 +1,14 @@
 /**
- * 생성 이력 페이지 (Aurora MUI 레이아웃 적용)
+ * 생성 이력 페이지 (REQ-F06)
+ *
+ * 문제집 목록 선택 시 react-pdf 기반 PDF 뷰어로 미리보기.
+ * 확대/축소, 페이지 번호 입력 이동, 스크롤 탐색 지원.
  */
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
@@ -18,7 +20,7 @@ import Divider from "@mui/material/Divider";
 import Tooltip from "@mui/material/Tooltip";
 import { Icon } from "@iconify/react";
 
-import WorkbookPreview from "components/WorkbookPreview";
+import PdfPreviewPanel from "components/PdfPreviewPanel";
 import { getWorkbooks, getStatus } from "api/client";
 
 function fmtDate(iso) {
@@ -28,21 +30,6 @@ function fmtDate(iso) {
   } catch { return iso; }
 }
 
-function toPreviewItems(selections) {
-  return (selections || []).map((sel, i) => ({
-    questionId:   sel.question_id || sel.manual_id || String(sel.question_num ?? i),
-    questionNum:  sel.question_num,
-    pageNum:      sel.page_num,
-    jobId:        sel.job_id,
-    workbookName: sel.workbook_name || "",
-    isManual:     Boolean(sel.manual_id),
-    manualId:     sel.manual_id,
-    displayTitle: sel.title,
-    thumbnailUrl: sel.manual_id
-      ? `/api/jobs/${sel.job_id}/pages/${sel.page_num}/questions/manual/${sel.manual_id}/thumbnail`
-      : `/api/jobs/${sel.job_id}/pages/${sel.page_num}/questions/${sel.question_num}/thumbnail`,
-  }));
-}
 
 export default function HistoryPage() {
   const navigate = useNavigate();
@@ -51,6 +38,8 @@ export default function HistoryPage() {
   const [error, setError]                 = useState("");
   const [downloadingId, setDownloadingId] = useState(null);
   const [selectedWb, setSelectedWb]       = useState(null);
+  const [pdfUrl, setPdfUrl]               = useState(null);
+  const [pdfLoading, setPdfLoading]       = useState(false);
 
   const fetchWorkbooks = useCallback(async () => {
     setLoading(true); setError("");
@@ -77,7 +66,19 @@ export default function HistoryPage() {
     finally     { setDownloadingId(null); }
   };
 
-  const previewItems = selectedWb ? toPreviewItems(selectedWb.selections) : [];
+  const handleSelectWb = async (wb) => {
+    if (selectedWb?.workbook_id === wb.workbook_id) {
+      setSelectedWb(null); setPdfUrl(null); return;
+    }
+    setSelectedWb(wb); setPdfUrl(null);
+    if (!wb.result_job_id) return;
+    setPdfLoading(true);
+    try {
+      const data = await getStatus(wb.result_job_id);
+      if (data.download_url) setPdfUrl(data.download_url);
+    } catch { /* PDF URL 로드 실패 시 무시 */ }
+    finally { setPdfLoading(false); }
+  };
 
   return (
     <Box sx={{ display: "flex", height: "100%", overflow: "hidden" }}>
@@ -112,7 +113,7 @@ export default function HistoryPage() {
               <Box key={wb.workbook_id ?? idx}>
                 <ListItemButton
                   selected={selectedWb?.workbook_id === wb.workbook_id}
-                  onClick={() => setSelectedWb(selectedWb?.workbook_id === wb.workbook_id ? null : wb)}
+                  onClick={() => handleSelectWb(wb)}
                   sx={{ px: 2, py: 1.5, alignItems: "flex-start" }}
                 >
                   <ListItemText
@@ -168,8 +169,14 @@ export default function HistoryPage() {
               <Chip label={selectedWb.layout} size="small" variant="outlined" />
               <Chip label={`${selectedWb.question_count}문항`} size="small" variant="outlined" />
             </Box>
-            <Box sx={{ flex: 1, overflowY: "auto", p: 3, display: "flex", justifyContent: "center" }}>
-              <WorkbookPreview selections={previewItems} layout={selectedWb.layout || "세로 2단"} previewWidth={320} />
+            <Box sx={{ flex: 1, overflow: "hidden" }}>
+              {pdfLoading ? (
+                <Box sx={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <CircularProgress size={32} />
+                </Box>
+              ) : (
+                <PdfPreviewPanel pdfUrl={pdfUrl} />
+              )}
             </Box>
           </>
         ) : (
