@@ -23,14 +23,22 @@ const API_ROOT = BASE_URL.replace(/\/api$/, "");
 
 function CardImg({ src, alt }) {
   const [loaded, setLoaded] = useState(false);
+  const [error, setError]   = useState(false);
   return (
     <div className="qap-card-img">
-      {!loaded && <div className="qap-img-skeleton" />}
+      {!loaded && !error && <div className="qap-img-skeleton" />}
+      {error && (
+        <div className="qap-card-img-error">
+          <span style={{ fontSize: 18 }}>🖼</span>
+          <span>이미지를 불러올 수 없습니다</span>
+        </div>
+      )}
       <img
         src={src}
         alt={alt}
         onLoad={() => setLoaded(true)}
-        style={{ display: loaded ? "block" : "none" }}
+        onError={() => { setError(true); setLoaded(false); }}
+        style={{ display: loaded && !error ? "block" : "none" }}
       />
     </div>
   );
