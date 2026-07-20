@@ -232,23 +232,25 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
         />
       </div>
 
-      {error && <p style={styles.error}>{error}</p>}
+      <div style={styles.scrollArea}>
+        {error && <p style={styles.error}>{error}</p>}
 
-      {!loading && filteredJobs.length === 0 ? (
-        <p style={styles.empty}>{sourceJobs.length === 0 ? "업로드된 파일 없음" : "검색 결과 없음"}</p>
-      ) : (
-        <ul style={styles.list}>
-          {filteredJobs.map((job) => (
-            <JobCard
-              key={job.job_id}
-              job={job}
-              isSelected={selectedJobId === job.job_id}
-              onSelect={onSelect}
-              onMetaUpdated={fetchJobs}
-            />
-          ))}
-        </ul>
-      )}
+        {!loading && filteredJobs.length === 0 ? (
+          <p style={styles.empty}>{sourceJobs.length === 0 ? "업로드된 파일 없음" : "검색 결과 없음"}</p>
+        ) : (
+          <ul style={styles.list}>
+            {filteredJobs.map((job) => (
+              <JobCard
+                key={job.job_id}
+                job={job}
+                isSelected={selectedJobId === job.job_id}
+                onSelect={onSelect}
+                onMetaUpdated={fetchJobs}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
@@ -256,12 +258,23 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
 const styles = {
   container: {
     width: "100%",
+    height: "100%",
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 0,
+    boxSizing: "border-box",
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 10,
+    flexShrink: 0,
+  },
+  scrollArea: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
   },
   sectionLabel: {
     fontSize: 12,
@@ -361,6 +374,7 @@ const styles = {
     flexDirection: "column",
     gap: 4,
     marginBottom: 8,
+    flexShrink: 0,
   },
   searchInput: {
     fontSize: 11,

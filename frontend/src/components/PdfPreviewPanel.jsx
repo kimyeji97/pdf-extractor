@@ -78,10 +78,18 @@ export default function PdfPreviewPanel({ pdfUrl }) {
   }, [numPages, scale, currentPage]);
 
   // ── 페이지 이동 ──────────────────────────────────────────
+  // scrollIntoView는 스크롤 조상을 자동 선택하고, smooth 애니메이션은
+  // react-pdf Page의 지속적 리페인트에 취소되어 동작하지 않는다.
+  // 스크롤 컨테이너를 명시적으로 지정해 목표 좌표로 즉시 스크롤한다.
   const scrollToPage = useCallback((pageNum) => {
     const el = pageRefs.current[pageNum - 1];
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const container = containerRef.current;
+    if (el && container) {
+      const top =
+        el.getBoundingClientRect().top -
+        container.getBoundingClientRect().top +
+        container.scrollTop;
+      container.scrollTo({ top, behavior: "instant" });
     }
   }, []);
 

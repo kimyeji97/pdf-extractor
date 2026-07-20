@@ -169,9 +169,9 @@ export default function HistoryPage() {
               <Chip label={selectedWb.layout} size="small" variant="outlined" />
               <Chip label={`${selectedWb.question_count}문항`} size="small" variant="outlined" />
             </Box>
-            <Box sx={{ flex: 1, overflow: "hidden" }}>
+            <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {pdfLoading ? (
-                <Box sx={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <CircularProgress size={32} />
                 </Box>
               ) : (

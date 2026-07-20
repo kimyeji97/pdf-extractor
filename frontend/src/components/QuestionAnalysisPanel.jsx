@@ -14,8 +14,7 @@ import {
   getPageQuestions,
   updateQuestionTitle,
   updateManualQuestionTitle,
-  deleteQuestion,
-  deleteManualQuestion,
+  bulkDeleteQuestions,
 } from "../api/client";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
@@ -98,7 +97,8 @@ export default function QuestionAnalysisPanel({
     });
   };
 
-  const allCheckable = questions.filter((q) => !q.is_false_positive);
+  // 전체 선택 대상: 오탐지 의심 문항 포함 (REQ-B06/B07 — 오탐도 벌크 삭제 대상)
+  const allCheckable = questions;
   const allChecked   =
     allCheckable.length > 0 && allCheckable.every((q) => checkedIds.has(q.question_id));
 
@@ -151,12 +151,21 @@ export default function QuestionAnalysisPanel({
     setQuestions((prev) => prev.filter((q) => !checkedIds.has(q.question_id)));
     setCheckedIds(new Set());
 
-    const calls = deletedItems.map((q) =>
-      q.is_manual
-        ? deleteManualQuestion(jobId, pageNum, q.manual_id).catch(() => null)
-        : deleteQuestion(jobId, pageNum, q.question_num).catch(() => null)
-    );
-    await Promise.all(calls);
+    // 자동/수동을 분리해 벌크 삭제 1회 호출 (단건 동시 호출의 경쟁 상태 회피)
+    const questionNums = deletedItems
+      .filter((q) => !q.is_manual)
+      .map((q) => q.question_num);
+    const manualIds = deletedItems
+      .filter((q) => q.is_manual)
+      .map((q) => q.manual_id);
+
+    try {
+      await bulkDeleteQuestions(jobId, pageNum, questionNums, manualIds);
+    } catch {
+      // 실패 시 서버 상태로 목록 복원
+      await fetchQuestions();
+      return;
+    }
 
     showUndoToast(`${deletedItems.length}개 문항이 삭제되었습니다.`, async () => {
       await fetchQuestions();
@@ -241,9 +250,8 @@ export default function QuestionAnalysisPanel({
                   type="checkbox"
                   className="qap-card-check"
                   checked={isChecked}
-                  onChange={() => !q.is_false_positive && toggleCheck(q.question_id)}
-                  disabled={q.is_false_positive}
-                  title={q.is_false_positive ? "오탐지 의심 문항은 직접 확인 후 삭제하세요." : ""}
+                  onChange={() => toggleCheck(q.question_id)}
+                  title={q.is_false_positive ? "오탐지 의심 문항입니다. 이미지를 확인한 뒤 선택하여 삭제할 수 있습니다." : ""}
                 />
 
                 <div className="qap-card-badges">

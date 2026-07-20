@@ -418,6 +418,10 @@ def extract_questions_v2(
         if wb_name:
             label_parts.append(wb_name)
         label_parts.append(page_label)
+        # REQ-C07: 문항 이름 추가 (프론트 미리보기의 displayTitle과 동일 문자열)
+        q_name = (getattr(sel, "label", None) or "").strip()
+        if q_name:
+            label_parts.append(q_name)
         src_label = ". ".join(label_parts)
 
         # ── 구형 수동 지정 영역 (custom_region) ─────────────
@@ -535,18 +539,19 @@ def _prepend_cover_image(
     cover_doc.close()
 
 
-def _get_korean_font(dst: fitz.Document) -> str:
+def _get_label_font() -> "fitz.Font":
     """
-    한글을 지원하는 폰트를 dst 문서에 등록하고 폰트 이름을 반환한다.
-    PyMuPDF 내장 korea 폰트를 사용한다.
-    등록 실패 시 기본 폰트 이름(helv)을 반환하여 무해하게 폴백한다.
+    라벨 렌더용 한글 폰트(PyMuPDF 내장 'korea')를 반환한다.
+
+    라벨은 TextWriter로 그린다 — `Document.add_font`(구버전 부재) + `insert_text`
+    조합은 이 PyMuPDF 버전에서 helv로 폴백되어 한글이 점(·)으로 렌더되는 버그가 있다.
+    TextWriter + Font 객체는 유니코드 한글을 정상 렌더하며 write_text 시 폰트를 임베드한다.
+    폭 계산(text_length)에도 이 Font를 사용한다(REQ-B09 폰트 자동 축소).
     """
     try:
-        font = fitz.Font("korea")
-        dst.add_font("KOR", fontbuffer=font.buffer, subset=False)
-        return "KOR"
+        return fitz.Font("korea")
     except Exception:
-        return "helv"
+        return fitz.Font("helv")
 
 
 def _build_grid_pdf(
@@ -591,7 +596,7 @@ def _build_grid_pdf(
 
     src_cache: dict[str, fitz.Document] = {}
     dst = fitz.open()
-    korean_font = _get_korean_font(dst)
+    label_font = _get_label_font()
     current_page: fitz.Page | None = None
 
     for idx, region in enumerate(regions):
@@ -642,13 +647,23 @@ def _build_grid_pdf(
         if label_text and current_page is not None:
             label_rect = fitz.Rect(cell_x, cell_y, cell_x + cell_w, cell_y + label_h)
             current_page.draw_rect(label_rect, color=None, fill=(0.96, 0.96, 0.98), width=0)
-            current_page.insert_text(
-                fitz.Point(cell_x + 2, cell_y + label_h - 4),
+            # REQ-B09: 라벨이 셀 폭을 넘으면 폰트를 줄여 전체를 표기(축약/잘림 방지).
+            pad = 2
+            max_w = cell_w - 2 * pad
+            fontsize = 14.0
+            text_w = label_font.text_length(label_text, fontsize=fontsize)
+            if text_w > max_w > 0:
+                fontsize = max(6.0, fontsize * max_w / text_w)
+            # 한글 렌더: TextWriter + Font 사용 (insert_text+add_font 조합은
+            # 이 PyMuPDF 버전에서 helv로 폴백되어 한글이 점(·)으로 깨진다 — REQ-B09)
+            tw = fitz.TextWriter(current_page.rect)
+            tw.append(
+                fitz.Point(cell_x + pad, cell_y + label_h - 4),
                 label_text,
-                fontname=korean_font,
-                fontsize=14,
-                color=(0.25, 0.25, 0.35),
+                font=label_font,
+                fontsize=fontsize,
             )
+            tw.write_text(current_page, color=(0.25, 0.25, 0.35))
 
     # 세로 구분선 그리기 — 마지막 페이지에만 아니라 모든 완성된 페이지에 적용 (REQ-C05)
     if divider_xs:

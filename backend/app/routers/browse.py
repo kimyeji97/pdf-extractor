@@ -13,6 +13,7 @@ DELETE /api/jobs/{job_id}/pages/{n}/questions/{q}                        - 자�
 POST   /api/jobs/{job_id}/pages/{n}/questions/manual                     - 수동 문항 추가 (REQ-13)
 PATCH  /api/jobs/{job_id}/pages/{n}/questions/manual/{mid}               - 수동 문항 타이틀 수정 (REQ-12)
 DELETE /api/jobs/{job_id}/pages/{n}/questions/manual/{mid}               - 수동 문항 삭제 (REQ-14)
+POST   /api/jobs/{job_id}/pages/{n}/questions/bulk-delete                - 자동/수동 문항 벌크 삭제 (REQ-B06)
 GET    /api/jobs/{job_id}/pages/{n}/questions/manual/{mid}/thumbnail     - 수동 문항 썸네일
 """
 import dataclasses
@@ -683,6 +684,77 @@ def delete_manual_question(job_id: str, page_num: int, manual_id: str):
 
     storage.save_manual_questions(job_id, manual_list)
     storage.delete_manual_thumbnail_cache(job_id, page_num, manual_id)
+
+
+# ── 문항 벌크(다중) 삭제 (REQ-B06) ───────────────────────────
+
+class BulkDeleteRequest(BaseModel):
+    """한 페이지에서 선택된 자동/수동 문항을 한 번에 삭제하기 위한 요청."""
+    question_nums: List[int] = []   # 자동 감지 문항 번호
+    manual_ids: List[str] = []      # 수동 문항 UUID
+
+
+@router.post("/jobs/{job_id}/pages/{page_num}/questions/bulk-delete")
+def bulk_delete_questions(job_id: str, page_num: int, body: BulkDeleteRequest):
+    """
+    선택된 자동/수동 문항을 한 번에 삭제한다 (REQ-B06).
+
+    단건 DELETE를 동시에 여러 번 호출하면 boundaries/manual 캐시가 각자 원본을
+    읽어 자기 것만 제거 후 되쓰는 read-modify-write 경쟁으로 일부만 삭제된다.
+    본 엔드포인트는 캐시별로 read-modify-write를 **1회**만 수행하여 이를 제거한다.
+
+    - 자동 문항: boundaries 캐시에서 (page_index==page_num AND number∈question_nums) 일괄 제거,
+      questions_per_page / total_question_count를 1회 재계산.
+    - 수동 문항: manual_questions 목록에서 manual_id∈manual_ids 일괄 제거.
+    - 관련 썸네일 캐시도 함께 삭제(존재하지 않으면 무시).
+    """
+    deleted_auto = 0
+    deleted_manual = 0
+
+    # ── 자동 문항 일괄 삭제 (boundaries 캐시 1회 read-modify-write) ──
+    if body.question_nums:
+        cached = storage.get_boundaries_cache(job_id)
+        if cached is None:
+            raise HTTPException(status_code=404, detail="경계 캐시가 없습니다.")
+
+        target_nums = set(body.question_nums)
+        remaining = [
+            b for b in cached
+            if not (b.get("page_index") == page_num and b.get("number") in target_nums)
+        ]
+        deleted_auto = len(cached) - len(remaining)
+
+        if deleted_auto:
+            storage.save_boundaries_cache(job_id, remaining)
+
+            # questions_per_page, total_question_count 1회 재계산
+            job = storage.get_status(job_id)
+            if job:
+                qpp: dict[str, int] = {}
+                for b in remaining:
+                    key = str(b.get("page_index", 0))
+                    qpp[key] = qpp.get(key, 0) + 1
+                job.questions_per_page = qpp
+                job.total_question_count = len(remaining)
+                storage.put_status(job)
+
+            # 썸네일 캐시 삭제 (idempotent)
+            for num in target_nums:
+                storage.delete_question_thumbnail_cache(job_id, page_num, num)
+
+    # ── 수동 문항 일괄 삭제 (manual 목록 1회 read-modify-write) ──
+    if body.manual_ids:
+        manual_list = storage.get_manual_questions(job_id)
+        target_ids = set(body.manual_ids)
+        remaining_manual = [m for m in manual_list if m.get("manual_id") not in target_ids]
+        deleted_manual = len(manual_list) - len(remaining_manual)
+
+        if deleted_manual:
+            storage.save_manual_questions(job_id, remaining_manual)
+            for mid in target_ids:
+                storage.delete_manual_thumbnail_cache(job_id, page_num, mid)
+
+    return {"deleted_auto": deleted_auto, "deleted_manual": deleted_manual}
 
 
 # ── 문항 썸네일 ────────────────────────────────────────────

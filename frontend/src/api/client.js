@@ -294,6 +294,24 @@ export async function deleteManualQuestion(jobId, pageNum, manualId) {
 }
 
 /**
+ * POST /api/jobs/{jobId}/pages/{pageNum}/questions/bulk-delete
+ * 자동/수동 문항을 한 번에 삭제 (REQ-B06)
+ * 단건 DELETE 동시 호출의 경쟁 상태를 피하기 위해 캐시별 1회 갱신으로 처리한다.
+ */
+export async function bulkDeleteQuestions(jobId, pageNum, questionNums = [], manualIds = []) {
+  const res = await apiFetch(
+    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/bulk-delete`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question_nums: questionNums, manual_ids: manualIds }),
+    }
+  );
+  if (!res.ok) throw new Error("문항 삭제 실패");
+  return res.json();
+}
+
+/**
  * GET /api/workbooks
  * 생성된 문제집 이력 목록 (REQ-21)
  */
