@@ -1,72 +1,122 @@
 /**
- * 표지 관리 페이지 (REQ-D05)
+ * 표지 관리 페이지 (REQ-D06 — REQ-D05 2패널을 대체)
  *
- * 2패널 수평 레이아웃 (문항 분석 뷰와 디자인 통일):
- *   좌: ① 표지 업로드 (리사이즈 가능)
- *   우: ② 저장된 표지 목록
+ * 1패널 목록형 (문항 분석 목록 페이지와 디자인 통일):
+ *   [+ 표지 업로드] [표지1] [표지2] ...  래핑 그리드
+ *   업로드 카드 클릭 → 업로드 모달(드롭존 + 이름 + 업로드)
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import Box from "@mui/material/Box";
-import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
+import IconButton from "@mui/material/IconButton";
+import CircularProgress from "@mui/material/CircularProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
-import IconButton from "@mui/material/IconButton";
 import Alert from "@mui/material/Alert";
-import CircularProgress from "@mui/material/CircularProgress";
 import Tooltip from "@mui/material/Tooltip";
-import Grid from "@mui/material/Grid";
-import Card from "@mui/material/Card";
-import CardMedia from "@mui/material/CardMedia";
-import CardContent from "@mui/material/CardContent";
 import { Icon } from "@iconify/react";
 
 import { listCovers, uploadCover, deleteCover } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
 
+const CARD_W   = 180;
+const CARD_H   = 280;
+const THUMB_H  = 232; // 나머지(48)는 이름 영역
+
+function UploadCard({ onClick }) {
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        width: CARD_W, height: CARD_H, flexShrink: 0,
+        border: "2px dashed", borderColor: "divider", borderRadius: 2,
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 1,
+        cursor: "pointer", color: "text.disabled",
+        transition: "all 0.15s",
+        "&:hover": { borderColor: "primary.main", color: "primary.main", bgcolor: "action.hover" },
+      }}
+    >
+      <Icon icon="material-symbols:add-rounded" style={{ fontSize: 36 }} />
+      <Typography variant="caption" fontWeight={600}>표지 업로드</Typography>
+    </Box>
+  );
+}
+
+function CoverCard({ cover, onDelete }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <Box
+      sx={{
+        width: CARD_W, height: CARD_H, flexShrink: 0,
+        border: 1, borderColor: "divider", borderRadius: 2,
+        display: "flex", flexDirection: "column",
+        bgcolor: "background.paper", overflow: "hidden", position: "relative",
+        transition: "all 0.15s",
+        "&:hover": { borderColor: "primary.main", boxShadow: "0 4px 12px rgba(0,0,0,0.12)" },
+        "&:hover .cover-delete-btn": { opacity: 1 },
+      }}
+    >
+      {/* 썸네일 */}
+      <Box sx={{ height: THUMB_H, flexShrink: 0, position: "relative", bgcolor: "action.hover", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        {!loaded && <Box className="img-skeleton" sx={{ position: "absolute", inset: 0 }} />}
+        <Box
+          component="img"
+          src={`${API_ROOT}${cover.thumbnail_url}`}
+          alt={cover.name || "표지"}
+          onLoad={() => setLoaded(true)}
+          sx={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: loaded ? "block" : "none" }}
+        />
+      </Box>
+
+      {/* 이름 */}
+      <Box sx={{ flex: 1, display: "flex", alignItems: "center", px: 1.25, minHeight: 0 }}>
+        <Typography variant="caption" noWrap title={cover.name} sx={{ width: "100%" }}>
+          {cover.name || "이름 없음"}
+        </Typography>
+      </Box>
+
+      {/* 삭제 (hover) */}
+      <IconButton
+        className="cover-delete-btn"
+        size="small"
+        onClick={() => onDelete(cover.cover_id)}
+        sx={{
+          position: "absolute", top: 6, right: 6,
+          bgcolor: "error.main", color: "#fff",
+          opacity: 0, transition: "opacity 0.15s",
+          width: 24, height: 24,
+          "&:hover": { bgcolor: "error.dark" },
+        }}
+      >
+        <Icon icon="material-symbols:close-rounded" style={{ fontSize: 15 }} />
+      </IconButton>
+    </Box>
+  );
+}
+
 export default function FormatPage() {
-  const [covers, setCovers]           = useState([]);
-  const [loading, setLoading]         = useState(false);
-  const [uploading, setUploading]     = useState(false);
-  const [error, setError]             = useState("");
-  const [coverName, setCoverName]     = useState("");
-  const [previewFile, setPreviewFile] = useState(null);
-  const [previewUrl, setPreviewUrl]   = useState(null);
+  const [covers, setCovers]   = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  // ── 업로드 모달 상태 ──────────────────────────────────
+  const [uploadOpen, setUploadOpen]     = useState(false);
+  const [uploading, setUploading]       = useState(false);
+  const [uploadError, setUploadError]   = useState("");
+  const [coverName, setCoverName]       = useState("");
+  const [previewFile, setPreviewFile]   = useState(null);
+  const [previewUrl, setPreviewUrl]     = useState(null);
+  const [dragOver, setDragOver]         = useState(false);
   const inputRef = useRef(null);
 
-  // ── 패널 너비 (리사이즈) ────────────────────────────────
-  const [panelWidth, setPanelWidth] = useState(300);
-  const resizingRef = useRef(null);
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!resizingRef.current) return;
-      const { startX, startWidth } = resizingRef.current;
-      setPanelWidth(Math.max(220, Math.min(480, startWidth + (e.clientX - startX))));
-    };
-    const handleMouseUp = () => {
-      resizingRef.current = null;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, []);
-
-  const startResize = (e) => {
-    e.preventDefault();
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    resizingRef.current = { startX: e.clientX, startWidth: panelWidth };
-  };
-
   const fetchCovers = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setError("");
     try {
       const data = await listCovers();
       setCovers(data.covers || []);
@@ -76,6 +126,7 @@ export default function FormatPage() {
 
   useEffect(() => { fetchCovers(); }, [fetchCovers]);
 
+  // 미리보기 objectURL 생성/해제
   useEffect(() => {
     if (!previewFile) { setPreviewUrl(null); return; }
     const url = URL.createObjectURL(previewFile);
@@ -83,22 +134,27 @@ export default function FormatPage() {
     return () => URL.revokeObjectURL(url);
   }, [previewFile]);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
+  const acceptFile = (file) => {
     if (!file) return;
     if (!["image/jpeg", "image/jpg", "image/png"].includes(file.type)) {
-      alert("JPEG 또는 PNG 이미지만 업로드할 수 있습니다."); return;
+      setUploadError("JPEG 또는 PNG 이미지만 업로드할 수 있습니다."); return;
     }
-    setPreviewFile(file); setError(""); e.target.value = "";
+    setPreviewFile(file); setUploadError("");
   };
+
+  const openUpload = () => {
+    setUploadError(""); setCoverName(""); setPreviewFile(null); setUploadOpen(true);
+  };
+  const closeUpload = () => { if (!uploading) setUploadOpen(false); };
 
   const handleUpload = async () => {
     if (!previewFile || uploading) return;
-    setUploading(true); setError("");
+    setUploading(true); setUploadError("");
     try {
       await uploadCover(previewFile, coverName);
-      setPreviewFile(null); setPreviewUrl(null); setCoverName(""); fetchCovers();
-    } catch (e) { setError(e.message); }
+      setUploadOpen(false);
+      await fetchCovers();
+    } catch (e) { setUploadError(e.message); }
     finally     { setUploading(false); }
   };
 
@@ -111,36 +167,77 @@ export default function FormatPage() {
   };
 
   return (
-    <Box sx={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
 
-      {/* ── ① 업로드 패널 ────────────────────────────── */}
-      <Paper
-        elevation={0}
-        sx={{
-          width: panelWidth, flexShrink: 0,
-          display: "flex", flexDirection: "column", overflow: "hidden",
-          borderRadius: 0, borderRight: 1, borderColor: "divider",
-        }}
-      >
-        <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider" }}>
-          <Typography variant="subtitle2" fontWeight={700}>① 표지 업로드</Typography>
-        </Box>
+      {/* ── 상단 헤더 바 ───────────────────────────────── */}
+      <Box sx={{
+        px: 2.5, py: 1.25, borderBottom: 1, borderColor: "divider",
+        display: "flex", gap: 1.5, alignItems: "center", justifyContent: "space-between",
+        flexShrink: 0, bgcolor: "background.paper",
+      }}>
+        <Typography variant="subtitle2" fontWeight={700}>표지 관리</Typography>
+        <Tooltip title="새로고침">
+          <IconButton size="small" onClick={fetchCovers} disabled={loading}>
+            {loading
+              ? <CircularProgress size={16} />
+              : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 18 }} />}
+          </IconButton>
+        </Tooltip>
+      </Box>
 
-        <Box sx={{ flex: 1, overflowY: "auto", p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            JPEG 또는 PNG 이미지를 업로드하세요.<br />
-            문제집 생성 시 첫 페이지(표지)로 사용됩니다.
-          </Typography>
+      {error && (
+        <Alert severity="error" sx={{ mx: 2.5, mt: 1.5 }} onClose={() => setError("")}>
+          {error}
+        </Alert>
+      )}
+
+      {/* ── 메인: 카드 래핑 그리드 (세로 스크롤) ─────────── */}
+      <Box sx={{
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        display: "flex", flexWrap: "wrap", gap: 2,
+        p: 2.5, alignContent: "flex-start",
+      }}>
+        {/* 업로드 카드: 항상 맨 앞 고정 */}
+        <UploadCard onClick={openUpload} />
+
+        {loading ? (
+          <Box sx={{ display: "flex", alignItems: "center", pl: 2 }}>
+            <CircularProgress size={24} />
+          </Box>
+        ) : (
+          covers.map((c) => (
+            <CoverCard key={c.cover_id} cover={c} onDelete={handleDelete} />
+          ))
+        )}
+
+        {!loading && covers.length === 0 && (
+          <Box sx={{ display: "flex", alignItems: "center", pl: 2, color: "text.disabled" }}>
+            <Typography variant="body2" color="text.disabled">
+              업로드된 표지가 없습니다.
+            </Typography>
+          </Box>
+        )}
+      </Box>
+
+      {/* ── 업로드 모달 ────────────────────────────────── */}
+      <Dialog open={uploadOpen} onClose={closeUpload} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ pb: 1 }}>표지 업로드</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "12px !important" }}>
+          {uploadError && <Alert severity="error" sx={{ py: 0 }}>{uploadError}</Alert>}
 
           {/* 드롭존 */}
           <Box
             onClick={() => inputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); acceptFile(e.dataTransfer.files?.[0]); }}
             sx={{
               width: "100%", aspectRatio: "3/4", maxHeight: 300,
-              border: "2px dashed", borderColor: previewFile ? "primary.main" : "divider",
+              border: "2px dashed",
+              borderColor: dragOver || previewFile ? "primary.main" : "divider",
               borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", overflow: "hidden", bgcolor: "action.hover",
-              transition: "border-color 0.2s",
+              cursor: "pointer", overflow: "hidden", bgcolor: dragOver ? "action.selected" : "action.hover",
+              transition: "border-color 0.2s, background-color 0.2s",
               "&:hover": { borderColor: "primary.main" },
             }}
           >
@@ -151,12 +248,13 @@ export default function FormatPage() {
               <Box sx={{ textAlign: "center", color: "text.disabled", p: 2 }}>
                 <Icon icon="material-symbols:image-outline-rounded" style={{ fontSize: 40 }} />
                 <Typography variant="caption" display="block" mt={1}>
-                  이미지 클릭 선택<br />(JPEG · PNG)
+                  클릭 또는 드래그하여 선택<br />(JPEG · PNG)
                 </Typography>
               </Box>
             )}
             <input ref={inputRef} type="file" accept="image/jpeg,image/jpg,image/png"
-              style={{ display: "none" }} onChange={handleFileChange} />
+              style={{ display: "none" }}
+              onChange={(e) => { acceptFile(e.target.files?.[0]); e.target.value = ""; }} />
           </Box>
 
           {previewFile && (
@@ -167,104 +265,26 @@ export default function FormatPage() {
 
           <TextField
             size="small" fullWidth
-            placeholder="표지 이름 (선택)"
+            label="표지 이름 (선택)"
             value={coverName}
             onChange={(e) => setCoverName(e.target.value)}
             disabled={uploading}
           />
-
-          {error && <Alert severity="error" sx={{ py: 0.5 }}>{error}</Alert>}
-
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={closeUpload} disabled={uploading} color="inherit">취소</Button>
           <Button
-            variant="contained" fullWidth
+            variant="contained"
             onClick={handleUpload}
             disabled={!previewFile || uploading}
             startIcon={uploading
-              ? <CircularProgress size={16} color="inherit" />
+              ? <CircularProgress size={14} color="inherit" />
               : <Icon icon="material-symbols:cloud-upload-outline-rounded" />}
           >
             {uploading ? "업로드 중..." : "업로드"}
           </Button>
-
-          {previewFile && (
-            <Button variant="outlined" color="error" size="small"
-              onClick={() => { setPreviewFile(null); setPreviewUrl(null); }}>
-              선택 취소
-            </Button>
-          )}
-        </Box>
-      </Paper>
-
-      {/* 리사이즈 핸들 */}
-      <Box
-        onMouseDown={startResize}
-        sx={{
-          width: 4, flexShrink: 0, cursor: "col-resize", bgcolor: "divider",
-          "&:hover": { bgcolor: "primary.light" }, transition: "background-color 0.15s",
-        }}
-      />
-
-      {/* ── ② 저장된 표지 목록 ────────────────────────── */}
-      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Typography variant="subtitle2" fontWeight={700}>② 저장된 표지</Typography>
-          <Tooltip title="새로고침">
-            <IconButton size="small" onClick={fetchCovers} disabled={loading}>
-              {loading
-                ? <CircularProgress size={16} />
-                : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 20 }} />}
-            </IconButton>
-          </Tooltip>
-        </Box>
-
-        <Box sx={{ flex: 1, overflowY: "auto", p: 2 }}>
-          {!loading && covers.length === 0 ? (
-            <Box sx={{ pt: 8, textAlign: "center", color: "text.disabled" }}>
-              <Icon icon="material-symbols:image-not-supported-outline-rounded" style={{ fontSize: 48 }} />
-              <Typography variant="body2" mt={1.5} color="text.secondary">
-                업로드된 표지가 없습니다.
-              </Typography>
-            </Box>
-          ) : (
-            <Grid container spacing={1.5}>
-              {covers.map((c) => (
-                <Grid item xs={6} sm={4} md={3} key={c.cover_id}>
-                  <Card variant="outlined"
-                    sx={{ position: "relative", "&:hover .delete-btn": { opacity: 1 } }}>
-                    <CardMedia
-                      component="img"
-                      height={140}
-                      image={`${API_ROOT}${c.thumbnail_url}`}
-                      alt={c.name}
-                      sx={{ objectFit: "cover" }}
-                    />
-                    <CardContent sx={{ py: 0.75, px: 1.25, "&:last-child": { pb: 0.75 } }}>
-                      <Typography variant="caption" noWrap title={c.name} display="block">
-                        {c.name || "이름 없음"}
-                      </Typography>
-                    </CardContent>
-                    <IconButton
-                      className="delete-btn"
-                      size="small"
-                      onClick={() => handleDelete(c.cover_id)}
-                      sx={{
-                        position: "absolute", top: 4, right: 4,
-                        bgcolor: "error.main", color: "white",
-                        opacity: 0, transition: "opacity 0.2s",
-                        "&:hover": { bgcolor: "error.dark" },
-                        width: 22, height: 22,
-                      }}
-                    >
-                      <Icon icon="material-symbols:close-rounded" style={{ fontSize: 14 }} />
-                    </IconButton>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </Box>
-      </Box>
-
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

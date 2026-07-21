@@ -322,11 +322,11 @@ export default function AnalysisFilePage() {
         </Alert>
       )}
 
-      {/* ── 메인: 카드 목록 (가로 스크롤) ────────────────── */}
+      {/* ── 메인: 카드 래핑 그리드 (세로 스크롤) ─────────── */}
       <Box sx={{
-        flex: 1, overflowX: "auto", overflowY: "hidden",
-        display: "flex", flexDirection: "row", gap: 2,
-        p: 2.5, alignItems: "flex-start",
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        display: "flex", flexWrap: "wrap", gap: 2,
+        p: 2.5, alignContent: "flex-start",
       }}>
         {/* 업로드 카드: 항상 맨 좌측 고정 */}
         <UploadCard onClick={openUpload} />
