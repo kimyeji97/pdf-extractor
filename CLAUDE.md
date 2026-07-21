@@ -298,9 +298,9 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
 
 `docs/예정된작업.md`를 기반으로 계획 번호를 부여하고 사전 논의 사항·작업 순서를 정리한다.
 
-### 0. 진행 현황 (2026-07-21 업데이트)
+### 0. 진행 현황 (2026-07-22 업데이트)
 
-**완료 (7건)** — 커밋 `9601355`(코드) / `8ef1f05`(스펙):
+**완료 (8건)** — B05~F08은 커밋 `9601355`(코드)/`8ef1f05`(스펙), F07은 별도 커밋:
 
 - **REQ-B08** 문제집 편집 문항 목록 내부 스크롤 복구 + **파일 목록 내부 스크롤**(별건 함께 처리)
 - **REQ-F08** 편집 미리보기 스크롤 좌우→상하(세로 스택)
@@ -309,11 +309,11 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
 - **REQ-C07** 라벨에 문항 이름 추가(미리보기·PDF 문자열 동기화, `sel.label` 단일 출처)
 - **REQ-B09** PDF 라벨 한글 미렌더(점 표시) 수정 → **원인은 축약 아님**: PyMuPDF 1.25.5에 `Document.add_font` 부재 → helv 폴백 → 한글 깨짐. **`TextWriter` + `fitz.Font("korea")`** 로 해결 + 폰트 자동 축소(긴 라벨 셀 폭 맞춤)
 - **REQ-B05** PDF 뷰어 툴바 고정 + 이전/다음 이동 수정. 원인=`history/index.jsx` 래퍼의 깨진 flex 높이 체인 + smooth `scrollIntoView` 취소. → 래퍼 flex 컬럼화 + 컨테이너 직접 `scrollTo({behavior:"instant"})`
+- **REQ-F07** 문항 분석 ② 미리보기를 PDF 뷰어(`PdfPreviewPanel` 재사용)로 전환. 백엔드 `GET /api/jobs/{id}.original_pdf_url` 신설, 뷰어에 `onPageChange`·`renderPageOverlay`·`ref.scrollToPage`(forwardRef) 확장(전부 optional=생성이력 무영향). **좌표변환은 `pt = cssPx / scale` 단일 공식**(react-pdf가 pt×scale 렌더)으로 해결 — 실측 오차<1px. ①↔뷰어 양방향 동기화(250ms 디바운스). 데드코드(views/ 전체+FilePagePanel+PageBrowser+App.css ~1,200줄) 별도 커밋 `52e4b7d`로 제거.
 
-**다음 (내일부터)**: **REQ-F07** 문항 분석 미리보기를 PDF 뷰어로 전환.
-> F07 착수 참고: `PdfPreviewPanel`은 **소비처가 flex 컬럼 부모(`display:flex; flexDirection:column; minHeight:0`)를 제공**해야 정상 스크롤됨(B05에서 확인된 계약). 좌표계 변환(썸네일→PDF 렌더)이 최대 난제이며 REQ-P02 뷰어 가상화와 통합 설계 필요.
+> `PdfPreviewPanel` 계약: **소비처가 flex 컬럼 부모(`display:flex; flexDirection:column; minHeight:0`)를 제공**해야 정상 스크롤(B05·F07에서 확인).
 
-**남은 작업**: REQ-F07, REQ-D06, REQ-P02, REQ-P03.
+**남은 작업**: REQ-D06(표지 목록형), REQ-P02(성능·뷰어 가상화 — F07에서 이월), REQ-P03(썸네일 응답).
 
 ### 1. 작업 목록 & 계획 번호
 
@@ -321,7 +321,7 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
 |---|------|------|----------|------|------|
 | 1 | 문항 분석 | PDF 뷰어 툴바 버그: 이전/다음 버튼 무동작 + 툴바가 스크롤 영역에 포함됨 | REQ-B05 | 버그 | ✅ 완료 |
 | 2 | 문항 분석 | 문항 목록 벌크(다중) 삭제 안됨 | REQ-B06 | 버그 | ✅ 완료 |
-| 3 | 문항 분석 | 페이지 미리보기를 PDF 뷰어로 전환 (생성 이력 REQ-F06 방식 재사용) | REQ-F07 | 개선 | ⬜ 다음 |
+| 3 | 문항 분석 | 페이지 미리보기를 PDF 뷰어로 전환 (생성 이력 REQ-F06 방식 재사용) | REQ-F07 | 개선 | ✅ 완료 |
 | 4 | 문항 분석 | 오탐 의심 문항 체크박스 비활성 → 삭제 불가 해소 | REQ-B07 | 버그 | ✅ 완료 |
 | 5 | 문제집 편집 | 문항 선택 목록 스크롤 문제 (REQ-B04와 동일 원인) | REQ-B08 | 버그 | ✅ 완료 |
 | 6 | 문제집 편집 | 문항 라벨 포맷 변경 (`{번호}.{문제집} p{페이지}` → `+ {문항 이름}`) | REQ-C07 | 보완 | ✅ 완료 |
@@ -365,9 +365,9 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
   REQ-C07 ✅ (라벨 포맷)  +  REQ-B09 ✅ (한글 미렌더 수정 — 실제 원인은 폰트 폴백)
   ※ 라벨 길이 증가와 폰트 이슈가 한 셀 안에서 충돌하므로 함께 설계
 
-[Phase 4] 진행 중 — PDF 뷰어 묶음 (REQ-F06 기반)
-  REQ-B05 ✅ (뷰어 툴바 안정화)  →  REQ-F07 ⬅ 다음 (문항 분석에 뷰어 적용)
-  ※ F07은 REQ-P02 뷰어 가상화와 통합 설계
+[Phase 4] ✅ 완료 — PDF 뷰어 묶음 (REQ-F06 기반)
+  REQ-B05 ✅ (뷰어 툴바 안정화)  →  REQ-F07 ✅ (문항 분석에 뷰어 적용)
+  ※ 좌표변환은 pt=cssPx/scale 단일 공식으로 해결. 뷰어 가상화는 P02로 이월(사용자 결정)
 
 [Phase 5] ⬜ 예정 — 표지 디자인
   REQ-D06 (목록형 1패널 + 모달, D05 대체 결정 선행)
