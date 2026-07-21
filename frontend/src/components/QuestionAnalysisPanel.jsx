@@ -2,12 +2,12 @@
  * 문항 분석 패널 (REQ-11~15, D01~D03)
  *
  * v3.3:
- *   - drawMode (수동 추가 드래그) 기능을 QuestionAnalysisView(Section 2)로 이전
+ *   - drawMode (수동 추가 드래그) 기능은 부모(pages/analysis/work.jsx ② 미리보기)가 담당
  *   - 이 컴포넌트는 툴바 + 문항 카드 목록만 담당
  *
  * Props:
  *   jobId, pageNum, pageInfo  — 현재 페이지 식별
- *   refreshTrigger            — 부모(View)가 재감지/수동추가 완료 시 증가시키는 카운터
+ *   refreshTrigger            — 부모가 재감지/수동추가 완료 시 증가시키는 카운터
  */
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
