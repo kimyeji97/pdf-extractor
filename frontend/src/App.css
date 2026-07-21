@@ -696,6 +696,153 @@ body {
   background: #fff5f5;
 }
 
+/* ━━━ QuestionListPanel (qlist-*) — 편집 ② 문항 선택 ━━━━━━━ */
+
+/* ── 문항 목록 패널 (QuestionListPanel) ─────────────── */
+.qlist-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.qlist-filter-wrap {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e4e8ef;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.qlist-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.qlist-page-chip {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid #d0d6e0;
+  border-radius: 12px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.qlist-page-chip:hover {
+  border-color: #4a90e2;
+  color: #2563eb;
+}
+.qlist-page-chip--active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+.qlist-filter-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.qlist-page-input {
+  flex: 1;
+  font-size: 11px;
+  padding: 4px 6px;
+  border: 1px solid #d0d6e0;
+  border-radius: 4px;
+  outline: none;
+}
+.qlist-page-input:focus {
+  border-color: #4a90e2;
+}
+.qlist-clear-filter {
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #fff;
+  color: #94a3b8;
+  cursor: pointer;
+}
+.qlist-clear-filter:hover {
+  color: #ef4444;
+  border-color: #fca5a5;
+}
+.qlist-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 8px;
+}
+.qlist-body::-webkit-scrollbar {
+  width: 4px;
+}
+.qlist-body::-webkit-scrollbar-thumb {
+  background: #d8dce4;
+  border-radius: 4px;
+}
+
+.qlist-page-group {
+  margin-bottom: 8px;
+}
+.qlist-page-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 4px 0 2px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.qlist-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 12px;
+  color: #334155;
+}
+.qlist-item:hover {
+  background: #f1f5f9;
+}
+.qlist-item--checked {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.qlist-item--checked:hover {
+  background: #dbeafe;
+}
+
+.qlist-item input[type="checkbox"] {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.qlist-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qlist-badge-manual {
+  font-size: 10px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.qlist-loading,
+.qlist-empty {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 24px 12px;
+}
+
 /* ━━━ WorkbookPreview (wbp-*) ━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 /* A4 페이지 카드 */
@@ -841,6 +988,10 @@ body {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   background: #fff;
   line-height: 0;
+  /* REQ-F07: 수동 추가 오버레이(absolute; inset:0)가 각 페이지에 앵커되도록.
+     제거 시 모든 페이지 오버레이가 상위 positioned 조상에 겹쳐 쌓여
+     마지막 페이지 오버레이가 전체 드래그를 가로챈다. */
+  position: relative;
 }
 
 .pdf-loading,
