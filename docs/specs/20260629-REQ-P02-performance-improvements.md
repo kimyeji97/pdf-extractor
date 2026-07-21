@@ -290,26 +290,26 @@ MUI 생태계(`@mui/material`, `@mui/x-data-grid`, `@mui/lab`, `@emotion/*`) 합
 
 ---
 
-#### P02-10. StrictMode 이중 요청 제거  *(신규 — 클라 성능 분석 Q1 / ✅ 적용 완료)*
+#### P02-10. StrictMode 이중 요청 = dev 전용 착시 (유지)  *(신규 — 클라 성능 분석 Q1)*
 
 | 항목 | 내용 |
 |------|------|
 | 파일 | `frontend/src/main.tsx` |
-| 분류 | Frontend · 개발 편의 |
+| 분류 | Frontend · 문서화(수정 없음) |
 
 **현상**
 
-개발 모드에서 `/api/jobs`, `/pages`, `/thumbnail`, `/covers`, `/pages/{n}/questions` 등 모든 요청이 **정확히 2배**로 발사됐다(네트워크 캡처 확인).
+개발 모드에서 `/api/jobs`, `/pages`, `/thumbnail`, `/covers`, `/pages/{n}/questions` 등 모든 요청이 **정확히 2배**로 발사된다(네트워크 캡처 확인).
 
-**원인**
+**원인·결론**
 
-React `<StrictMode>`가 개발 모드에서 effect를 의도적으로 2회 실행(cleanup 정합성 검증)하기 때문이다. **프로덕션 빌드에서는 이중 실행하지 않아 배포 환경에선 애초에 발생하지 않았다**(성능 문제 아님).
+React `<StrictMode>`가 개발 모드에서 effect를 의도적으로 2회 실행(cleanup 정합성 검증)하기 때문이다. **프로덕션 빌드에서는 이중 실행하지 않아 배포 환경에선 발생하지 않는다.** → **성능 최적화 대상 아님.** 실질 중복은 P02-03(dedup)에서 처리.
 
-**처리 (커밋 `fef001d`)**
+**결정: StrictMode ON 유지**
 
-사용자 결정으로 `main.tsx`에서 `<StrictMode>` 래퍼를 **제거**했다. 재로드 시 `/api/jobs`·`/pages`·`/covers`가 각 1회씩만 발사됨을 확인.
+현업 기본값(Vite/CRA/Next 템플릿 기본, React 팀 권장)이며 프로덕션 비용이 0이고, effect cleanup 누락(예: **P02-05 폴링 interval**)을 dev에서 조기 발견하는 안전망 이점이 크다. 이중 요청은 정상 동작으로 이해한다.
 
-> **트레이드오프 (인지)**: StrictMode 제거로 effect cleanup 누락(구독·타이머·리스너)을 dev에서 조기 발견하는 이점을 포기한다. 대신 **P02-05(폴링 interval 클린업)** 등 effect cleanup을 코드 리뷰/수동 점검으로 보완해야 한다. 실질 중복 요청 방지는 P02-03(dedup)이 계속 담당.
+> **이력**: 2026-07-22 이중 요청 노이즈 제거 목적으로 `<StrictMode>`를 한 번 제거(커밋 `fef001d`)했으나, 현업 기본값·안전망 이유로 **되돌려 다시 켬**. 본 항목은 "이중 요청을 성능 문제로 오인 금지"를 명시하는 문서화 목적으로 유지한다.
 
 ---
 
