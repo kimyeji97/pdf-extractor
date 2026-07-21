@@ -120,6 +120,29 @@ def save_thumbnail_cache(job_id: str, page_num: int, data: bytes) -> None:
     path.write_bytes(data)
 
 
+# ── 페이지 메타 캐시 (REQ-P03-02) ─────────────────────────
+
+def get_page_info_cache(job_id: str) -> Optional[list]:
+    """저장된 페이지 메타(page_num/width/height) JSON을 반환. 없으면 None."""
+    path = _BASE / "page_info" / f"{job_id}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_page_info_cache(job_id: str, data: list) -> None:
+    """페이지 메타 리스트를 JSON으로 저장."""
+    path = _ensure(_BASE / "page_info" / f"{job_id}.json")
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
+def clear_page_info_cache(job_id: str) -> None:
+    """페이지 메타 캐시 삭제 (재감지 시 무효화)."""
+    path = _BASE / "page_info" / f"{job_id}.json"
+    if path.exists():
+        path.unlink()
+
+
 # ── 경계 캐시 ─────────────────────────────────────────────
 
 def get_boundaries_cache(job_id: str) -> Optional[list]:

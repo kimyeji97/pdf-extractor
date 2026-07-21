@@ -18,6 +18,7 @@ from typing import Optional
 from app.core.config import settings
 from app.models.schemas import BoundariesStatus, UploadResponse, JobStatusFile, JobStatus
 from app.services import storage
+from app.services import thumbnail_service
 from app.utils.question_parser import detect_question_boundaries
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,13 @@ def _trigger_boundary_detection(job_id: str) -> None:
         storage.save_boundaries_cache(
             job_id, [dataclasses.asdict(b) for b in boundaries]
         )
+
+        # 페이지 메타 캐시 프리워밍 (REQ-P03-02) — 이미 받은 pdf_bytes 재사용,
+        # 이후 list_pages가 전체 PDF 재다운로드 없이 캐시만 읽도록 함
+        try:
+            storage.save_page_info_cache(job_id, thumbnail_service.get_page_info(pdf_bytes))
+        except Exception as e:
+            logger.warning("[boundary] page_info 캐시 저장 실패(무시) | job_id=%s error=%s", job_id, e)
 
         questions_per_page: dict[str, int] = {}
         for b in boundaries:

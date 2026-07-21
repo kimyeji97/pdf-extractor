@@ -112,29 +112,33 @@ page_infos = thumbnail_service.get_page_info(pdf_bytes)
 
 ---
 
-#### P03-02. 페이지 메타데이터 캐시  *(구 P02-02)*
+#### P03-02. 페이지 메타데이터 캐시  *(구 P02-02 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
-| 파일 | `backend/app/routers/browse.py`(`list_pages`), `backend/app/services/thumbnail_service.py`(`get_page_info`) |
+| 파일 | `backend/app/routers/browse.py`(`list_pages`, `_get_or_build_page_info`), `backend/app/routers/upload.py`(감지 프리워밍), `backend/app/services/{local_storage_service,s3_service,storage}.py` |
 | 분류 | Backend · I/O |
 
 **현재 문제**
 
 `list_pages()` 호출 시마다 전체 PDF를 읽어 `get_page_info()`로 페이지 수·크기를 추출한다. `boundaries` 캐시 패턴은 있으나 페이지 메타에는 미적용.
 
-**개선 방안**
+**적용 내용**
 
-최초 업로드/감지 시 `page_info/{job_id}.json` 캐시 저장. 이후 `list_pages()`는 캐시만 읽는다.
+- storage 3함수 신설(local/s3/facade): `get_page_info_cache` · `save_page_info_cache` · `clear_page_info_cache`. 캐시 키 `page_info/{job_id}.json`, 내용 `[{page_num,width,height}, ...]`.
+- `list_pages` → `_get_or_build_page_info(job_id)`: **캐시 우선, 미스 시에만** 전체 PDF read + 파싱 후 저장.
+- **프리워밍**: 업로드 후 boundary 감지 백그라운드 태스크(`upload.py`)와 refresh 재감지(`browse.py`)에서 이미 로드한 `pdf_bytes`로 page_info를 저장 → 신규 업로드는 **첫 `list_pages`부터 캐시 히트**.
+- page_info는 job당 PDF가 불변이라 무효화 불필요(같은 UUID=같은 파일). refresh 시엔 안전하게 재저장.
 
-```
-저장 시점: 업로드 완료 후 boundary 감지 직후
-캐시 키:   page_info/{job_id}.json
-내용:      [{ page_num, width, height }, ...]
-무효화:    refresh(재감지) 시 함께 갱신
-```
+**측정 결과 (2026-07-22, R2)**
 
-**기대 효과**: 페이지 목록 API ~40% 단축, PDF 재읽기 제거. P03-01의 핵심 수단.
+| 호출 | 시간 |
+|------|------|
+| 1회차(캐시 미스, PDF 다운로드+저장) | 2.75s |
+| 2회차(캐시 히트) | 0.22s |
+| 3회차(캐시 히트) | 0.17s |
+
+→ **list_pages 2.75s → 0.17s (~16배).** 캐시 히트 잔여 ~170ms는 status·page_info 두 R2 JSON read(각 ~90ms). 신규 업로드는 프리워밍으로 첫 호출부터 캐시 히트.
 
 ---
 

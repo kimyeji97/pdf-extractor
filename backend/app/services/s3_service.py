@@ -45,6 +45,7 @@ UPLOADS_PREFIX = "uploads"
 RESULTS_PREFIX = "results"
 THUMBNAILS_PREFIX = "thumbnails"
 BOUNDARIES_PREFIX = "boundaries"
+PAGE_INFO_PREFIX = "page_info"
 MANUAL_QUESTIONS_PREFIX = "manual_questions"
 WORKBOOKS_PREFIX = "workbooks"
 
@@ -188,6 +189,20 @@ def save_thumbnail_cache(job_id: str, page_num: int, data: bytes) -> None:
         ContentType="image/png",
         CacheControl=_CC_IMMUTABLE,
     )
+
+
+# ── 페이지 메타 캐시 (REQ-P03-02) ─────────────────────────
+
+def get_page_info_cache(job_id: str) -> Optional[list]:
+    return _get_json_or_none(_key(PAGE_INFO_PREFIX, f"{job_id}.json"))
+
+
+def save_page_info_cache(job_id: str, data: list) -> None:
+    _put_json(_key(PAGE_INFO_PREFIX, f"{job_id}.json"), data)
+
+
+def clear_page_info_cache(job_id: str) -> None:
+    _delete(_key(PAGE_INFO_PREFIX, f"{job_id}.json"))
 
 
 # ── 경계 캐시 ─────────────────────────────────────────────

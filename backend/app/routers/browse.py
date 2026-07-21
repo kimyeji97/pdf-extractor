@@ -219,6 +219,13 @@ def _run_refresh_detection(job_id: str) -> None:
         # Step 3: 새 결과 캐시 저장
         storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
 
+        # 페이지 메타 캐시 워밍 (REQ-P03-02) — 같은 PDF라 치수는 불변이나,
+        # 이미 읽은 pdf_bytes로 캐시를 보장해 list_pages 재다운로드를 막는다
+        try:
+            storage.save_page_info_cache(job_id, thumbnail_service.get_page_info(pdf_bytes))
+        except Exception:
+            pass
+
         # Step 4: 페이지별 문항 수 집계 → questions_per_page 갱신
         qpp: dict[str, int] = {}
         for b in boundaries:
@@ -253,6 +260,23 @@ class PageListResponse(BaseModel):
     pages: List[PageInfo]
 
 
+def _get_or_build_page_info(job_id: str) -> list:
+    """
+    페이지 메타(page_num/width/height)를 캐시 우선으로 반환한다 (REQ-P03-02).
+
+    캐시 미스 시에만 전체 PDF를 읽어 파싱한다. 프로파일링상 이 read_file(R2)이
+    썸네일/페이지 응답의 ~99% 병목이므로, 캐시로 재다운로드를 제거한다.
+    """
+    cached = storage.get_page_info_cache(job_id)
+    if cached is not None:
+        return cached
+
+    pdf_bytes = storage.read_file(storage.original_key(job_id))
+    page_infos = thumbnail_service.get_page_info(pdf_bytes)
+    storage.save_page_info_cache(job_id, page_infos)
+    return page_infos
+
+
 @router.get("/jobs/{job_id}/pages", response_model=PageListResponse)
 def list_pages(job_id: str):
     """선택된 PDF의 전체 페이지 목록과 썸네일 URL 반환"""
@@ -260,8 +284,7 @@ def list_pages(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
 
-    pdf_bytes = storage.read_file(storage.original_key(job_id))
-    page_infos = thumbnail_service.get_page_info(pdf_bytes)
+    page_infos = _get_or_build_page_info(job_id)
 
     qpp = job.questions_per_page or {}   # { "0": 5, "1": 3, ... }
 
