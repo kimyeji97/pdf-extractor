@@ -2,10 +2,15 @@
  * 문항 분석 - 작업 페이지 (/analysis/:jobId)
  *
  * 파일 선택 페이지(/)에서 파일을 고른 뒤 진입.
- * ① 페이지 목록  ② 페이지 미리보기  ③ 문항 목록  3패널 구성.
+ * ① 페이지 목록  ② 페이지 미리보기(PDF 뷰어, REQ-F07)  ③ 문항 목록  3패널 구성.
  * 뒤로 가기 → 파일 선택 페이지로 복귀 (사이드바 메뉴 유지).
+ *
+ * REQ-F07: ② 미리보기를 페이지 썸네일 → PdfPreviewPanel(react-pdf)로 전환.
+ *   - ① 페이지 클릭 ↔ 뷰어 스크롤 양방향 동기화 (뷰어 스크롤 → ③ 자동 전환, 250ms 디바운스)
+ *   - 수동 문항 드래그 오버레이는 renderPageOverlay로 각 페이지 위에 렌더
+ *   - 좌표 변환: PDF pt = CSS px / scale (react-pdf가 pt×scale로 렌더하므로)
  */
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useParams, useLocation, useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
@@ -21,9 +26,10 @@ import Stack from "@mui/material/Stack";
 import { Icon } from "@iconify/react";
 
 import QuestionAnalysisPanel from "components/QuestionAnalysisPanel";
+import PdfPreviewPanel from "components/PdfPreviewPanel";
 import { getPages, refreshJobQuestions, getJobInfo, addManualQuestion } from "api/client";
 
-const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
+const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
 
 const ResizeHandle = ({ onMouseDown }) => (
   <Box
@@ -50,9 +56,15 @@ export default function AnalysisWorkPage() {
   const [pagesError, setPagesError]     = useState("");
   const [refreshing, setRefreshing]     = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const pagesRef = useRef(pages);
+  useEffect(() => { pagesRef.current = pages; }, [pages]);
+
+  // ── 원본 PDF URL (REQ-F07) ────────────────────────────
+  const [pdfUrl, setPdfUrl]               = useState(null);
+  const [pdfUrlLoading, setPdfUrlLoading] = useState(true);
 
   // ── 선택 상태 ─────────────────────────────────────────
-  const [selectedPage, setSelectedPage]       = useState(null);
+  const [selectedPage, setSelectedPage]         = useState(null);
   const [selectedPageInfo, setSelectedPageInfo] = useState(null);
   const [panelRefreshTrigger, setPanelRefreshTrigger] = useState(0);
 
@@ -63,18 +75,15 @@ export default function AnalysisWorkPage() {
   const [panelWidths, setPanelWidths] = useState({ section3: 420 });
   const resizingRef = useRef(null);
 
-  // ── 수동 추가 ─────────────────────────────────────────
-  const [drawMode, setDrawMode]               = useState(false);
-  const [isDragging, setIsDragging]           = useState(false);
-  const [dragStart, setDragStart]             = useState(null);
-  const [dragCurrent, setDragCurrent]         = useState(null);
-  const [pendingRegionPx, setPendingRegionPx] = useState(null);
-  const [pendingRegionPt, setPendingRegionPt] = useState(null);
-  const [manualTitle, setManualTitle]         = useState("");
+  // ── 수동 추가 (드래그 → PDF pt 영역) ──────────────────
+  const [drawMode, setDrawMode]             = useState(false);
+  const [dragBox, setDragBox]               = useState(null);   // {pageIdx, left, top, width, height} — CSS px
+  const [pendingRegion, setPendingRegion]   = useState(null);   // {pageIdx, pt:{x0,y0,x1,y1}} — PDF pt
+  const [manualTitle, setManualTitle]           = useState("");
   const [manualTitleError, setManualTitleError] = useState("");
-  const [addingManual, setAddingManual]       = useState(false);
-  const imgRef     = useRef(null);
-  const overlayRef = useRef(null);
+  const [addingManual, setAddingManual]         = useState(false);
+  const dragStateRef = useRef(null);                            // {pageIdx, el, startX, startY, scale}
+  const viewerRef    = useRef(null);
 
   // ── 페이지 로드 ───────────────────────────────────────
   const fetchPages = useCallback(async (jid) => {
@@ -92,6 +101,18 @@ export default function AnalysisWorkPage() {
   }, []);
 
   useEffect(() => { fetchPages(jobId); }, [jobId, fetchPages]);
+
+  // ── 원본 PDF URL 조회 ─────────────────────────────────
+  useEffect(() => {
+    let alive = true;
+    setPdfUrlLoading(true);
+    setPdfUrl(null);
+    getJobInfo(jobId)
+      .then((info) => { if (alive) setPdfUrl(info.original_pdf_url || null); })
+      .catch(() => { if (alive) setPdfUrl(null); })
+      .finally(() => { if (alive) setPdfUrlLoading(false); });
+    return () => { alive = false; };
+  }, [jobId]);
 
   // ── 재감지 ────────────────────────────────────────────
   const handleRefresh = useCallback(async () => {
@@ -118,16 +139,37 @@ export default function AnalysisWorkPage() {
     }
   }, [jobId, refreshing, fetchPages]);
 
-  // ── 페이지 선택 ───────────────────────────────────────
+  // ── 수동 추가 취소/초기화 ─────────────────────────────
+  const handleCancelManual = useCallback(() => {
+    setPendingRegion(null);
+    setDragBox(null);
+    dragStateRef.current = null;
+    setManualTitle("");
+    setManualTitleError("");
+  }, []);
+
+  const toggleDrawMode = () => { setDrawMode((v) => !v); handleCancelManual(); };
+
+  // ── 페이지 선택 (① 목록 클릭 → 뷰어 스크롤) ──────────
   const handlePageClick = useCallback((page) => {
     setSelectedPage(page.page_num);
     setSelectedPageInfo(page);
     setPanelRefreshTrigger((t) => t + 1);
-    setPendingRegionPx(null);
-    setPendingRegionPt(null);
-    setManualTitle("");
-    setManualTitleError("");
+    handleCancelManual();
+    viewerRef.current?.scrollToPage(page.page_num + 1);
+  }, [handleCancelManual]);
+
+  // ── 뷰어 스크롤 → ①·③ 자동 동기화 (250ms 디바운스) ──
+  const pageChangeTimer = useRef(null);
+  const handleViewerPageChange = useCallback((pageNum1) => {
+    clearTimeout(pageChangeTimer.current);
+    pageChangeTimer.current = setTimeout(() => {
+      const idx = pageNum1 - 1;
+      setSelectedPage((prev) => (prev === idx ? prev : idx));
+      setSelectedPageInfo(pagesRef.current.find((p) => p.page_num === idx) || null);
+    }, 250);
   }, []);
+  useEffect(() => () => clearTimeout(pageChangeTimer.current), []);
 
   // ── 패널 리사이즈 ─────────────────────────────────────
   useEffect(() => {
@@ -155,81 +197,107 @@ export default function AnalysisWorkPage() {
     resizingRef.current = { panel, dir, startX: e.clientX, startWidth: panelWidths[panel] };
   };
 
-  // ── 수동 문항 드로우 ──────────────────────────────────
-  const toPdfCoords = useCallback((px) => {
-    const img = imgRef.current;
-    if (!img || !selectedPageInfo) return null;
-    const scaleX = selectedPageInfo.width / img.clientWidth;
-    const scaleY = selectedPageInfo.height / img.clientHeight;
-    return {
-      x0: Math.max(0, px.x0 * scaleX), y0: Math.max(0, px.y0 * scaleY),
-      x1: Math.min(selectedPageInfo.width, px.x1 * scaleX),
-      y1: Math.min(selectedPageInfo.height, px.y1 * scaleY),
-    };
-  }, [selectedPageInfo]);
-
-  const getPos = (e) => {
-    const rect = overlayRef.current.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(e.clientX - rect.left, rect.width)),
-      y: Math.max(0, Math.min(e.clientY - rect.top, rect.height)),
-    };
-  };
-
-  const handleMouseDown = (e) => {
+  // ── 수동 문항 드래그 (PDF 페이지 오버레이 위) ─────────
+  const handleOverlayMouseDown = useCallback((e, pageIdx, scale) => {
     e.preventDefault();
-    setPendingRegionPx(null); setPendingRegionPt(null);
-    setManualTitle(""); setManualTitleError("");
-    setIsDragging(true);
-    const p = getPos(e);
-    setDragStart(p); setDragCurrent(p);
-  };
-  const handleMouseMove = (e) => { if (isDragging) setDragCurrent(getPos(e)); };
-  const handleMouseUp   = (e) => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    const p  = getPos(e);
-    const x0 = Math.min(dragStart.x, p.x), y0 = Math.min(dragStart.y, p.y);
-    const x1 = Math.max(dragStart.x, p.x), y1 = Math.max(dragStart.y, p.y);
-    if (x1 - x0 > 8 && y1 - y0 > 8) {
-      const pxRegion = { x0, y0, x1, y1 };
-      setPendingRegionPx(pxRegion);
-      setPendingRegionPt(toPdfCoords(pxRegion));
-    }
-    setDragStart(null); setDragCurrent(null);
-  };
+    setPendingRegion(null);
+    setManualTitle("");
+    setManualTitleError("");
+    const el   = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = clamp(e.clientX - rect.left, 0, rect.width);
+    const y = clamp(e.clientY - rect.top, 0, rect.height);
+    dragStateRef.current = { pageIdx, el, startX: x, startY: y, scale };
+    setDragBox({ pageIdx, left: x, top: y, width: 0, height: 0 });
+  }, []);
 
-  const dragBox = useMemo(() => {
-    if (!dragStart || !dragCurrent) return null;
-    return {
-      left: Math.min(dragStart.x, dragCurrent.x), top: Math.min(dragStart.y, dragCurrent.y),
-      width: Math.abs(dragCurrent.x - dragStart.x), height: Math.abs(dragCurrent.y - dragStart.y),
+  useEffect(() => {
+    const onMove = (e) => {
+      const d = dragStateRef.current;
+      if (!d) return;
+      const rect = d.el.getBoundingClientRect();
+      const x = clamp(e.clientX - rect.left, 0, rect.width);
+      const y = clamp(e.clientY - rect.top, 0, rect.height);
+      setDragBox({
+        pageIdx: d.pageIdx,
+        left: Math.min(d.startX, x), top: Math.min(d.startY, y),
+        width: Math.abs(x - d.startX), height: Math.abs(y - d.startY),
+      });
     };
-  }, [dragStart, dragCurrent]);
+    const onUp = (e) => {
+      const d = dragStateRef.current;
+      if (!d) return;
+      dragStateRef.current = null;
+      const rect = d.el.getBoundingClientRect();
+      const x = clamp(e.clientX - rect.left, 0, rect.width);
+      const y = clamp(e.clientY - rect.top, 0, rect.height);
+      const x0 = Math.min(d.startX, x), y0 = Math.min(d.startY, y);
+      const x1 = Math.max(d.startX, x), y1 = Math.max(d.startY, y);
+      setDragBox(null);
+      if (x1 - x0 > 8 && y1 - y0 > 8) {
+        // CSS px → PDF pt (react-pdf는 pt × scale 로 렌더)
+        setPendingRegion({
+          pageIdx: d.pageIdx,
+          pt: { x0: x0 / d.scale, y0: y0 / d.scale, x1: x1 / d.scale, y1: y1 / d.scale },
+        });
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, []);
+
+  // 각 PDF 페이지 위 오버레이 (드래그 캡처 + 드래그 박스/확정 영역 표시)
+  const renderPageOverlay = useCallback((pageNum1, { scale }) => {
+    if (!drawMode) return null;
+    const pageIdx       = pageNum1 - 1;
+    const isDragPage    = dragBox?.pageIdx === pageIdx;
+    const isPendingPage = pendingRegion?.pageIdx === pageIdx;
+    return (
+      <Box
+        sx={{ position: "absolute", inset: 0, cursor: "crosshair", zIndex: 2 }}
+        onMouseDown={(e) => handleOverlayMouseDown(e, pageIdx, scale)}
+      >
+        {isDragPage && (
+          <Box sx={{
+            position: "absolute",
+            left: dragBox.left, top: dragBox.top, width: dragBox.width, height: dragBox.height,
+            border: "2px dashed", borderColor: "primary.main",
+            bgcolor: "primary.lighter", opacity: 0.6, pointerEvents: "none",
+          }} />
+        )}
+        {isPendingPage && !dragBox && (
+          <Box sx={{
+            position: "absolute",
+            left:   pendingRegion.pt.x0 * scale,
+            top:    pendingRegion.pt.y0 * scale,
+            width:  (pendingRegion.pt.x1 - pendingRegion.pt.x0) * scale,
+            height: (pendingRegion.pt.y1 - pendingRegion.pt.y0) * scale,
+            border: "2px solid", borderColor: "primary.main",
+            bgcolor: "primary.lighter", opacity: 0.5, pointerEvents: "none",
+          }} />
+        )}
+      </Box>
+    );
+  }, [drawMode, dragBox, pendingRegion, handleOverlayMouseDown]);
 
   const handleAddManual = async () => {
     if (!manualTitle.trim()) { setManualTitleError("타이틀을 입력해주세요."); return; }
-    if (!pendingRegionPt || jobId == null || selectedPage == null) return;
+    if (!pendingRegion || jobId == null) return;
     setAddingManual(true); setManualTitleError("");
     try {
-      await addManualQuestion(jobId, selectedPage, { title: manualTitle.trim(), region: pendingRegionPt });
-      setPendingRegionPx(null); setPendingRegionPt(null); setManualTitle(""); setDrawMode(false);
+      const pageIdx = pendingRegion.pageIdx;
+      await addManualQuestion(jobId, pageIdx, { title: manualTitle.trim(), region: pendingRegion.pt });
+      handleCancelManual();
+      setDrawMode(false);
+      if (selectedPage !== pageIdx) {
+        setSelectedPage(pageIdx);
+        setSelectedPageInfo(pagesRef.current.find((p) => p.page_num === pageIdx) || null);
+      }
       setPanelRefreshTrigger((t) => t + 1);
     } catch (e) { setManualTitleError(e.message || "추가에 실패했습니다."); }
     finally     { setAddingManual(false); }
   };
-
-  const handleCancelManual = () => {
-    setPendingRegionPx(null); setPendingRegionPt(null);
-    setManualTitle(""); setManualTitleError("");
-  };
-  const toggleDrawMode = () => { setDrawMode((v) => !v); handleCancelManual(); };
-
-  const pageThumbUrl = selectedPageInfo?.thumbnail_url
-    ? `${API_ROOT}${selectedPageInfo.thumbnail_url}` : null;
-
-  const [previewLoaded, setPreviewLoaded] = useState(false);
-  useEffect(() => { setPreviewLoaded(false); }, [pageThumbUrl]);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
@@ -319,14 +387,14 @@ export default function AnalysisWorkPage() {
           </Box>
         </Paper>
 
-        {/* ② 페이지 미리보기 (남는 공간 채움) */}
+        {/* ② 페이지 미리보기 — PDF 뷰어 (REQ-F07, 남는 공간 채움) */}
         <Paper
           elevation={0}
-          sx={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}
+          sx={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider", position: "relative" }}
         >
           <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <Typography variant="subtitle2" fontWeight={700}>② 페이지 미리보기</Typography>
-            {pageThumbUrl && (
+            {pdfUrl && (
               <Button
                 size="small" variant={drawMode ? "contained" : "outlined"}
                 color={drawMode ? "error" : "primary"}
@@ -339,79 +407,58 @@ export default function AnalysisWorkPage() {
             )}
           </Box>
 
-          <Box sx={{ flex: 1, overflowY: "auto", p: 1.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
-            {pageThumbUrl ? (
-              <>
-                {drawMode && (
-                  <Alert severity="info" sx={{ py: 0, fontSize: 12 }}>
-                    이미지 위에서 드래그하여 영역을 지정하세요.
-                  </Alert>
-                )}
+          {drawMode && (
+            <Alert severity="info" sx={{ py: 0, fontSize: 12, borderRadius: 0, flexShrink: 0 }}>
+              페이지 위에서 드래그하여 영역을 지정하세요.
+            </Alert>
+          )}
 
-                <Box sx={{ position: "relative", width: "100%", cursor: drawMode ? "crosshair" : "default" }}>
-                  {!previewLoaded && (
-                    <Box className="img-skeleton" sx={{ width: "100%", paddingTop: "141%" }} />
-                  )}
-                  <Box
-                    component="img"
-                    ref={imgRef}
-                    src={pageThumbUrl}
-                    alt={`${(selectedPage ?? 0) + 1}페이지`}
-                    draggable={false}
-                    onLoad={() => setPreviewLoaded(true)}
-                    sx={{ width: "100%", display: previewLoaded ? "block" : "none", userSelect: "none" }}
-                  />
-                  {drawMode && (
-                    <Box
-                      ref={overlayRef}
-                      sx={{ position: "absolute", inset: 0 }}
-                      onMouseDown={handleMouseDown}
-                      onMouseMove={handleMouseMove}
-                      onMouseUp={handleMouseUp}
-                      onMouseLeave={() => isDragging && handleMouseUp({ clientX: 0, clientY: 0 })}
-                    >
-                      {dragBox && (
-                        <Box sx={{ position: "absolute", left: dragBox.left, top: dragBox.top, width: dragBox.width, height: dragBox.height, border: "2px dashed", borderColor: "primary.main", bgcolor: "primary.lighter", opacity: 0.6, pointerEvents: "none" }} />
-                      )}
-                      {pendingRegionPx && !isDragging && (
-                        <Box sx={{ position: "absolute", left: pendingRegionPx.x0, top: pendingRegionPx.y0, width: pendingRegionPx.x1 - pendingRegionPx.x0, height: pendingRegionPx.y1 - pendingRegionPx.y0, border: "2px solid", borderColor: "primary.main", bgcolor: "primary.lighter", opacity: 0.5, pointerEvents: "none" }} />
-                      )}
-                    </Box>
-                  )}
-                </Box>
+          {pdfUrlLoading ? (
+            <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : pdfUrl ? (
+            /* PdfPreviewPanel 계약: flex 컬럼 부모 + minHeight:0 (REQ-B05) */
+            <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <PdfPreviewPanel
+                ref={viewerRef}
+                pdfUrl={pdfUrl}
+                onPageChange={handleViewerPageChange}
+                renderPageOverlay={renderPageOverlay}
+              />
+            </Box>
+          ) : (
+            <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "text.disabled", gap: 1.5 }}>
+              <Icon icon="material-symbols:picture-as-pdf-outline-rounded" style={{ fontSize: 48 }} />
+              <Typography variant="body2" textAlign="center" color="text.secondary">
+                원본 PDF를 불러올 수 없습니다.
+              </Typography>
+            </Box>
+          )}
 
-                {drawMode && pendingRegionPt && (
-                  <Paper variant="outlined" sx={{ p: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
-                    <TextField
-                      size="small" fullWidth autoFocus
-                      placeholder="문항 타이틀 (필수)"
-                      value={manualTitle}
-                      onChange={(e) => setManualTitle(e.target.value)}
-                      error={!!manualTitleError}
-                      helperText={manualTitleError}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter")  handleAddManual();
-                        if (e.key === "Escape") handleCancelManual();
-                      }}
-                    />
-                    <Stack direction="row" spacing={1}>
-                      <Button variant="contained" size="small" onClick={handleAddManual} disabled={addingManual} fullWidth>
-                        {addingManual ? "추가 중..." : "추가"}
-                      </Button>
-                      <Button variant="outlined" size="small" onClick={handleCancelManual} fullWidth>취소</Button>
-                    </Stack>
-                  </Paper>
-                )}
-              </>
-            ) : (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "text.disabled", gap: 1.5, py: 6 }}>
-                <Icon icon="material-symbols:image-outline-rounded" style={{ fontSize: 48 }} />
-                <Typography variant="body2" textAlign="center" color="text.secondary">
-                  페이지를 선택하면<br />미리보기가 표시됩니다.
-                </Typography>
-              </Box>
-            )}
-          </Box>
+          {/* 수동 문항 타이틀 입력 카드 (드래그 확정 시, 패널 하단 플로팅) */}
+          {drawMode && pendingRegion && (
+            <Paper elevation={4} sx={{ position: "absolute", left: 16, right: 16, bottom: 16, zIndex: 20, p: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+              <TextField
+                size="small" fullWidth autoFocus
+                placeholder="문항 타이틀 (필수)"
+                value={manualTitle}
+                onChange={(e) => setManualTitle(e.target.value)}
+                error={!!manualTitleError}
+                helperText={manualTitleError}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter")  handleAddManual();
+                  if (e.key === "Escape") handleCancelManual();
+                }}
+              />
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" size="small" onClick={handleAddManual} disabled={addingManual} fullWidth>
+                  {addingManual ? "추가 중..." : "추가"}
+                </Button>
+                <Button variant="outlined" size="small" onClick={handleCancelManual} fullWidth>취소</Button>
+              </Stack>
+            </Paper>
+          )}
         </Paper>
 
         <ResizeHandle onMouseDown={(e) => startResize("section3", -1, e)} />

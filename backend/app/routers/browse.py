@@ -51,6 +51,7 @@ class JobSummary(BaseModel):
     total_question_count: Optional[int] = None
     workbook_name: Optional[str] = None
     workbook_types: Optional[list[str]] = None
+    original_pdf_url: Optional[str] = None  # 원본 PDF 뷰어용 (REQ-F07, 단건 조회에서만 채움)
 
 
 class JobListResponse(BaseModel):
@@ -89,6 +90,17 @@ def get_job(job_id: str):
     job = storage.get_status(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+
+    # 원본 PDF 뷰어 URL (REQ-F07) — 소스 job만 원본 PDF를 가진다
+    original_pdf_url = None
+    if job.job_type == JobType.SOURCE:
+        try:
+            original_pdf_url = storage.generate_download_presigned_url(
+                storage.original_key(job_id)
+            )
+        except Exception:
+            original_pdf_url = None
+
     return JobSummary(
         job_id=job.job_id,
         filename=job.filename,
@@ -99,6 +111,7 @@ def get_job(job_id: str):
         total_question_count=job.total_question_count,
         workbook_name=job.workbook_name,
         workbook_types=job.workbook_types,
+        original_pdf_url=original_pdf_url,
     )
 
 

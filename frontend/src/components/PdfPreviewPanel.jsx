@@ -1,10 +1,28 @@
 /**
- * PDF 미리보기 패널 (REQ-F06)
+ * PDF 미리보기 패널 (REQ-F06, REQ-F07 확장)
  *
  * 실제 PDF를 렌더링하여 미리보기를 제공한다.
  * 기능: 확대/축소, 페이지 번호 입력 이동, 스크롤 기반 페이지 탐색
+ *
+ * REQ-F07 확장 (모두 optional — 생성 이력 등 기존 소비처는 무변경 동작):
+ *   - onPageChange(pageNum):        현재 페이지 변경 통지 (1-based)
+ *   - renderPageOverlay(pageNum, {scale, pageSize}):
+ *       각 페이지 래퍼(.pdf-page-wrapper, position:relative) 안에 렌더할
+ *       오버레이 노드 반환. pageSize는 PDF pt 기준 {width, height}.
+ *       CSS px ↔ PDF pt 변환: pt = px / scale, px = pt * scale
+ *   - ref.scrollToPage(pageNum):    외부에서 페이지 이동 (1-based)
+ *
+ * ⚠️ 소비처 계약: 부모가 display:flex; flexDirection:column; minHeight:0 를
+ *    제공해야 내부 스크롤이 동작한다 (REQ-B05).
  */
-import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -18,16 +36,30 @@ const SCALE_MIN = 0.5;
 const SCALE_MAX = 3.0;
 const SCALE_STEP = 0.25;
 
-export default function PdfPreviewPanel({ pdfUrl }) {
+const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
+  { pdfUrl, onPageChange, renderPageOverlay },
+  ref
+) {
   const [numPages, setNumPages] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [scale, setScale] = useState(1.0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pageInput, setPageInput] = useState("1");
+  // 페이지별 원본 크기 (PDF pt, scale=1 기준) — 오버레이 좌표 변환용
+  const [pageSizes, setPageSizes] = useState({});
 
   const containerRef = useRef(null);
   const pageRefs = useRef([]);
+
+  // ── 현재 페이지 변경 통지 (REQ-F07) ─────────────────────
+  const onPageChangeRef = useRef(onPageChange);
+  useEffect(() => {
+    onPageChangeRef.current = onPageChange;
+  });
+  useEffect(() => {
+    if (numPages) onPageChangeRef.current?.(currentPage);
+  }, [currentPage, numPages]);
 
   // ── PDF 로드 완료 ────────────────────────────────────────
   const onDocumentLoadSuccess = useCallback(({ numPages: n }) => {
@@ -36,6 +68,7 @@ export default function PdfPreviewPanel({ pdfUrl }) {
     setPageInput("1");
     setLoading(false);
     setError("");
+    setPageSizes({});
     pageRefs.current = Array(n).fill(null);
   }, []);
 
@@ -43,6 +76,18 @@ export default function PdfPreviewPanel({ pdfUrl }) {
     setLoading(false);
     setError("PDF를 불러올 수 없습니다.");
     console.error("PDF load error:", err);
+  }, []);
+
+  const onPageLoadSuccess = useCallback((page) => {
+    // originalWidth/Height = scale 1 기준 = PDF pt
+    setPageSizes((prev) => {
+      const cur = prev[page.pageNumber];
+      if (cur && cur.width === page.originalWidth && cur.height === page.originalHeight) return prev;
+      return {
+        ...prev,
+        [page.pageNumber]: { width: page.originalWidth, height: page.originalHeight },
+      };
+    });
   }, []);
 
   // ── IntersectionObserver: 스크롤 시 현재 페이지 추적 ────
@@ -92,6 +137,20 @@ export default function PdfPreviewPanel({ pdfUrl }) {
       container.scrollTo({ top, behavior: "instant" });
     }
   }, []);
+
+  // ── 외부 제어 (REQ-F07): ref.scrollToPage(n) ────────────
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToPage: (pageNum) => {
+        if (!numPages || pageNum < 1 || pageNum > numPages) return;
+        setCurrentPage(pageNum);
+        setPageInput(String(pageNum));
+        scrollToPage(pageNum);
+      },
+    }),
+    [numPages, scrollToPage]
+  );
 
   const handlePageInputKeyDown = (e) => {
     if (e.key !== "Enter") return;
@@ -206,11 +265,15 @@ export default function PdfPreviewPanel({ pdfUrl }) {
                   scale={scale}
                   renderTextLayer={false}
                   renderAnnotationLayer={false}
+                  onLoadSuccess={onPageLoadSuccess}
                 />
+                {renderPageOverlay?.(i + 1, { scale, pageSize: pageSizes[i + 1] ?? null })}
               </div>
             ))}
         </Document>
       </div>
     </div>
   );
-}
+});
+
+export default PdfPreviewPanel;
