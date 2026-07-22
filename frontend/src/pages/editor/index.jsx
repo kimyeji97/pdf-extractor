@@ -197,12 +197,13 @@ export default function EditorPage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  // REQ-20 복원
+  // REQ-20 복원 + 표지 목록 로드 — 서로 독립적이라 병렬 호출 (REQ-P02-06)
   useEffect(() => {
-    if (!initialWorkbookId) return;
-    (async () => {
-      try {
-        const meta = await getWorkbook(initialWorkbookId);
+    Promise.all([
+      initialWorkbookId ? getWorkbook(initialWorkbookId).catch(() => null) : Promise.resolve(null),
+      listCovers().catch(() => null),
+    ]).then(([meta, coverData]) => {
+      if (meta) {
         if (meta.layout) setLayout(meta.layout);
         if (meta.selections?.length) {
           setBasket(
@@ -220,8 +221,9 @@ export default function EditorPage() {
             })),
           );
         }
-      } catch {}
-    })();
+      }
+      setCovers(coverData?.covers || []);
+    });
   }, [initialWorkbookId]);
 
   useEffect(() => {
@@ -387,11 +389,6 @@ export default function EditorPage() {
     }
   };
 
-  useEffect(() => {
-    listCovers()
-      .then((d) => setCovers(d.covers || []))
-      .catch(() => {});
-  }, []);
   useEffect(
     () => () => {
       if (exportPollRef.current) clearInterval(exportPollRef.current);
