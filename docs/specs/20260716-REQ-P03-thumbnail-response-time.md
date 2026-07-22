@@ -186,7 +186,7 @@ GET /api/jobs?skip=0&limit=20&type=source
 
 ### MEDIUM — 명확한 개선 효과
 
-#### P03-04. 백그라운드 작업 비동기 전환  *(구 P02-04)*
+#### P03-04. 백그라운드 작업 비동기 전환  *(구 P02-04 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -206,16 +206,29 @@ GET /api/jobs?skip=0&limit=20&type=source
 
 **기대 효과**: 동시 추출 처리 능력 향상, 이벤트 루프 블로킹 방지
 
+**적용 내용 (2026-07-22)**
+
+- `extract.py`에 모듈 레벨 `_extract_pool = ProcessPoolExecutor(max_workers=2)` 신설(ECS 0.5 vCPU 고려해 워커 2개로 제한).
+- `_process_extraction`: 다운로드(I/O)는 그대로 두고, CPU-bound인 `pdf_service.extract_questions(...)` 호출만 `_extract_pool.submit(...).result()`로 별도 프로세스에서 실행.
+- `_process_extraction_v2`: `pdf_service.extract_questions_v2(...)` 전체(내부에서 다운로드·경계감지·그리드빌드·업로드까지 수행)를 프로세스 풀로 위임. `selections`(pydantic `SelectionItem` 리스트)는 pickle 가능함을 확인 후 그대로 전달.
+- 두 함수 모두 `BackgroundTasks`가 이미 threadpool에서 실행하므로, 풀에 넘긴 뒤 `.result()`로 동기 대기해도 이벤트 루프는 막히지 않는다. 목적은 CPU 작업이 **메인 프로세스의 GIL**을 점유해 다른 요청 처리를 지연시키는 것을 막는 것(프로세스 분리로 GIL 자체를 분리).
+
+**검증 (2026-07-22, R2, 실제 job)**
+
+- 프로세스 풀 경유 vs 동일 프로세스 직접 호출 비교(132p/573문항 PDF, 문항 3개 추출): **12.76s vs 12.66s** — 풀 오버헤드(프로세스 생성) 체감 지연 거의 없음(대부분 시간은 `detect_question_boundaries` 자체 비용).
+- 자식 프로세스에서 발생한 예외(`ValueError`)가 부모로 정상 전파되는지 확인(존재하지 않는 문항 번호 요청 → 동일한 에러 메시지로 catch).
+- 실제 `POST /api/extract-v2` HTTP 호출로 종단 검증: 2문항 선택 → 7초 내 `DONE` + 유효한 1페이지 A4 PDF 생성 확인(테스트용 export job은 검증 후 R2에서 삭제).
+
 ---
 
-#### P03-05. 문항 썸네일 중복 PDF 읽기 제거  *(구 P02-08)*
+#### P03-05. 문항 썸네일 중복 PDF 읽기 제거  *(구 P02-08 / ⏭️ 검토 결과 — 이미 해결됨, 조치 불필요)*
 
 | 항목 | 내용 |
 |------|------|
 | 파일 | `backend/app/routers/browse.py`(`get_question_thumbnail_endpoint`) |
 | 분류 | Backend · I/O |
 
-**현재 문제**
+**현재 문제 (스펙 작성 시 진단)**
 
 캐시 미스 시 boundary 감지용으로 PDF를 읽고(약 795행), 이후 썸네일 생성용으로 **동일 PDF를 재읽기**한다.
 
@@ -224,6 +237,8 @@ GET /api/jobs?skip=0&limit=20&type=source
 첫 read의 `pdf_bytes`를 썸네일 생성에 재사용(P03-01의 "PDF bytes 재사용"과 동일 맥락).
 
 **기대 효과**: 캐시 미스 시 응답 ~20% 단축
+
+**재검토 결과 (2026-07-22)**: 실제 코드를 다시 확인한 결과 이미 재사용 로직이 들어가 있었다. `cached_boundaries is None`(경계 캐시 미스) 분기에서 읽은 `pdf_bytes`를 그대로 유지하고, 이후 `if pdf_bytes is None: pdf_bytes = storage.read_file(...)`로 캐시 히트 분기에서만 새로 읽는다. `git blame`으로 확인한 결과 이 엔드포인트가 **최초 작성된 커밋(`d4367ce`)부터 이미 이 형태**였다 — 중복 read는 존재하지 않는다. 스펙 작성 당시의 진단이 실제 코드와 맞지 않았던 것으로 보인다. **추가 조치 없이 완료 처리.**
 
 ---
 
@@ -297,9 +312,10 @@ PDF 처리 엔드포인트에 30초 타임아웃(`asyncio.wait_for()` 또는 미
 | 단계 | 항목 | 비고 |
 |------|------|------|
 | ✅ **프로파일링** | P03-01 원인 확정 → **R2 다운로드가 ~99%**(렌더·파싱 무시 수준) | 완료(§P03-01) |
-| **High impact** | P03-02(페이지 메타 캐시), P03-01(프리워밍 — job당 PDF 다운로드 1회화) | 병목 직격 |
-| **Quick win** | P03-05(단일 요청 중복 read 제거) | 간단 |
-| **Scalability** | P03-03(페이지네이션), P03-04(비동기), P03-08(타임아웃) | 구조 변경 |
+| ✅ **High impact** | P03-02(페이지 메타 캐시), P03-01(프리워밍 — job당 PDF 다운로드 1회화) | 완료·병목 직격 |
+| ✅ **Quick win** | P03-05(단일 요청 중복 read 제거) | 재검토 결과 이미 해결돼 있어 조치 불필요 |
+| ✅ **동시성** | P03-04(추출 작업 ProcessPoolExecutor 분리) | 완료(§P03-04) |
+| **Scalability** | P03-03(페이지네이션), P03-08(타임아웃) | 구조 변경 — 미착수 |
 | **낮음(지연 무관)** | P03-06(adaptive 조건부), P03-07(DPI) | 병목 아님 확인 → 리소스 관점만 |
 
 ---
@@ -322,5 +338,5 @@ PDF 처리 엔드포인트에 30초 타임아웃(`asyncio.wait_for()` 또는 미
 - P03-01: R2가 바이트 레인지/부분 다운로드를 지원하는지 → 전체 재다운로드 회피 가능 여부 (프리워밍으로 대부분 해소되므로 후순위)
 - ~~P03-01: 썸네일 프리워밍을 어느 시점에 어느 범위로 할지~~ → **결정·적용 완료: 업로드/재감지 직후(boundaries DONE 저장 후), 전 페이지 + 전체 감지 문항 범위로 프리워밍**. R2 PUT 건당 ~270ms라 순차 시 job당 3~4분 소요돼 `ThreadPoolExecutor(12)`로 병렬화.
 - P03-03: 프론트 UI를 무한 스크롤 vs 페이지 번호 중 선택(P02 연계)
-- P03-04: ECS 0.5 vCPU에서 ProcessPoolExecutor 실효성 — vCPU 부족 시 I/O 분리만 적용
+- ~~P03-04: ECS 0.5 vCPU에서 ProcessPoolExecutor 실효성~~ → **적용 완료(max_workers=2)**. 실측상 풀 경유 오버헤드는 미미(12.76s vs 직접호출 12.66s). vCPU 총량은 그대로지만 CPU 작업이 별도 프로세스로 빠져 메인 프로세스 GIL이 다른 요청 처리에 즉시 사용 가능해지는 효과는 유지.
 - 목표 SLA: "모든 통신 1초 이하" 대비 현실적 SLA 합의(콜드 스타트·대형 PDF 예외 허용치)

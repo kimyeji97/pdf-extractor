@@ -5,6 +5,7 @@ POST /api/extract-v2      - 복수 선택 문항 추출 작업 시작 (백그라
 """
 import tempfile
 import uuid
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -16,6 +17,12 @@ from app.models.schemas import (
 from app.services import storage, pdf_service
 
 router = APIRouter()
+
+# CPU-bound PDF 처리(pdfplumber 파싱 + PyMuPDF 렌더링)를 메인 프로세스의 GIL 밖으로
+# 분리한다 (REQ-P03-04). BackgroundTasks는 sync 함수를 threadpool에서 실행할 뿐이라
+# CPU 작업이 GIL을 점유하는 동안 메인 이벤트 루프·다른 요청 처리가 지연될 수 있었다.
+# ECS Fargate 0.5 vCPU 환경을 고려해 워커 수는 2로 제한.
+_extract_pool = ProcessPoolExecutor(max_workers=2)
 
 
 # ── 추출 요청 ─────────────────────────────────────────────
@@ -70,11 +77,13 @@ def _process_extraction(job_id: str, status_file: JobStatusFile) -> None:
         try:
             storage.download_file(status_file.original_key, input_path)
 
-            count = pdf_service.extract_questions(
-                input_pdf_path=input_path,
-                question_numbers_raw=status_file.question_numbers,
-                output_pdf_path=output_path,
-            )
+            # CPU-bound 파싱/크롭을 별도 프로세스로 분리 (REQ-P03-04)
+            count = _extract_pool.submit(
+                pdf_service.extract_questions,
+                input_path,
+                status_file.question_numbers,
+                output_path,
+            ).result()
 
             res_key = storage.result_key(job_id)
             storage.upload_file(output_path, res_key)
@@ -128,13 +137,15 @@ def _process_extraction_v2(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
-            count = pdf_service.extract_questions_v2(
-                selections=selections,
-                export_job_id=export_job_id,
-                tmpdir=tmpdir,
-                layout=layout,
-                cover_id=cover_id,
-            )
+            # CPU-bound 파싱/크롭/그리드 빌드를 별도 프로세스로 분리 (REQ-P03-04)
+            count = _extract_pool.submit(
+                pdf_service.extract_questions_v2,
+                selections,
+                export_job_id,
+                tmpdir,
+                layout,
+                cover_id,
+            ).result()
             export_status.status = JobStatus.DONE
             export_status.result_key = storage.result_key(export_job_id)
             export_status.extracted_count = count
