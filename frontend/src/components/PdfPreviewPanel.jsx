@@ -48,6 +48,9 @@ const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
   const [pageInput, setPageInput] = useState("1");
   // 페이지별 원본 크기 (PDF pt, scale=1 기준) — 오버레이 좌표 변환용
   const [pageSizes, setPageSizes] = useState({});
+  // 가상화(REQ-P02-01): 뷰포트 근처에 들어온 적 있는 페이지만 실제 <Page> 렌더.
+  // 한 번 렌더된 페이지는 계속 유지(다시 스크롤해 지나갈 때 재마운트 방지).
+  const [renderedPages, setRenderedPages] = useState(() => new Set([1]));
 
   const containerRef = useRef(null);
   const pageRefs = useRef([]);
@@ -69,6 +72,7 @@ const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
     setLoading(false);
     setError("");
     setPageSizes({});
+    setRenderedPages(new Set([1]));
     pageRefs.current = Array(n).fill(null);
   }, []);
 
@@ -122,21 +126,85 @@ const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
     return () => observer.disconnect();
   }, [numPages, scale, currentPage]);
 
+  // ── 가상화(REQ-P02-01): 뷰포트 근처 페이지만 실제 렌더 ──
+  // 대형 PDF(200+ 페이지)에서 전체 페이지를 동시에 <Page>로 렌더하면 캔버스가
+  // 한꺼번에 생성돼 메모리·CPU를 대량 소비한다. 위아래 여유(rootMargin)를 넉넉히
+  // 두어 스크롤이 실제 뷰포트에 닿기 전에 미리 렌더되도록 한다.
+  useEffect(() => {
+    if (!numPages) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const toAdd = [];
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const idx = pageRefs.current.indexOf(entry.target);
+            if (idx >= 0) toAdd.push(idx + 1);
+          }
+        });
+        if (toAdd.length === 0) return;
+        setRenderedPages((prev) => {
+          if (toAdd.every((p) => prev.has(p))) return prev;
+          const next = new Set(prev);
+          toAdd.forEach((p) => next.add(p));
+          return next;
+        });
+      },
+      { root: container, rootMargin: "1000px 0px" },
+    );
+
+    pageRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [numPages]);
+
+  // 아직 렌더되지 않은(placeholder) 페이지의 예상 크기 — 같은 문서는 대부분
+  // 페이지 크기가 동일하므로, 이미 로드된 페이지 중 하나의 크기를 재사용한다.
+  // 하나도 없으면 A4 세로 기준(595×842pt)으로 추정.
+  const firstLoadedPageSize = Object.values(pageSizes)[0];
+  const fallbackWidthPt  = firstLoadedPageSize?.width  ?? 595;
+  const fallbackHeightPt = firstLoadedPageSize?.height ?? 842;
+
   // ── 페이지 이동 ──────────────────────────────────────────
   // scrollIntoView는 스크롤 조상을 자동 선택하고, smooth 애니메이션은
   // react-pdf Page의 지속적 리페인트에 취소되어 동작하지 않는다.
   // 스크롤 컨테이너를 명시적으로 지정해 목표 좌표로 즉시 스크롤한다.
+  //
+  // 가상화 대상 페이지로 점프하는 경우, 대상 페이지를 먼저 렌더 큐에 추가한 뒤
+  // 실제 DOM에 반영될 다음 프레임에 위치를 계산해야 정확히 이동한다.
   const scrollToPage = useCallback((pageNum) => {
-    const el = pageRefs.current[pageNum - 1];
-    const container = containerRef.current;
-    if (el && container) {
-      const top =
-        el.getBoundingClientRect().top -
-        container.getBoundingClientRect().top +
-        container.scrollTop;
-      container.scrollTo({ top, behavior: "instant" });
-    }
-  }, []);
+    // 대상 페이지의 "앞" 페이지들은 강제 렌더하지 않는다 — 앞 페이지까지 함께
+    // 실제 <Page>로 전환하면 그 페이지가 아직 크기를 잡기 전(0px) 상태에서
+    // 누적 높이를 계산하게 되어 스크롤 위치가 한 페이지만큼 짧게 계산되는
+    // 버그가 있었다(실측: 150페이지 이동 시 149로 안착). 대상 페이지 이전은
+    // 이미 정확한 크기의 placeholder이므로 그대로 두고, 대상(및 다음 페이지)만
+    // 렌더 큐에 추가한다.
+    setRenderedPages((prev) => {
+      if (prev.has(pageNum)) return prev;
+      const next = new Set(prev);
+      next.add(pageNum);
+      if (numPages && pageNum < numPages) next.add(pageNum + 1);
+      return next;
+    });
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = pageRefs.current[pageNum - 1];
+        const container = containerRef.current;
+        if (el && container) {
+          const top =
+            el.getBoundingClientRect().top -
+            container.getBoundingClientRect().top +
+            container.scrollTop;
+          container.scrollTo({ top, behavior: "instant" });
+        }
+      });
+    });
+  }, [numPages]);
 
   // ── 외부 제어 (REQ-F07): ref.scrollToPage(n) ────────────
   useImperativeHandle(
@@ -254,22 +322,37 @@ const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
           loading=""
         >
           {numPages &&
-            Array.from({ length: numPages }, (_, i) => (
-              <div
-                key={i}
-                className="pdf-page-wrapper"
-                ref={(el) => { pageRefs.current[i] = el; }}
-              >
-                <Page
-                  pageNumber={i + 1}
-                  scale={scale}
-                  renderTextLayer={false}
-                  renderAnnotationLayer={false}
-                  onLoadSuccess={onPageLoadSuccess}
-                />
-                {renderPageOverlay?.(i + 1, { scale, pageSize: pageSizes[i + 1] ?? null })}
-              </div>
-            ))}
+            Array.from({ length: numPages }, (_, i) => {
+              const pageNum = i + 1;
+              const isRendered = renderedPages.has(pageNum);
+              return (
+                <div
+                  key={i}
+                  className="pdf-page-wrapper"
+                  ref={(el) => { pageRefs.current[i] = el; }}
+                >
+                  {isRendered ? (
+                    <>
+                      <Page
+                        pageNumber={pageNum}
+                        scale={scale}
+                        renderTextLayer={false}
+                        renderAnnotationLayer={false}
+                        onLoadSuccess={onPageLoadSuccess}
+                      />
+                      {renderPageOverlay?.(pageNum, { scale, pageSize: pageSizes[pageNum] ?? null })}
+                    </>
+                  ) : (
+                    <div
+                      style={{
+                        width: (pageSizes[pageNum]?.width ?? fallbackWidthPt) * scale,
+                        height: (pageSizes[pageNum]?.height ?? fallbackHeightPt) * scale,
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
         </Document>
       </div>
     </div>
