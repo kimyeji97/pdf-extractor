@@ -9,7 +9,7 @@
  *   jobId, pageNum, pageInfo  — 현재 페이지 식별
  *   refreshTrigger            — 부모가 재감지/수동추가 완료 시 증가시키는 카운터
  */
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, memo } from "react";
 import {
   getPageQuestions,
   updateQuestionTitle,
@@ -42,6 +42,83 @@ function CardImg({ src, alt }) {
     </div>
   );
 }
+
+// 체크박스 하나만 토글해도 전체 카드 목록이 리렌더되는 것을 막기 위해
+// 카드를 별도 컴포넌트로 분리하고 memo 처리한다 (REQ-P02-04). 편집 중인 카드만
+// isEditing/editingValue가 바뀌므로 나머지 카드는 리렌더를 건너뛴다.
+const QuestionCard = memo(
+  function QuestionCard({
+    q, isChecked, isEditing, editingValue,
+    onToggleCheck, onStartEdit, onCommitEdit, onCancelEdit, onEditingValueChange,
+  }) {
+    const displayTitle = q.title || (q.is_manual ? "(수동 문항)" : `문항 ${q.question_num}`);
+    return (
+      <div
+        className={[
+          "qap-card",
+          q.is_false_positive ? "qap-card--fp" : "",
+          isChecked            ? "qap-card--checked" : "",
+        ].join(" ")}
+      >
+        {/* 상단 행: 체크박스 + 배지 + 타이틀 */}
+        <div className="qap-card-header">
+          <input
+            type="checkbox"
+            className="qap-card-check"
+            checked={isChecked}
+            onChange={() => onToggleCheck(q.question_id)}
+            title={q.is_false_positive ? "오탐지 의심 문항입니다. 이미지를 확인한 뒤 선택하여 삭제할 수 있습니다." : ""}
+          />
+
+          <div className="qap-card-badges">
+            {q.is_manual && <span className="qap-badge qap-badge--manual">수동</span>}
+            {q.is_false_positive && (
+              <span className="qap-badge qap-badge--fp">오탐지 의심</span>
+            )}
+          </div>
+
+          {isEditing ? (
+            <input
+              type="text"
+              className="qap-title-input"
+              value={editingValue}
+              onChange={(e) => onEditingValueChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter")  onCommitEdit(q);
+                if (e.key === "Escape") onCancelEdit();
+              }}
+              onBlur={() => onCommitEdit(q)}
+              autoFocus
+            />
+          ) : (
+            <span
+              className="qap-card-title"
+              title="더블클릭하여 타이틀 수정"
+              onDoubleClick={() => !q.is_false_positive && onStartEdit(q)}
+            >
+              {displayTitle}
+            </span>
+          )}
+        </div>
+
+        {/* 문항 이미지 */}
+        <CardImg src={`${API_ROOT}${q.thumbnail_url}`} alt={displayTitle} />
+
+        {q.is_false_positive && (
+          <p className="qap-fp-note">
+            오탐지일 수 있습니다. 문항 이미지를 확인 후 필요하면 삭제하세요.
+          </p>
+        )}
+      </div>
+    );
+  },
+  (prev, next) =>
+    prev.q.question_id === next.q.question_id &&
+    prev.q.title === next.q.title &&
+    prev.isChecked === next.isChecked &&
+    prev.isEditing === next.isEditing &&
+    prev.editingValue === next.editingValue,
+);
 
 export default function QuestionAnalysisPanel({
   jobId,
@@ -231,71 +308,20 @@ export default function QuestionAnalysisPanel({
               </div>
             )}
 
-        {questions.map((q) => {
-          const displayTitle = q.title || (q.is_manual ? "(수동 문항)" : `문항 ${q.question_num}`);
-          const isChecked    = checkedIds.has(q.question_id);
-
-          return (
-            <div
-              key={q.question_id}
-              className={[
-                "qap-card",
-                q.is_false_positive ? "qap-card--fp" : "",
-                isChecked            ? "qap-card--checked" : "",
-              ].join(" ")}
-            >
-              {/* 상단 행: 체크박스 + 배지 + 타이틀 */}
-              <div className="qap-card-header">
-                <input
-                  type="checkbox"
-                  className="qap-card-check"
-                  checked={isChecked}
-                  onChange={() => toggleCheck(q.question_id)}
-                  title={q.is_false_positive ? "오탐지 의심 문항입니다. 이미지를 확인한 뒤 선택하여 삭제할 수 있습니다." : ""}
-                />
-
-                <div className="qap-card-badges">
-                  {q.is_manual && <span className="qap-badge qap-badge--manual">수동</span>}
-                  {q.is_false_positive && (
-                    <span className="qap-badge qap-badge--fp">오탐지 의심</span>
-                  )}
-                </div>
-
-                {editingId === q.question_id ? (
-                  <input
-                    type="text"
-                    className="qap-title-input"
-                    value={editingValue}
-                    onChange={(e) => setEditingValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter")  commitEdit(q);
-                      if (e.key === "Escape") cancelEdit();
-                    }}
-                    onBlur={() => commitEdit(q)}
-                    autoFocus
-                  />
-                ) : (
-                  <span
-                    className="qap-card-title"
-                    title="더블클릭하여 타이틀 수정"
-                    onDoubleClick={() => !q.is_false_positive && startEdit(q)}
-                  >
-                    {displayTitle}
-                  </span>
-                )}
-              </div>
-
-              {/* 문항 이미지 */}
-              <CardImg src={`${API_ROOT}${q.thumbnail_url}`} alt={displayTitle} />
-
-              {q.is_false_positive && (
-                <p className="qap-fp-note">
-                  오탐지일 수 있습니다. 문항 이미지를 확인 후 필요하면 삭제하세요.
-                </p>
-              )}
-            </div>
-          );
-        })}
+        {questions.map((q) => (
+          <QuestionCard
+            key={q.question_id}
+            q={q}
+            isChecked={checkedIds.has(q.question_id)}
+            isEditing={editingId === q.question_id}
+            editingValue={editingValue}
+            onToggleCheck={toggleCheck}
+            onStartEdit={startEdit}
+            onCommitEdit={commitEdit}
+            onCancelEdit={cancelEdit}
+            onEditingValueChange={setEditingValue}
+          />
+        ))}
       </div>
     </div>
   );

@@ -7,8 +7,29 @@
  * 페이지 필터: 텍스트 입력으로 구간(3-10) 또는 개별(1,3,5) 지정.
  * 썸네일: 로딩 시간 단축을 위해 표시하지 않는다.
  */
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, memo } from "react";
 import { getAllQuestions } from "../api/client";
+
+// 체크박스 하나만 토글해도 전체 목록이 리렌더되는 것을 막기 위해 항목을
+// 별도 컴포넌트로 분리하고 memo 처리한다 (REQ-P02-04). 대량 문항(600+)에서
+// isSelected·question_id가 바뀌지 않은 항목은 리렌더를 건너뛴다.
+const QuestionItem = memo(
+  function QuestionItem({ q, pageNum, isSelected, onToggle }) {
+    const displayTitle = q.title || (q.is_manual ? "(수동 문항)" : `문항 ${q.question_num}`);
+    return (
+      <label className={`qlist-item${isSelected ? " qlist-item--checked" : ""}`}>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggle?.({ ...q, _pageNum: pageNum })}
+        />
+        <span className="qlist-item-label">{displayTitle}</span>
+        {q.is_manual && <span className="qlist-badge-manual">수동</span>}
+      </label>
+    );
+  },
+  (prev, next) => prev.isSelected === next.isSelected && prev.q.question_id === next.q.question_id,
+);
 
 /**
  * 페이지 입력 파싱 (1-based → 0-based Set)
@@ -144,25 +165,15 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
           <div key={group.pageNum} className="qlist-page-group">
             <div className="qlist-page-label">{group.pageNum + 1}페이지</div>
 
-            {group.questions.map((q) => {
-              const displayTitle = q.title || (q.is_manual ? "(수동 문항)" : `문항 ${q.question_num}`);
-              const isSelected   = selectedIds.has(q.question_id);
-
-              return (
-                <label
-                  key={q.question_id}
-                  className={`qlist-item${isSelected ? " qlist-item--checked" : ""}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggle?.({ ...q, _pageNum: group.pageNum })}
-                  />
-                  <span className="qlist-item-label">{displayTitle}</span>
-                  {q.is_manual && <span className="qlist-badge-manual">수동</span>}
-                </label>
-              );
-            })}
+            {group.questions.map((q) => (
+              <QuestionItem
+                key={q.question_id}
+                q={q}
+                pageNum={group.pageNum}
+                isSelected={selectedIds.has(q.question_id)}
+                onToggle={onToggle}
+              />
+            ))}
           </div>
         ))}
       </div>
