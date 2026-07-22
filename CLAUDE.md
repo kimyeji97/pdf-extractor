@@ -345,9 +345,25 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
 
 **결론**: REQ-P03(서버 성능)은 **P03-03(페이지네이션)만 사용자 결정으로 보류**, 나머지 전부 완료/기각 처리 완료. P03-03은 `GET /api/jobs` 응답 형태 변경(`{source_jobs, export_jobs}` → `{items, total, skip, limit}` 등) + 프론트 무한스크롤/페이지버튼 UX 결정이 필요해 별도 논의 예정(현재 실 데이터는 source 5건+export 10건 수준이라 당장 급하지 않음).
 
+### 0-3. 2026-07-22 REQ-P02 완료 — 클라 성능 (10개 항목 전체)
+
+사용자 결정으로 **Quick win(02,05,03) → Polish(04,06,07,08,09) → 가장 크고 복잡한 P02-01(뷰어 가상화)을 마지막에** 순서로 진행. 전 항목 실제 브라우저(dev 서버 + headless Chrome/CDP) 검증 후 커밋.
+
+- **P02-02 (커밋 `49c677b`)**: 분석 목록 `JobCard`의 `getPages` 호출 제거, 썸네일 URL `/api/jobs/{id}/pages/0/thumbnail` 직접 조립(결정적 URL이라 목록 API 불필요). `onError`로 `thumbFailed` 추가해 기존 아이콘 폴백 유지.
+- **P02-05 (같은 커밋)**: `work.jsx` 재감지 폴링이 로컬 `setInterval` 변수라 언마운트 시 미정리되던 것을 `refreshPollRef` + cleanup useEffect로 수정(`editor/index.jsx` export 폴링은 이미 같은 패턴 적용돼 있었음 — 확인만).
+- **P02-03 (커밋 `931b594`)**: `client.js`의 `apiFetch`에 GET 전용 dedup. 동일 URL in-flight면 Promise 공유 + `Response.clone()`으로 각자 독립 `res.json()` 가능하게 함. Node로 직접 검증(동시 3회 → 실제 요청 1회).
+- **P02-04 (커밋 `e9d9df2`)**: `QuestionListPanel`→`QuestionItem`, `QuestionAnalysisPanel`→`QuestionCard`로 항목 추출 + `React.memo`. 편집 상태(`isEditing`/`editingValue`)를 비교자에 포함해 인라인 편집 중인 카드만 리렌더.
+- **P02-06 (커밋 `66bd6bc`)**: `editor/index.jsx`의 `getWorkbook`+`listCovers`를 `Promise.all`로 병렬화(개별 `.catch()`로 에러 격리 유지).
+- **P02-07 (커밋 `303ac50`)**: `WorkbookPreview`에 `WorkbookPage`+`usePageVisible`(IntersectionObserver, rootMargin 300px) 가상화 추가. `loading="lazy"`는 최초 구현부터 이미 있었음. 실측: 40문항/20페이지 중 이미지 렌더 셀 5개뿐(가상화 확인).
+- **P02-08 (커밋 `9678721`)**: `QuestionAnalysisPanel`의 `allChecked`를 `useMemo`로 래핑(편집 중 매 keystroke마다 전체 `.every()` 재순회 방지).
+- **P02-09 (커밋 `4772e00`)**: `@mui/lab`·`@mui/x-data-grid` 전수 확인 결과 **둘 다 실제 라우트에서 도달 불가능한 죽은 코드**(계정 섹션, DataGrid 페이지네이션 헬퍼)에서만 사용 중이라 확인 후 제거. 연쇄 죽은 코드(`AccountsProvider`, `data/account/*`, `TablePagination.tsx` 오버라이드 등) 포함 22개 파일 삭제. `npm install`/`tsc`/`npm run build` 통과.
+- **P02-01 (커밋 `7f4c7ed`)**: `PdfPreviewPanel.jsx`에 IntersectionObserver 기반 뷰어 가상화(rootMargin 1000px). react-window 대신 직접 구현 선택(F07 오버레이 좌표 계약 유지가 더 쉬움). **버그 발견·수정**: `scrollToPage` 점프 시 대상 페이지의 "이전" 페이지까지 강제 렌더하면 그 페이지가 아직 0px인 상태로 누적 높이를 계산해 스크롤이 한 페이지 짧게 계산됨(실측: 150페이지 이동 시 149에 안착) → 이전 페이지는 강제 렌더 대상에서 제외하고 대상+다음 페이지만 렌더 큐에 추가하도록 수정해 해결. CDP로 실제 206페이지 문서 검증: 초기 캔버스 2~4개(전체 206개 대비), 페이지 점프(75/100/150) 정확히 도착, 자연 스크롤 점진 렌더링(4→16개) 확인. 생성 이력 페이지의 단순 사용처(ref 없음)도 정상.
+
+**결론**: REQ-P02(클라 성능) **10개 항목 전체 적용 완료**. 서버(P03)·클라(P02) 양쪽 성능 작업 모두 마무리, 남은 건 P03-03(페이지네이션, 보류)뿐.
+
 **남은 작업**:
 - **REQ-P03 (서버)** — P03-03(페이지네이션)만 보류. 나머지 완료.
-- **REQ-P02 (클라)** — 미착수, 다음 착수 대상. P02-02(목록 카드 `getPages` 제거)·P02-01(뷰어 가상화, F07 오버레이 좌표 계약 유지) 우선.
+- **REQ-P02 (클라)** — ✅ 전체 완료.
 
 ### 1. 작업 목록 & 계획 번호
 
@@ -362,7 +378,7 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
 | 7 | 문제집 편집 | 다운로드 PDF에서 문항 라벨 `...` 축약 방지 | REQ-B09 | 버그 | ✅ 완료 |
 | 8 | 문제집 편집 | 우측 미리보기 스크롤 방향 좌우 → 상하 | REQ-F08 | 개선 | ✅ 완료 |
 | 9 | 표지 관리 | 목록형 1패널 + 업로드 모달로 재설계 (기존 REQ-D05 방향 상충) | REQ-D06 | 디자인 | ✅ 완료 |
-| 10 | 클라(FE) | 클라 성능: 뷰어 가상화, getPages 낭비 제거, dedup, 리스트 memo 등 | REQ-P02 | 성능 | ⬜ 예정 |
+| 10 | 클라(FE) | 클라 성능: 뷰어 가상화, getPages 낭비 제거, dedup, 리스트 memo 등 | REQ-P02 | 성능 | ✅ 완료 (10개 항목 전체) |
 | 11 | 서버(BE) | 서버 성능: 썸네일 6~10초 병목(전체 PDF 재read) + 캐시·페이지네이션·비동기 | REQ-P03 | 성능 | ✅ 완료 (P03-03 페이지네이션만 사용자 결정으로 보류) |
 
 > **번호 부여 메모**
@@ -381,7 +397,7 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
 - **REQ-B09 (라벨 축약)**: `...` 축약 발생 위치(`pdf_service` PDF 생성 시 truncate 로직) 확인. 라벨이 길 때 줄바꿈 허용 vs 폰트 축소 vs 셀 영역 확대 정책. REQ-C07과 **동시 진행 권장**.
 - **REQ-F08 (미리보기 스크롤 방향)**: 대상은 문제집 편집 우측 `WorkbookPreview` 캔버스 컨테이너. `overflow-x → overflow-y` 전환 시 페이지·셀 배치 흐름과 다중 페이지 세로 나열 방식 확정.
 - **REQ-D06 (표지 목록형)**: 기존 REQ-D05(2패널)와 상충 — D05 폐기/대체 결정. 업로드 모달 UX(트리거 버튼, 모달 내 필드). `[+표지 업로드][표지1][표지2]…` 한 줄 그리드. 기준 삼을 "목록 페이지" 디자인 식별(`FileListPanel` 등).
-- **REQ-P02 (클라 성능)**: 2026-07-22 재구성 후 **Frontend 전용**. P02-01~10(뷰어 가상화, getPages 낭비 제거, dedup, 리스트 memo, 폴링 클린업, 초기화 병렬, WorkbookPreview, 파생 useMemo, MUI 번들, StrictMode 착시 문서화). 뷰어 가상화(P02-01)는 F07 오버레이 좌표 계약 유지 필요.
+- **REQ-P02 (클라 성능)**: 2026-07-22 재구성 후 **Frontend 전용**. P02-01~10(뷰어 가상화, getPages 낭비 제거, dedup, 리스트 memo, 폴링 클린업, 초기화 병렬, WorkbookPreview, 파생 useMemo, MUI 번들, StrictMode 착시 문서화). 뷰어 가상화(P02-01)는 F07 오버레이 좌표 계약 유지 필요. **2026-07-22 완료(§0-3)**: 10개 항목 전체 적용, P02-01에서 스크롤 점프 버그 발견·수정.
 - **REQ-P03 (서버 성능)**: 2026-07-22 재구성 후 **Backend 전용**(구 P02 백엔드 7개 이관 + 썸네일 병목). **원인 규명 완료**: 6~10초 = 캐시 미스 시 전체 PDF 재다운로드(R2 왕복) + 전체 문서 파싱이 썸네일 1장당 반복. P03-01(재read 제거+프리워밍)·P03-02(페이지 메타 캐시)가 핵심. P02-02와 함께 적용해야 목록 로딩 근본 개선. **2026-07-22 완료(§0-2)**: P03-01/02/04/05/07/08 전부 적용, P03-06은 정확도 회귀로 기각·원복, P03-03(페이지네이션)만 사용자 결정으로 보류.
 
 ### 3. 작업 순서 (의존 관계 기반)
@@ -406,7 +422,7 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
 [Phase 5] ✅ 완료 — 표지 디자인
   REQ-D06 ✅ (목록형 1패널 + 모달, D05 superseded 처리 / 분석 목록도 래핑 그리드로 통일)
 
-[Phase 6] 🔄 진행중 — 성능 (2026-07-22 재구성: P02=클라 / P03=서버)
+[Phase 6] ✅ 완료 — 성능 (2026-07-22 재구성: P02=클라 / P03=서버)
   REQ-P03 (서버) ✅ 완료(P03-03 보류):
     ✅ P03-01 프로파일링 + 전 페이지 프리워밍 (R2 다운로드 ~99% 병목 확정 → ThreadPoolExecutor(12)로 프리워밍)
     ✅ P03-02 페이지 메타 캐시 (list_pages 2.75s→0.17s)
@@ -416,9 +432,12 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
     ✅ P03-07 썸네일 DPI 96 기본값
     ✅ P03-08 요청 타임아웃 미들웨어(30초)
     ⏸ P03-03 페이지네이션 — 사용자 결정으로 보류, 추후 논의(API 응답 형태 변경 + 프론트 UX 결정 필요)
-  REQ-P02 (클라) 미착수, 다음 착수 대상: P02-02(getPages 제거) → P02-01(뷰어 가상화) 등
-  ※ P02-02(목록 카드 getPages 제거)는 P03-01 프리워밍과 함께여야 목록 로딩 근본 개선 체감
-  ※ P02-01(뷰어 가상화)은 F07 오버레이 좌표 계약(pt=cssPx/scale, .pdf-page-wrapper relative) 유지 필요
+  REQ-P02 (클라) ✅ 완료(10개 항목 전체, §0-3):
+    ✅ P02-02 getPages 제거  ✅ P02-05 폴링 클린업  ✅ P02-03 dedup
+    ✅ P02-04 리스트/카드 memo  ✅ P02-06 초기화 병렬  ✅ P02-07 WorkbookPreview 가상화
+    ✅ P02-08 파생 상태 useMemo  ✅ P02-09 미사용 MUI 패키지 제거
+    ✅ P02-01 뷰어 가상화 (스크롤 점프 버그 발견·수정 — 대상 이전 페이지 강제 렌더 시 스크롤 위치 오차)
+  ※ P02-01(뷰어 가상화)은 F07 오버레이 좌표 계약(pt=cssPx/scale, .pdf-page-wrapper relative) 유지 확인됨
 ```
 
 > **P02/P03 재구성 (2026-07-22)**: 구 P02(클라+서버 혼재)를 **P02=Frontend / P03=Backend**로 분리. 백엔드 7개 항목(구 P02-02·03·04·08·09·12·14)을 P03로 이관하고 P02는 P02-01~10 순차 재번호. 클라 성능 분석 발견(StrictMode 이중요청=dev 착시, 목록 카드 getPages 낭비, list_pages/thumbnail 전체 PDF 재read 병목) 반영.

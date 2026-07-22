@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| 날짜 | 2026-06-29 (2026-07-22 재구성) |
+| 날짜 | 2026-06-29 (2026-07-22 재구성, 2026-07-22 완료) |
 | 작성자 | kimyeji97 |
-| 상태 | open |
+| 상태 | ✅ 완료 (10개 항목 전체 적용) |
 | 관련 | REQ-P03 서버(Backend) 성능 개선, REQ-F07 문항 분석 PDF 뷰어 |
 
 ---
@@ -37,7 +37,7 @@
 
 ### HIGH — 체감 효과 큰 개선
 
-#### P02-01. PDF 뷰어 페이지 가상화  *(구 P02-01)*
+#### P02-01. PDF 뷰어 페이지 가상화  *(구 P02-01 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -71,9 +71,11 @@
 
 **기대 효과**: 초기 렌더 2~8초 단축, 메모리 75-90% 감소 (대형 PDF)
 
+**적용 내용 (2026-07-22)**: `PdfPreviewPanel.jsx`에 IntersectionObserver 기반 가상화 구현(직접 구현, react-window 미사용 — F07 오버레이 좌표 계약을 그대로 유지하기 쉬움). `renderedPages` Set으로 뷰포트 근처(rootMargin 1000px) 페이지만 실제 `<Page>` 렌더, 나머지는 크기 유지 placeholder. `scrollToPage` 점프 시 대상 페이지를 먼저 렌더 큐에 넣고 다음 프레임에 위치 계산(대상 "이전" 페이지까지 강제 렌더하면 스크롤 위치가 한 페이지 짧게 계산되는 버그를 실측으로 발견해 수정). 실제 206페이지 문서로 CDP 기반 검증: 초기 캔버스 2~4개(전체 206개 대비), 페이지 점프·자연 스크롤 모두 정상 동작 확인. F07 오버레이(`renderPageOverlay`)는 실제 렌더된 페이지에서만 호출되며, 현재 유일한 소비처(work.jsx)가 `pageSize`를 쓰지 않고 `scale`만 사용해 영향 없음.
+
 ---
 
-#### P02-02. 목록 카드 `getPages` 낭비 호출 제거  *(신규 — 클라 성능 분석 Q2-A)*
+#### P02-02. 목록 카드 `getPages` 낭비 호출 제거  *(신규 — 클라 성능 분석 Q2-A / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -106,9 +108,11 @@ const thumbUrl = `${API_ROOT}/api/jobs/${job.job_id}/pages/0/thumbnail`;
 
 **기대 효과**: 목록 진입 시 전체 PDF 재다운로드 N회 → 0회. 카드 로딩 대폭 단축.
 
+**적용 내용 (2026-07-22)**: `analysis/index.jsx`의 `JobCard`에서 `getPages` 호출·`useEffect` 제거, `thumbUrl`을 결정적으로 직접 조립. 기존 "썸네일 없음→아이콘 폴백" UX를 유지하기 위해 `onError` 핸들러로 `thumbFailed` 상태 추가(진짜 로드 실패시에만 아이콘, 그 외엔 스켈레톤→이미지).
+
 ---
 
-#### P02-03. API 요청 중복 방지 (Deduplication)  *(구 P02-11)*
+#### P02-03. API 요청 중복 방지 (Deduplication)  *(구 P02-11 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -140,11 +144,13 @@ export async function getAllQuestions(jobId) {
 
 **기대 효과**: 불필요한 중복 API 호출 제거
 
+**적용 내용 (2026-07-22)**: `client.js`의 `apiFetch`에 GET 전용 dedup 추가. 동일 URL이 진행 중이면 그 Promise를 공유하고 `Response.clone()`으로 반환해 각 호출자가 독립적으로 `res.json()` 호출 가능. POST 등은 대상 제외. Node로 직접 검증(동시 3회 호출 → 실제 네트워크 1회, 모두 유효한 응답 수신).
+
 ---
 
 ### MEDIUM — 명확한 개선 효과
 
-#### P02-04. 문항 리스트 컴포넌트 메모이제이션  *(구 P02-05)*
+#### P02-04. 문항 리스트 컴포넌트 메모이제이션  *(구 P02-05 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -170,9 +176,11 @@ const QuestionItem = React.memo(({ q, isSelected, onToggle }) => (
 
 **기대 효과**: 리스트 인터랙션 60-80% 빨라짐 (대량 문항)
 
+**적용 내용 (2026-07-22)**: `QuestionListPanel`은 `QuestionItem`(isSelected/question_id 비교), `QuestionAnalysisPanel`은 `QuestionCard`(isChecked/isEditing/editingValue/title 비교)로 항목 추출 + `React.memo`. 인라인 편집 상태를 비교 대상에 포함해 편집 중인 카드만 리렌더되면서도 stale 클로저 오작동 없음(비편집 카드 콜백은 상태를 직접 참조하지 않아 안전). 실제 브라우저로 체크박스·편집 정상 동작 확인.
+
 ---
 
-#### P02-05. 폴링 interval 클린업  *(구 P02-06)*
+#### P02-05. 폴링 interval 클린업  *(구 P02-06 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -196,9 +204,11 @@ useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, 
 
 **기대 효과**: 메모리 릭 방지, 불필요한 API 호출 제거
 
+**적용 내용 (2026-07-22)**: `editor/index.jsx`의 export 폴링은 이미 `exportPollRef` + cleanup useEffect로 처리돼 있었음(기존 구현 확인). `work.jsx`의 재감지 폴링(`handleRefresh` 내 로컬 `const poll = setInterval(...)`)은 언마운트 시 정리되지 않던 것을 확인해 `refreshPollRef` + cleanup useEffect로 동일 패턴 적용.
+
 ---
 
-#### P02-06. 초기화 API 병렬 호출  *(구 P02-07)*
+#### P02-06. 초기화 API 병렬 호출  *(구 P02-07 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -224,9 +234,11 @@ useEffect(() => {
 
 **기대 효과**: 초기 로딩 200-500ms 단축
 
+**적용 내용 (2026-07-22)**: `getWorkbook`(REQ-20 복원)과 `listCovers`를 하나의 `useEffect`에서 `Promise.all`로 병렬 호출하도록 병합. 각 promise를 개별 `.catch()`해 한쪽 실패가 다른 쪽 결과에 영향 없도록 기존 에러 격리 동작 유지.
+
 ---
 
-#### P02-07. WorkbookPreview 렌더링 최적화  *(구 P02-10)*
+#### P02-07. WorkbookPreview 렌더링 최적화  *(구 P02-10 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -243,11 +255,13 @@ useEffect(() => {
 
 **기대 효과**: 미리보기 렌더링 30-40% 빨라짐 (대량 선택)
 
+**적용 내용 (2026-07-22)**: 이미지 `loading="lazy"`는 최초 구현부터 이미 적용돼 있었음(별도 조치 불필요). 미적용이던 "보이는 페이지만 렌더링"은 `WorkbookPage` 컴포넌트 + `usePageVisible`(IntersectionObserver, rootMargin 300px)로 구현. 실측: 40문항(20페이지) 기준 DOM에 `wbp-page` 20개 모두 존재하나 실제 이미지 렌더 셀은 5개뿐 — 가상화 정상 동작 확인.
+
 ---
 
 ### LOW — 코드 품질·방어적 개선
 
-#### P02-08. 파생 상태 useMemo 적용  *(구 P02-13)*
+#### P02-08. 파생 상태 useMemo 적용  *(구 P02-13 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -267,9 +281,11 @@ const allChecked = allCheckable.every((q) => checkedIds.has(q.question_id)); // 
 
 **기대 효과**: 미미하나 대량 문항에서 누적 효과
 
+**적용 내용 (2026-07-22)**: `QuestionAnalysisPanel`의 `allChecked`를 `useMemo([allCheckable, checkedIds])`로 래핑. 인라인 편집 중 매 keystroke 리렌더에서 불필요한 `.every()` 전체 순회 방지. `allCheckable`은 단순 참조 재할당이라 memo 불필요해 그대로 둠.
+
 ---
 
-#### P02-09. MUI 번들 사이즈 최적화  *(구 P02-15)*
+#### P02-09. MUI 번들 사이즈 최적화  *(구 P02-15 / ✅ 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -287,6 +303,8 @@ MUI 생태계(`@mui/material`, `@mui/x-data-grid`, `@mui/lab`, `@emotion/*`) 합
 3. `manualChunks`로 vendor 분리
 
 **기대 효과**: 메인 번들 150-200KB 감소, 초기 로딩 0.5-1초 개선
+
+**적용 내용 (2026-07-22)**: 두 패키지 모두 **실제 라우트에서 도달 불가능한 죽은 코드**에서만 쓰이고 있음을 확인 후 제거 — `@mui/lab`(sections/account/*, TabList/TabPanel), `@mui/x-data-grid`(DataGridPagination 계열, 실제 `<DataGrid>` 사용처 없음). 연쇄적으로 `TablePagination.tsx` 오버라이드·`AccountsProvider`·`data/account/*`까지 22개 파일 제거. `npm install`로 반영, `tsc`/`npm run build` 통과, 실제 브라우저로 전체 화면 정상 동작 확인. (번들 크기 감소분은 실측하지 않음 — 죽은 코드 제거가 핵심 목적이었고 tree-shaking 후 실제 절감폭은 스펙의 150-200KB 추정과 다를 수 있음.)
 
 ---
 
@@ -317,9 +335,11 @@ React `<StrictMode>`가 개발 모드에서 effect를 의도적으로 2회 실�
 
 | 단계 | 항목 | 비고 |
 |------|------|------|
-| **Quick win** | P02-02(getPages 제거), P02-05(폴링 클린업), P02-10(문서화) | 간단·즉효 |
-| **High impact** | P02-01(뷰어 가상화), P02-03(dedup) | 체감 효과 최대 |
-| **Polish** | P02-04·06·07·08·09 | 점진 적용 |
+| ✅ **Quick win** | P02-02(getPages 제거), P02-05(폴링 클린업), P02-10(문서화) | 완료 |
+| ✅ **High impact** | P02-01(뷰어 가상화), P02-03(dedup) | 완료 |
+| ✅ **Polish** | P02-04·06·07·08·09 | 완료 |
+
+**전체 완료 (2026-07-22)**: REQ-P02 10개 항목 모두 적용 완료. 실행 순서는 사용자 결정으로 Quick win(02,03,05) → Polish(04,06,07,08,09) → High impact 잔여(01) 순으로 진행(가장 크고 복잡한 P02-01을 마지막에 배치).
 
 > 서버측 병목(썸네일 응답 6~10초, `list_pages` 전체 PDF 재read 등)은 **[REQ-P03](20260716-REQ-P03-thumbnail-response-time.md)** 에서 다룬다. P02-02(getPages 제거)와 P03(전체 PDF 재read 제거)은 **함께 적용해야** 목록 로딩이 근본 개선된다.
 
@@ -327,6 +347,6 @@ React `<StrictMode>`가 개발 모드에서 effect를 의도적으로 2회 실�
 
 ## 4. 미결 질문 (Open Questions)
 
-- P02-01: `react-window` vs 직접 IntersectionObserver 가상화 — react-pdf 호환성 + F07 오버레이 좌표 유지 관점에서 선택
-- P02-01: 가상화 시 문항 분석 수동 추가 오버레이가 placeholder 페이지에서 어떻게 동작할지(렌더 전 페이지에 드래그 시 처리)
-- P02-09: `@mui/x-data-grid`·`@mui/lab` 실제 사용처 전수 확인 후 제거 가능 여부
+- ~~P02-01: `react-window` vs 직접 IntersectionObserver 가상화~~ → **직접 IntersectionObserver 구현으로 결정**. F07 오버레이 좌표 계약(`.pdf-page-wrapper` position:relative, pt=cssPx/scale)을 그대로 유지하기 쉬웠고, 외부 의존성 추가 없이 자체 구현으로 충분히 대응 가능했음.
+- ~~P02-01: 가상화 시 문항 분석 수동 추가 오버레이가 placeholder 페이지에서 어떻게 동작할지~~ → **실사용상 문제 없음으로 결론**. 유일한 소비처(work.jsx)의 `renderPageOverlay`가 `pageSize`를 쓰지 않고 `scale`만 사용하며, 오버레이는 실제 렌더된(placeholder 아닌) 페이지에서만 호출됨. 사용자가 상호작용 가능한 시점엔 이미 rootMargin 버퍼로 렌더되어 있어 실질적 공백 없음.
+- ~~P02-09: `@mui/x-data-grid`·`@mui/lab` 실제 사용처 전수 확인 후 제거 가능 여부~~ → **전수 확인 완료, 둘 다 죽은 코드에서만 사용 — 제거함**(§P02-09 적용 내용 참조).
