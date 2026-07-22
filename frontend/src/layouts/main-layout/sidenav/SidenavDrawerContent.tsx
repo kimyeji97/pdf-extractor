@@ -53,7 +53,7 @@ const SidenavDrawerContent = ({ variant = 'permanent' }: SidenavDrawerContentPro
             },
           ]}
         >
-          <Logo showName={expanded} inverse />
+          <Logo showName={expanded} />
           <IconButton
             sx={{ mt: 1, display: { md: 'none' }, color: 'grey.300' }}
             onClick={toggleNavbarDrawer}
