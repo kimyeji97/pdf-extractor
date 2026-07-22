@@ -1,6 +1,4 @@
-import type {} from '@mui/lab/themeAugmentation';
 import type {} from '@mui/material/themeCssVarsAugmentation';
-import type {} from '@mui/x-data-grid/themeAugmentation';
 import AppBar from './components/AppBar';
 import Autocomplete from './components/Autocomplete';
 import { Avatar, AvatarGroup } from './components/Avatar';
@@ -13,7 +11,6 @@ import CardHeader from './components/CardHeader';
 import Checkbox from './components/Checkbox';
 import Chip from './components/Chip';
 import CssBaseline from './components/CssBaseline';
-import DataGrid from './components/DataGrid';
 import Dialog from './components/Dialog';
 import Drawer from './components/Drawer';
 import Link from './components/Link';
@@ -30,7 +27,6 @@ import { SnackbarContent } from './components/Snackbar';
 import Stack from './components/Stack';
 import Switch from './components/Switch';
 import { Tab, Tabs } from './components/Tab';
-import TablePagination from './components/TablePagination';
 import ToggleButton, { ToggleButtonGroup } from './components/ToggleButton';
 import Toolbar from './components/Toolbar';
 import Tooltip from './components/Tooltip';
@@ -90,7 +86,6 @@ export const themeOverrides = {
     MuiRadio: Radio,
     MuiPagination: Pagination,
     MuiPaginationItem: PaginationItem,
-    MuiTablePagination: TablePagination,
     MuiChip: Chip,
     MuiSwitch: Switch,
     MuiList: List,
@@ -107,7 +102,6 @@ export const themeOverrides = {
     MuiLinearProgress: LinearProgress,
     MuiAvatar: Avatar,
     MuiAvatarGroup: AvatarGroup,
-    MuiDataGrid: DataGrid,
     MuiCssBaseline: CssBaseline,
     MuiLink: Link,
     MuiBackdrop: Backdrop,
