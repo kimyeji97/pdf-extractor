@@ -6,6 +6,7 @@
  *   layout       — "세로 2단" | "가로 2단" | "4단" | "6단"
  *   previewWidth — 미리보기 영역 너비 (px), 기본 340
  */
+import { useEffect, useRef, useState } from "react";
 import {
   A4_WIDTH_PT, A4_HEIGHT_PT,
   MARGIN_PT, GAP_PT,
@@ -17,39 +18,38 @@ import {
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
 
-export default function WorkbookPreview({ selections = [], layout = DEFAULT_LAYOUT, previewWidth = 340 }) {
-  if (selections.length === 0) {
-    return <div className="wbp-empty">문항을 선택하면 미리보기가 표시됩니다.</div>;
-  }
+// 뷰포트 근처(위아래 300px)에 들어온 페이지만 실제 셀·이미지를 렌더링한다 (REQ-P02-07).
+// 한 번 보인 페이지는 계속 렌더 유지(다시 스크롤해 지나갈 때 깜빡임 방지).
+function usePageVisible(ref) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (visible) return;
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true); },
+      { rootMargin: "300px 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, visible]);
+  return visible;
+}
 
-  const scale        = previewWidth / A4_WIDTH_PT;
-  const pageHeightPx = A4_HEIGHT_PT * scale;
-  const labelHpx     = LABEL_HEIGHT_PT * scale;
-
-  const qpp       = questionsPerPage(layout);
-  const pageCount = Math.ceil(selections.length / qpp);
-  const pages     = Array.from({ length: pageCount }, (_, pi) =>
-    selections.slice(pi * qpp, pi * qpp + qpp)
-  );
-
-  const spec = LAYOUT_SPEC[layout] || LAYOUT_SPEC[DEFAULT_LAYOUT];
-  const { cols } = spec;
-  const cellW = (A4_WIDTH_PT - 2 * MARGIN_PT - (cols - 1) * GAP_PT) / cols;
-  const dividerXs = cols > 1
-    ? Array.from({ length: cols - 1 }, (_, ci) => {
-        const rightEdge = MARGIN_PT + (ci + 1) * (cellW + GAP_PT) - GAP_PT;
-        return (rightEdge + GAP_PT / 2) * scale;
-      })
-    : [];
+function WorkbookPage({
+  pi, pageItems, pageCount, qpp, cols, layout, previewWidth, pageHeightPx, labelHpx, scale, dividerXs,
+}) {
+  const ref = useRef(null);
+  const visible = usePageVisible(ref);
 
   return (
-    <>
-      {pages.map((pageItems, pi) => (
-        <div
-          key={`${layout}-${pi}`}
-          className="wbp-page"
-          style={{ width: previewWidth, height: pageHeightPx, position: "relative" }}
-        >
+    <div
+      ref={ref}
+      className="wbp-page"
+      style={{ width: previewWidth, height: pageHeightPx, position: "relative" }}
+    >
+      {!visible ? null : (
+        <>
           {/* 세로 구분선 (REQ-C05) */}
           {dividerXs.map((x, di) => (
             <div
@@ -178,7 +178,54 @@ export default function WorkbookPreview({ selections = [], layout = DEFAULT_LAYO
           >
             {pi + 1} / {pageCount}
           </div>
-        </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function WorkbookPreview({ selections = [], layout = DEFAULT_LAYOUT, previewWidth = 340 }) {
+  if (selections.length === 0) {
+    return <div className="wbp-empty">문항을 선택하면 미리보기가 표시됩니다.</div>;
+  }
+
+  const scale        = previewWidth / A4_WIDTH_PT;
+  const pageHeightPx = A4_HEIGHT_PT * scale;
+  const labelHpx     = LABEL_HEIGHT_PT * scale;
+
+  const qpp       = questionsPerPage(layout);
+  const pageCount = Math.ceil(selections.length / qpp);
+  const pages     = Array.from({ length: pageCount }, (_, pi) =>
+    selections.slice(pi * qpp, pi * qpp + qpp)
+  );
+
+  const spec = LAYOUT_SPEC[layout] || LAYOUT_SPEC[DEFAULT_LAYOUT];
+  const { cols } = spec;
+  const cellW = (A4_WIDTH_PT - 2 * MARGIN_PT - (cols - 1) * GAP_PT) / cols;
+  const dividerXs = cols > 1
+    ? Array.from({ length: cols - 1 }, (_, ci) => {
+        const rightEdge = MARGIN_PT + (ci + 1) * (cellW + GAP_PT) - GAP_PT;
+        return (rightEdge + GAP_PT / 2) * scale;
+      })
+    : [];
+
+  return (
+    <>
+      {pages.map((pageItems, pi) => (
+        <WorkbookPage
+          key={`${layout}-${pi}`}
+          pi={pi}
+          pageItems={pageItems}
+          pageCount={pageCount}
+          qpp={qpp}
+          cols={cols}
+          layout={layout}
+          previewWidth={previewWidth}
+          pageHeightPx={pageHeightPx}
+          labelHpx={labelHpx}
+          scale={scale}
+          dividerXs={dividerXs}
+        />
       ))}
     </>
   );
