@@ -7,6 +7,9 @@ import { Avatar, AvatarGroup } from './components/Avatar';
 import Backdrop from './components/Backdrop';
 import Breadcrumbs from './components/Breadcrumbs';
 import Button, { ButtonBase } from './components/Button';
+import Card from './components/Card';
+import CardContent from './components/CardContent';
+import CardHeader from './components/CardHeader';
 import Checkbox from './components/Checkbox';
 import Chip from './components/Chip';
 import CssBaseline from './components/CssBaseline';
@@ -63,6 +66,9 @@ export const themeOverrides = {
     MuiToggleButton: ToggleButton,
     MuiToggleButtonGroup: ToggleButtonGroup,
     MuiButtonBase: ButtonBase,
+    MuiCard: Card,
+    MuiCardContent: CardContent,
+    MuiCardHeader: CardHeader,
     // input fields
     MuiTextField: TextField,
     MuiFilledInput: FilledInput,

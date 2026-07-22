@@ -6,34 +6,34 @@ const createTypography = (
 ): TypographyVariantsOptions => ({
   fontFamily: [fontFamily, 'sans-serif', 'Spline Sans Mono', 'monospace'].join(','),
   h1: {
-    fontWeight: 700,
-    fontSize: '3rem', // 48px
-    lineHeight: 1.5,
+    fontWeight: 500,
+    fontSize: '3.5rem', // 56px
+    lineHeight: 1.2,
   },
   h2: {
-    fontWeight: 700,
-    fontSize: '2.625rem', // 42px
-    lineHeight: 1.5,
+    fontWeight: 500,
+    fontSize: '3rem', // 48px
+    lineHeight: 1.2,
   },
   h3: {
-    fontWeight: 700,
-    fontSize: '2rem', // 32px
-    lineHeight: 1.5,
+    fontWeight: 500,
+    fontSize: '2.25rem', // 36px
+    lineHeight: 1.2,
   },
   h4: {
-    fontWeight: 700,
-    fontSize: '1.75rem', // 28px
-    lineHeight: 1.5,
+    fontWeight: 500,
+    fontSize: '2rem', // 32px
+    lineHeight: 1.2,
   },
   h5: {
-    fontWeight: 700,
+    fontWeight: 500,
     fontSize: '1.5rem', // 24px
-    lineHeight: 1.5,
+    lineHeight: 1.2,
   },
   h6: {
-    fontWeight: 700,
-    fontSize: '1.3125rem', // 21px
-    lineHeight: 1.4,
+    fontWeight: 500,
+    fontSize: '1.125rem', // 18px
+    lineHeight: 1.2,
   },
   subtitle1: {
     fontWeight: 400,
@@ -56,7 +56,7 @@ const createTypography = (
     lineHeight: 1.6,
   },
   button: {
-    fontWeight: 700,
+    fontWeight: 500,
     fontSize: '0.875rem', // 14px
     lineHeight: 1.286,
     textTransform: 'capitalize',

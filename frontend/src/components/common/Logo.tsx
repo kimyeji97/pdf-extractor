@@ -4,9 +4,16 @@ import { rootPaths } from 'routes/paths';
 
 interface LogoProps extends SvgIconProps {
   showName?: boolean;
+  inverse?: boolean;
 }
 
-const Logo = ({ sx, viewBox = '0 0 26 40', showName = true, ...rest }: LogoProps) => {
+const Logo = ({
+  sx,
+  viewBox = '0 0 26 40',
+  showName = true,
+  inverse = false,
+  ...rest
+}: LogoProps) => {
   const [id, setId] = useState('logo');
 
   useEffect(() => {
@@ -132,15 +139,17 @@ const Logo = ({ sx, viewBox = '0 0 26 40', showName = true, ...rest }: LogoProps
       {showName && (
         <Typography
           sx={{
-            color: 'text.secondary',
+            color: inverse ? 'grey.300' : 'text.secondary',
             fontWeight: 'medium',
             fontSize: 29.5,
             lineHeight: 1,
             margin: 1,
             marginLeft: 0.625,
             letterSpacing: '-.8px',
-            background: ({ vars }) =>
-              `linear-gradient(100.06deg, #20DE99 6.97%, #7DB1F5 27.63%, #5A9EF6 49.36%, ${vars.palette.text.secondary} 50.11%, ${vars.palette.text.secondary} 87.87%);`,
+            background: ({ vars }) => {
+              const textColor = inverse ? vars.palette.grey[300] : vars.palette.text.secondary;
+              return `linear-gradient(100.06deg, #20DE99 6.97%, #7DB1F5 27.63%, #5A9EF6 49.36%, ${textColor} 50.11%, ${textColor} 87.87%);`;
+            },
             backgroundSize: '240% 100%',
             backgroundPosition: 'right',
             WebkitBackgroundClip: 'text',

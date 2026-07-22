@@ -1,6 +1,6 @@
 import { mainDrawerWidth } from 'lib/constants';
 
-export const fontFamilies = ['Plus Jakarta Sans', 'Roboto', 'Inter', 'Poppins'] as const;
+export const fontFamilies = ['Inter', 'Plus Jakarta Sans', 'Roboto', 'Poppins'] as const;
 
 export type FontFamily = (typeof fontFamilies)[number];
 

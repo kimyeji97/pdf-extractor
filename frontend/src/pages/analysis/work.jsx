@@ -303,12 +303,12 @@ export default function AnalysisWorkPage() {
     <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
       {/* ── 컨텍스트 바 ─────────────────────────────── */}
-      <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0, bgcolor: "background.paper" }}>
+      <Box sx={{ px: 2.5, py: 0.75, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0, bgcolor: "background.paper" }}>
         <Button
           size="small" variant="text" color="inherit"
           onClick={() => navigate(-1)}
           startIcon={<Icon icon="material-symbols:arrow-back-rounded" style={{ fontSize: 16 }} />}
-          sx={{ fontSize: 12, minWidth: 0, px: 1 }}
+          sx={{ fontSize: 12, minWidth: 0, px: 1, flexShrink: 0, whiteSpace: "nowrap" }}
         >
           파일 선택
         </Button>
@@ -339,7 +339,7 @@ export default function AnalysisWorkPage() {
           {drawMode && (
             <Box sx={{ position: "absolute", inset: 0, bgcolor: "rgba(255,255,255,0.55)", zIndex: 10, pointerEvents: "all" }} />
           )}
-          <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <Box sx={{ px: 2.5, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <Typography variant="subtitle2" fontWeight={700}>① 페이지</Typography>
             <Tooltip title="전체 재감지">
               <IconButton size="small" onClick={handleRefresh} disabled={refreshing}>

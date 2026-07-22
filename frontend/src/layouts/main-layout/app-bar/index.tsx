@@ -10,8 +10,9 @@ import SearchBox, { SearchBoxButton } from '../common/search-box/SearchBox';
 
 const AppBar = () => {
   const {
-    config: { drawerWidth },
+    config: { drawerWidth, sidenavCollapsed },
     handleDrawerToggle,
+    toggleNavbarCollapse,
   } = useSettingsContext();
 
   const { up } = useBreakpoints();
@@ -53,6 +54,25 @@ const AppBar = () => {
           <Box>
             <Logo showName={upSm} />
           </Box>
+        </Box>
+
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', pr: 2 }}>
+          <Button
+            color="neutral"
+            variant="soft"
+            shape="circle"
+            aria-label={sidenavCollapsed ? '메뉴 펼치기' : '메뉴 접기'}
+            onClick={toggleNavbarCollapse}
+          >
+            <IconifyIcon
+              icon={
+                sidenavCollapsed
+                  ? 'material-symbols:dock-to-right-outline'
+                  : 'material-symbols:dock-to-left-outline'
+              }
+              sx={{ fontSize: 20 }}
+            />
+          </Button>
         </Box>
 
         <Stack

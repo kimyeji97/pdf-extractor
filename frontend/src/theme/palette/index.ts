@@ -174,12 +174,12 @@ const action = generatePaletteChannel({
   disabledBackground: grey[200],
   focus: grey[300],
 });
-const divider = grey[300];
+const divider = grey[200];
 const menuDivider = cssVarRgba(grey['700Channel'], 0);
 const dividerLight = cssVarRgba(grey['300Channel'], 0.6);
 const text = generatePaletteChannel({
-  primary: grey[800],
-  secondary: grey[600],
+  primary: grey[900],
+  secondary: grey[500],
   disabled: grey[400],
 });
 const background = generatePaletteChannel({

@@ -458,7 +458,7 @@ export default function EditorPage() {
         >
           <Box
             sx={{
-              px: 2,
+              px: 2.5,
               py: 1.25,
               borderBottom: 1,
               borderColor: "divider",

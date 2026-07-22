@@ -43,6 +43,7 @@ const MainLayout = ({ children }: PropsWithChildren) => {
                 pt: 3,
                 boxSizing: 'border-box',
                 width: mainDrawerWidth.full,
+                bgcolor: 'grey.950',
               },
             }}
           >

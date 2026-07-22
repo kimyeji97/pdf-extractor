@@ -126,19 +126,30 @@ const NavItem = ({ item, level }: NavItemProps) => {
           }
           sx={[
             (theme) => ({
-              p: theme.spacing('3.5px', 2),
+              p: theme.spacing('6px', 2),
+              color: theme.vars.palette.grey[300],
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              },
               '&.Mui-selected': {
+                backgroundColor: theme.vars.palette.primary.main,
                 [`& .${listItemTextClasses.primary}`]: {
-                  color: 'primary.main',
+                  color: theme.vars.palette.primary.contrastText,
+                },
+                [`& .${listItemIconClasses.root}`]: {
+                  color: theme.vars.palette.primary.contrastText,
+                },
+                '&:hover': {
+                  backgroundColor: theme.vars.palette.primary.dark,
                 },
               },
             }),
             !item.active && {
               [`& .${listItemTextClasses.primary}`]: {
-                color: 'text.disabled',
+                color: 'grey.700',
               },
               [`& .${listItemIconClasses.root}`]: {
-                color: 'text.disabled',
+                color: 'grey.700',
               },
             },
             sidenavCollapsed && {
@@ -164,8 +175,9 @@ const NavItem = ({ item, level }: NavItemProps) => {
           {item.icon && (
             <ListItemIcon
               sx={{
+                mr: 1,
                 '& .iconify': {
-                  fontSize: sidenavCollapsed ? 24 : 14,
+                  fontSize: sidenavCollapsed ? 24 : 20,
                 },
               }}
             >
@@ -192,11 +204,11 @@ const NavItem = ({ item, level }: NavItemProps) => {
               sx={[
                 {
                   [`& .${listItemTextClasses.primary}`]: {
-                    typography: 'caption',
-                    fontWeight: 'medium',
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
                     whiteSpace: 'nowrap',
                     lineHeight: 1.3,
-                    color: level === 0 ? 'text.primary' : 'text.secondary',
+                    color: level === 0 ? 'grey.300' : 'grey.400',
                   },
                 },
                 sidenavCollapsed && {

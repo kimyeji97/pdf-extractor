@@ -40,9 +40,10 @@ const Sidenav = () => {
             overflow: 'visible',
             boxSizing: 'border-box',
             width: drawerWidth,
+            bgcolor: 'grey.950',
             border: 0,
             borderRight: 1,
-            borderColor: 'divider',
+            borderColor: 'grey.800',
             transition: {
               xs: theme.transitions.create(['width'], {
                 duration: theme.transitions.duration.standard,
