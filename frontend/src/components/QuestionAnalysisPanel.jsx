@@ -9,7 +9,7 @@
  *   jobId, pageNum, pageInfo  — 현재 페이지 식별
  *   refreshTrigger            — 부모가 재감지/수동추가 완료 시 증가시키는 카운터
  */
-import { useEffect, useState, useCallback, useRef, memo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
 import {
   getPageQuestions,
   updateQuestionTitle,
@@ -176,8 +176,12 @@ export default function QuestionAnalysisPanel({
 
   // 전체 선택 대상: 오탐지 의심 문항 포함 (REQ-B06/B07 — 오탐도 벌크 삭제 대상)
   const allCheckable = questions;
-  const allChecked   =
-    allCheckable.length > 0 && allCheckable.every((q) => checkedIds.has(q.question_id));
+  // 인라인 타이틀 편집 중 매 keystroke마다 리렌더되는데, questions/checkedIds가
+  // 안 바뀌었으면 .every() 전체 순회를 다시 하지 않도록 memo (REQ-P02-08)
+  const allChecked = useMemo(
+    () => allCheckable.length > 0 && allCheckable.every((q) => checkedIds.has(q.question_id)),
+    [allCheckable, checkedIds],
+  );
 
   const toggleAll = () => {
     if (allChecked) {
