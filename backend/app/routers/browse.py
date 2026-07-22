@@ -33,6 +33,7 @@ from app.models.schemas import (
 )
 from app.services import storage
 from app.services import thumbnail_service
+from app.services import prewarm_service
 from app.utils.question_parser import detect_question_boundaries, QuestionBoundary
 
 router = APIRouter()
@@ -221,8 +222,10 @@ def _run_refresh_detection(job_id: str) -> None:
 
         # 페이지 메타 캐시 워밍 (REQ-P03-02) — 같은 PDF라 치수는 불변이나,
         # 이미 읽은 pdf_bytes로 캐시를 보장해 list_pages 재다운로드를 막는다
+        page_infos = None
         try:
-            storage.save_page_info_cache(job_id, thumbnail_service.get_page_info(pdf_bytes))
+            page_infos = thumbnail_service.get_page_info(pdf_bytes)
+            storage.save_page_info_cache(job_id, page_infos)
         except Exception:
             pass
 
@@ -235,6 +238,16 @@ def _run_refresh_detection(job_id: str) -> None:
         job.boundaries_status = BoundariesStatus.DONE
         job.total_question_count = len(boundaries)
         job.questions_per_page = qpp
+
+        # DONE 상태를 먼저 저장해 프론트 폴링이 즉시 재감지 완료를 확인하게 한 뒤,
+        # 썸네일 프리워밍(REQ-P03-01)을 이어서 실행한다 (실패해도 감지 결과엔 영향 없음)
+        storage.put_status(job)
+
+        try:
+            page_count = len(page_infos) if page_infos is not None else len(thumbnail_service.get_page_info(pdf_bytes))
+            prewarm_service.prewarm_all_thumbnails(job_id, pdf_bytes, boundaries, page_count)
+        except Exception:
+            pass
 
     except Exception as e:
         job.boundaries_status = BoundariesStatus.FAILED

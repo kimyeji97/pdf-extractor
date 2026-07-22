@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.models.schemas import BoundariesStatus, UploadResponse, JobStatusFile, JobStatus
 from app.services import storage
 from app.services import thumbnail_service
+from app.services import prewarm_service
 from app.utils.question_parser import detect_question_boundaries
 
 logger = logging.getLogger(__name__)
@@ -140,8 +141,10 @@ def _trigger_boundary_detection(job_id: str) -> None:
 
         # 페이지 메타 캐시 프리워밍 (REQ-P03-02) — 이미 받은 pdf_bytes 재사용,
         # 이후 list_pages가 전체 PDF 재다운로드 없이 캐시만 읽도록 함
+        page_infos = None
         try:
-            storage.save_page_info_cache(job_id, thumbnail_service.get_page_info(pdf_bytes))
+            page_infos = thumbnail_service.get_page_info(pdf_bytes)
+            storage.save_page_info_cache(job_id, page_infos)
         except Exception as e:
             logger.warning("[boundary] page_info 캐시 저장 실패(무시) | job_id=%s error=%s", job_id, e)
 
@@ -153,6 +156,17 @@ def _trigger_boundary_detection(job_id: str) -> None:
         status_file.boundaries_status = BoundariesStatus.DONE
         status_file.total_question_count = len(boundaries)
         status_file.questions_per_page = questions_per_page
+
+        # DONE 상태를 먼저 저장해 프론트 폴링이 즉시 결과를 확인할 수 있게 한 뒤,
+        # 썸네일 프리워밍(REQ-P03-01)은 그 뒤에 이어서 실행한다 (실패해도 감지 결과엔 영향 없음)
+        storage.put_status(status_file)
+        logger.info("[boundary] DONE 상태 저장 완료 | job_id=%s", job_id)
+
+        try:
+            page_count = len(page_infos) if page_infos is not None else len(thumbnail_service.get_page_info(pdf_bytes))
+            prewarm_service.prewarm_all_thumbnails(job_id, pdf_bytes, boundaries, page_count)
+        except Exception as e:
+            logger.warning("[boundary] 썸네일 프리워밍 실패(무시) | job_id=%s error=%s", job_id, e)
 
     except Exception as e:
         logger.error("[boundary] 감지 실패 | job_id=%s error=%s", job_id, e, exc_info=True)

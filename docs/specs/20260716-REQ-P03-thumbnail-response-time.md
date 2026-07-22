@@ -50,7 +50,7 @@ thumbnail request 응답 시간이 평균 6~10초로 지나치게 느리다. 원
 
 ### HIGH — 체감 효과 큰 개선
 
-#### P03-01. 전체 PDF 재read·재파싱 제거 + PDF bytes 재사용  *(신규 — 썸네일 6~10초 병목 핵심)*
+#### P03-01. 전체 PDF 재read·재파싱 제거 + PDF bytes 재사용  *(신규 — 썸네일 6~10초 병목 핵심 / ✅ 프리워밍 적용 완료)*
 
 | 항목 | 내용 |
 |------|------|
@@ -109,6 +109,22 @@ page_infos = thumbnail_service.get_page_info(pdf_bytes)
 **기대 효과**: 캐시 미스 경로 6~10초 → 1초 이하(프리워밍 적용 시 즉시). 목록·미리보기 로딩 근본 개선.
 
 > **클라 연계**: REQ-P02-02(목록 카드 `getPages` 제거)와 **함께 적용해야** 목록 진입 시 전체 PDF 재다운로드 N회가 실제로 사라진다.
+
+**적용 내용 (전 페이지 프리워밍, 2026-07-22)**
+
+- 신설: `backend/app/services/prewarm_service.py::prewarm_all_thumbnails(job_id, pdf_bytes, boundaries, page_count)`. 이미 로드된 `pdf_bytes`로 **전 페이지 썸네일**(`get_page_thumbnail`, dpi 96) + **감지된 전체 문항 크롭 썸네일**(`get_question_thumbnail`)을 렌더링해 각각 `storage.save_thumbnail_cache` / `save_question_thumbnail_cache`로 캐시 저장. 개별 항목 실패는 로그만 남기고 계속 진행(프리워밍은 최적화일 뿐 실패해도 온디맨드 경로로 폴백).
+- 호출 지점: `upload.py::_trigger_boundary_detection`(최초 업로드 감지), `browse.py::_run_refresh_detection`(재감지) 둘 다 boundaries 감지 완료 → **`boundaries_status=DONE` 저장 후** 이어서 실행. DONE을 먼저 저장해 프론트 폴링이 프리워밍을 기다리지 않고 즉시 결과를 받는다.
+- **동시성 결정**: R2 PUT 1건이 실측 ~270ms라 순차 처리 시 job당(132p/573문항 기준 705장) **3~4분** 소요 — 프로파일링 당시 가정한 "렌더만 30ms×N≈6초"는 R2 업로드 왕복을 빠뜨린 과소 추정이었다. I/O bound 작업이므로 `ThreadPoolExecutor(max_workers=12)`로 병렬화(페이지 전체 제출 후 대기 → 문항 전체 제출 후 대기, 2단계).
+
+**측정 결과 (2026-07-22, R2, job 47533256/132p/573문항, refresh 경로)**
+
+| 단계 | 시간 |
+|------|------|
+| 문항 재감지 + DONE 저장 | ~16s |
+| 프리워밍(705장, 12 workers) | ~12~20s |
+| 프리워밍 후 개별 페이지 썸네일 GET | 0.2~0.45s (R2 캐시 히트 1건 GET) |
+
+R2 `head_object`의 `LastModified`로 프리워밍이 실제 실행돼 신선한 캐시를 남겼음을 확인(요청 시각과 일치). 프리워밍 이전에는 캐시 미스 시 전체 PDF 재다운로드(~2초)가 썸네일마다 반복됐다.
 
 ---
 
@@ -304,7 +320,7 @@ PDF 처리 엔드포인트에 30초 타임아웃(`asyncio.wait_for()` 또는 미
 
 - ~~P03-01: 6~10초 병목이 스토리지 왕복 vs 전체 파싱 중 비중~~ → **프로파일링 완료: R2 전체 PDF 다운로드가 ~99%(~2초/8MB)**. 렌더 ~30ms·파싱 ~14ms로 무시 수준. 6~10초는 N회 전체 다운로드(카드/썸네일별) 누적.
 - P03-01: R2가 바이트 레인지/부분 다운로드를 지원하는지 → 전체 재다운로드 회피 가능 여부 (프리워밍으로 대부분 해소되므로 후순위)
-- P03-01: 썸네일 프리워밍을 어느 시점(업로드 직후 vs 최초 조회 시 lazy)에 어느 범위(전 페이지 vs 첫 N페이지)로 할지 → **착수 결정 필요**
+- ~~P03-01: 썸네일 프리워밍을 어느 시점에 어느 범위로 할지~~ → **결정·적용 완료: 업로드/재감지 직후(boundaries DONE 저장 후), 전 페이지 + 전체 감지 문항 범위로 프리워밍**. R2 PUT 건당 ~270ms라 순차 시 job당 3~4분 소요돼 `ThreadPoolExecutor(12)`로 병렬화.
 - P03-03: 프론트 UI를 무한 스크롤 vs 페이지 번호 중 선택(P02 연계)
 - P03-04: ECS 0.5 vCPU에서 ProcessPoolExecutor 실효성 — vCPU 부족 시 I/O 분리만 적용
 - 목표 SLA: "모든 통신 1초 이하" 대비 현실적 SLA 합의(콜드 스타트·대형 PDF 예외 허용치)
