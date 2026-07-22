@@ -58,6 +58,10 @@ export default function AnalysisWorkPage() {
   const [refreshError, setRefreshError] = useState("");
   const pagesRef = useRef(pages);
   useEffect(() => { pagesRef.current = pages; }, [pages]);
+  const refreshPollRef = useRef(null);
+  useEffect(() => () => {
+    if (refreshPollRef.current) clearInterval(refreshPollRef.current);
+  }, []);
 
   // ── 원본 PDF URL (REQ-F07) ────────────────────────────
   const [pdfUrl, setPdfUrl]               = useState(null);
@@ -121,12 +125,13 @@ export default function AnalysisWorkPage() {
     setRefreshError("");
     try {
       await refreshJobQuestions(jobId);
-      const poll = setInterval(async () => {
+      refreshPollRef.current = setInterval(async () => {
         try {
           const info = await getJobInfo(jobId);
           const st   = info.boundaries_status;
           if (st === "DONE" || st === "FAILED") {
-            clearInterval(poll);
+            clearInterval(refreshPollRef.current);
+            refreshPollRef.current = null;
             setRefreshing(false);
             if (st === "FAILED") setRefreshError("재감지에 실패했습니다.");
             else fetchPages(jobId);

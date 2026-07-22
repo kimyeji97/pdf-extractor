@@ -17,7 +17,7 @@ import InputAdornment from "@mui/material/InputAdornment";
 import { Icon } from "@iconify/react";
 
 import UploadForm from "components/UploadForm";
-import { listJobs, requestUploadUrl, uploadPdf, getPages } from "api/client";
+import { listJobs, requestUploadUrl, uploadPdf } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
 
@@ -65,20 +65,13 @@ function isAnalyzing(job) {
 }
 
 function JobCard({ job, onClick }) {
-  const [thumbUrl, setThumbUrl]       = useState(null);
+  // 썸네일 URL은 결정적(deterministic)이라 /pages 호출 없이 직접 조립한다 (REQ-P02-02).
+  // 카드 N개 = 전체 PDF N번 재다운로드+파싱이던 목록 로딩 병목 제거.
+  const thumbUrl = `${API_ROOT}/api/jobs/${job.job_id}/pages/0/thumbnail`;
   const [thumbLoaded, setThumbLoaded] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
   const hasTypes = job.workbook_types?.length > 0;
   const dimmed   = isAnalyzing(job);
-
-  useEffect(() => {
-    setThumbLoaded(false);
-    getPages(job.job_id)
-      .then((data) => {
-        const url = data.pages?.[0]?.thumbnail_url;
-        if (url) setThumbUrl(`${API_ROOT}${url}`);
-      })
-      .catch(() => {});
-  }, [job.job_id]);
 
   return (
     <Box
@@ -109,16 +102,17 @@ function JobCard({ job, onClick }) {
           display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
-        {(!thumbUrl || !thumbLoaded) && (
-          thumbUrl
-            ? <Box className="img-skeleton" sx={{ position: "absolute", inset: 0 }} />
-            : <Icon icon="material-symbols:description-outline-rounded" style={{ fontSize: 40, color: "#ccc" }} />
+        {!thumbLoaded && (
+          thumbFailed
+            ? <Icon icon="material-symbols:description-outline-rounded" style={{ fontSize: 40, color: "#ccc" }} />
+            : <Box className="img-skeleton" sx={{ position: "absolute", inset: 0 }} />
         )}
-        {thumbUrl && (
+        {!thumbFailed && (
           <Box
             component="img"
             src={thumbUrl}
             onLoad={() => setThumbLoaded(true)}
+            onError={() => setThumbFailed(true)}
             sx={{
               position: "absolute", inset: 0,
               width: "100%", height: "100%",
