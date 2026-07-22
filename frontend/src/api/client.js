@@ -13,12 +13,35 @@ function _setLoading(delta) {
   _onLoadingChange?.(_activeCount > 0);
 }
 
+// ── GET 요청 중복 방지 (REQ-P02-03) ────────────────────────
+// 리렌더·동시 마운트로 같은 GET이 겹치면 진행 중인 fetch Promise를 공유한다.
+// Response.clone()으로 반환해 여러 호출자가 각자 독립적으로 res.json()을 호출할 수 있게 한다.
+const _inflightGets = new Map();
+
 async function apiFetch(url, options) {
+  const method = (options?.method || "GET").toUpperCase();
+  if (method !== "GET") {
+    _setLoading(+1);
+    try {
+      return await fetch(url, options);
+    } finally {
+      _setLoading(-1);
+    }
+  }
+
+  if (_inflightGets.has(url)) {
+    const res = await _inflightGets.get(url);
+    return res.clone();
+  }
+
   _setLoading(+1);
+  const promise = fetch(url, options).finally(() => _setLoading(-1));
+  _inflightGets.set(url, promise);
   try {
-    return await fetch(url, options);
+    const res = await promise;
+    return res.clone();
   } finally {
-    _setLoading(-1);
+    _inflightGets.delete(url);
   }
 }
 
