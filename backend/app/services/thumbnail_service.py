@@ -23,11 +23,11 @@ def get_question_thumbnail(
     y0: float,
     x1: float,
     y1: float,
-    dpi: int = 144,
+    dpi: int = 96,
 ) -> bytes:
     """
     지정 페이지의 bbox 영역만 크롭하여 PNG bytes로 반환.
-    dpi 기본값 144: 페이지 썸네일(96dpi)보다 선명하게 문항 내용 표시.
+    dpi 기본값 96: 페이지 썸네일과 동일 — UI 미리보기 용도로는 144가 과도했다 (REQ-P03-07).
     """
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     page = doc[page_index]
