@@ -12,6 +12,19 @@
  *   canvasPx = pt * scale
  */
 
+// ── 셀 내 문항 배율 (2026-07-25) ─────────────────────────
+// backend/app/utils/layout_spec.py 의 동일 상수와 반드시 일치해야 한다.
+export const MIN_CELL_SCALE  = 0.5;
+export const MAX_CELL_SCALE  = 3.0;
+export const CELL_SCALE_STEP = 0.1;
+
+/** 배율을 허용 범위로 clamp (소수점 오차 정리 포함) */
+export function clampCellScale(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.round(Math.min(Math.max(n, MIN_CELL_SCALE), MAX_CELL_SCALE) * 100) / 100;
+}
+
 // ── A4 규격 (pt 단위) ────────────────────────────────────
 export const A4_WIDTH_PT  = 595;
 export const A4_HEIGHT_PT = 842;

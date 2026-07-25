@@ -20,9 +20,15 @@ import Divider from "@mui/material/Divider";
 import Tooltip from "@mui/material/Tooltip";
 import { Icon } from "@iconify/react";
 
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Button from "@mui/material/Button";
+
 import PdfPreviewPanel from "components/PdfPreviewPanel";
 import usePaginatedList from "hooks/usePaginatedList";
-import { getWorkbooks, getStatus } from "api/client";
+import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 
 function fmtDate(iso) {
   if (!iso) return "-";
@@ -45,6 +51,31 @@ export default function HistoryPage() {
   const {
     items: workbooks, total, loading, loadingMore, error, sentinelRef, reload: fetchWorkbooks,
   } = usePaginatedList(fetchPage);
+
+  // ── 삭제 (문제집 + 결과 PDF, REQ-C08) ─────────────────
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting]         = useState(false);
+  const [deleteError, setDeleteError]   = useState("");
+
+  const handleDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteWorkbook(deleteTarget.workbook_id);
+      // 삭제한 문제집을 미리보기 중이었다면 뷰어도 비운다
+      if (selectedWb?.workbook_id === deleteTarget.workbook_id) {
+        setSelectedWb(null);
+        setPdfUrl(null);
+      }
+      setDeleteTarget(null);
+      await fetchWorkbooks();
+    } catch (e) {
+      setDeleteError(e.message || "삭제에 실패했습니다.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleDownload = async (wb) => {
     if (!wb.result_job_id) return;
@@ -143,6 +174,11 @@ export default function HistoryPage() {
                         <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 18 }} />
                       </IconButton>
                     </Tooltip>
+                    <Tooltip title="삭제">
+                      <IconButton size="small" color="error" onClick={() => setDeleteTarget(wb)}>
+                        <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 18 }} />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                 </ListItemButton>
                 <Divider />
@@ -195,6 +231,38 @@ export default function HistoryPage() {
           </Box>
         )}
       </Box>
+
+      {/* ── 삭제 확인 다이얼로그 (REQ-C08) ──────────────── */}
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1 }}>문제집을 삭제할까요?</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: "12px !important" }}>
+          {deleteError && <Alert severity="error" sx={{ py: 0 }}>{deleteError}</Alert>}
+          <Typography variant="body2" fontWeight={700}>
+            {deleteTarget?.name || deleteTarget?.filename}
+          </Typography>
+          <Alert severity="warning" sx={{ py: 0.5 }}>
+            생성된 <b>PDF까지 함께 삭제</b>되며 되돌릴 수 없습니다. 원본 문제집은 그대로 남습니다.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteTarget(null)} disabled={deleting} color="inherit">
+            취소
+          </Button>
+          <Button
+            variant="contained" color="error"
+            onClick={handleDelete}
+            disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            {deleting ? "삭제 중..." : "삭제"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

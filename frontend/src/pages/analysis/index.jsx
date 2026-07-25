@@ -19,7 +19,7 @@ import { Icon } from "@iconify/react";
 import UploadForm from "components/UploadForm";
 import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
-import { listJobs, requestUploadUrl, uploadPdf } from "api/client";
+import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
 
@@ -66,7 +66,7 @@ function isAnalyzing(job) {
   return true;
 }
 
-function JobCard({ job, onClick }) {
+function JobCard({ job, onClick, onEdit, onDelete }) {
   // 썸네일 URL은 결정적(deterministic)이라 /pages 호출 없이 직접 조립한다 (REQ-P02-02).
   // 카드 N개 = 전체 PDF N번 재다운로드+파싱이던 목록 로딩 병목 제거.
   const thumbUrl = `${API_ROOT}/api/jobs/${job.job_id}/pages/0/thumbnail`;
@@ -143,6 +143,28 @@ function JobCard({ job, onClick }) {
             <Chip label="분석 실패" size="small" color="error" sx={{ fontSize: 10, height: 18 }} />
           )}
         </Box>
+
+        {/* 편집·삭제 — 이름/유형 편집은 문제집 편집 ①에서 옮겨 옴 (2026-07-25) */}
+        <Box sx={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 0.5 }}>
+          <Tooltip title="이름·유형 편집">
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); onEdit(job); }}
+              sx={{ bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
+            >
+              <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="삭제">
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); onDelete(job); }}
+              sx={{ bgcolor: "rgba(255,255,255,0.9)", color: "error.main", "&:hover": { bgcolor: "#fff" } }}
+            >
+              <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
 
       {/* 정보 영역 */}
@@ -211,6 +233,59 @@ export default function AnalysisFilePage() {
   } = usePaginatedList(fetchPage);
 
   const hasSearch = Boolean(debouncedName.trim() || debouncedType.trim());
+
+  // ── 이름/유형 편집 (문제집 편집 ①에서 이동) ──────────
+  const [editJob, setEditJob]         = useState(null);
+  const [editName, setEditName]       = useState("");
+  const [editTypes, setEditTypes]     = useState("");
+  const [editSaving, setEditSaving]   = useState(false);
+  const [editError, setEditError]     = useState("");
+
+  const openEdit = (job) => {
+    setEditJob(job);
+    setEditName(job.workbook_name || "");
+    setEditTypes((job.workbook_types || []).join(", "));
+    setEditError("");
+  };
+
+  // ── 삭제 (연관 저장물 전체) ────────────────────────────
+  const [deleteJobTarget, setDeleteJob]   = useState(null);
+  const [deleting, setDeleting]           = useState(false);
+  const [deleteError, setDeleteError]     = useState("");
+
+  const handleDelete = async () => {
+    if (!deleteJobTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteJob(deleteJobTarget.job_id);
+      setDeleteJob(null);
+      await fetchJobs();
+    } catch (e) {
+      setDeleteError(e.message || "삭제에 실패했습니다.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editJob || editSaving) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const types = editTypes.split(",").map((s) => s.trim()).filter(Boolean);
+      await updateJobMeta(editJob.job_id, {
+        workbook_name: editName.trim() || null,
+        workbook_types: types.length > 0 ? types : null,
+      });
+      setEditJob(null);
+      await fetchJobs();
+    } catch (e) {
+      setEditError(e.message || "저장에 실패했습니다.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   const handleCardClick = (job) => {
     navigate(`/analysis/${job.job_id}`, {
@@ -315,7 +390,13 @@ export default function AnalysisFilePage() {
           </Box>
         ) : (
           jobs.map((job) => (
-            <JobCard key={job.job_id} job={job} onClick={handleCardClick} />
+            <JobCard
+              key={job.job_id}
+              job={job}
+              onClick={handleCardClick}
+              onEdit={openEdit}
+              onDelete={setDeleteJob}
+            />
           ))
         )}
 
@@ -345,6 +426,83 @@ export default function AnalysisFilePage() {
           )}
         </Box>
       </Box>
+
+      {/* ── 삭제 확인 다이얼로그 ───────────────────────── */}
+      <Dialog
+        open={Boolean(deleteJobTarget)}
+        onClose={() => !deleting && setDeleteJob(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1 }}>문제집을 삭제할까요?</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: "12px !important" }}>
+          {deleteError && <Alert severity="error" sx={{ py: 0 }}>{deleteError}</Alert>}
+          <Typography variant="body2" fontWeight={700}>
+            {deleteJobTarget?.workbook_name || deleteJobTarget?.filename}
+          </Typography>
+          <Alert severity="warning" sx={{ py: 0.5 }}>
+            원본 PDF·감지된 문항·썸네일이 <b>모두 삭제</b>되며 되돌릴 수 없습니다.
+            이 문제집의 문항으로 만든 생성 이력은 남지만, 편집 화면에서 해당 문항 이미지가 보이지 않습니다.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteJob(null)} disabled={deleting} color="inherit">
+            취소
+          </Button>
+          <Button
+            variant="contained" color="error"
+            onClick={handleDelete}
+            disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            {deleting ? "삭제 중..." : "삭제"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── 이름/유형 편집 다이얼로그 ──────────────────── */}
+      <Dialog
+        open={Boolean(editJob)}
+        onClose={() => !editSaving && setEditJob(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1 }}>문제집 정보 편집</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "12px !important" }}>
+          {editError && <Alert severity="error" sx={{ py: 0 }}>{editError}</Alert>}
+          <Typography variant="caption" color="text.disabled">
+            {editJob?.filename}
+          </Typography>
+          <TextField
+            size="small" fullWidth autoFocus
+            label="문제집 이름"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            disabled={editSaving}
+          />
+          <TextField
+            size="small" fullWidth
+            label="유형 (쉼표로 구분)"
+            placeholder="예: 수학, 도형"
+            value={editTypes}
+            onChange={(e) => setEditTypes(e.target.value)}
+            disabled={editSaving}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setEditJob(null)} disabled={editSaving} color="inherit">
+            취소
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleEditSave}
+            disabled={editSaving}
+            startIcon={editSaving ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            {editSaving ? "저장 중..." : "저장"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* ── 업로드 다이얼로그 ──────────────────────────── */}
       <Dialog

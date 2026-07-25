@@ -13,6 +13,13 @@ frontend/src/utils/workbookLayout.js 와 완전히 동일해야 한다.
   6단:      3행×2열 → 페이지당 6문항
 """
 
+# ── 셀 내 문항 배율 (2026-07-25) ─────────────────────────────
+# 사용자가 셀 안에서 문항 이미지를 확대/축소할 때의 허용 범위.
+# frontend/src/utils/workbookLayout.js 의 동일 상수와 반드시 일치해야 한다.
+MIN_CELL_SCALE = 0.5
+MAX_CELL_SCALE = 3.0
+CELL_SCALE_STEP = 0.1
+
 # ── A4 규격 (pt 단위) ────────────────────────────────────────
 # 1 pt = 1/72 inch. A4 = 210×297mm → 595×842pt (ISO 216 기준).
 A4_WIDTH_PT  = 595

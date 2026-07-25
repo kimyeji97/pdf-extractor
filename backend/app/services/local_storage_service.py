@@ -324,6 +324,30 @@ def delete_cover(cover_id: str) -> None:
         path.unlink(missing_ok=True)
 
 
+# ── job / 문제집 삭제 ─────────────────────────────────────
+
+def delete_job(job_id: str) -> None:
+    """
+    job과 연관된 파일을 전부 삭제한다 (원본·결과·상태·경계·썸네일·수동문항·페이지캐시).
+
+    source/export 어느 쪽이든 디렉토리 구조가 같아 한 함수로 처리한다.
+    """
+    for rel in (
+        f"status/{job_id}.json",
+        f"boundaries/{job_id}.json",
+        f"page_info/{job_id}.json",
+        f"manual_questions/{job_id}.json",
+    ):
+        (_BASE / rel).unlink(missing_ok=True)
+
+    for rel in (f"uploads/{job_id}", f"results/{job_id}", f"thumbnails/{job_id}"):
+        shutil.rmtree(_BASE / rel, ignore_errors=True)
+
+
+def delete_workbook(workbook_id: str) -> None:
+    (_BASE / "workbooks" / f"{workbook_id}.json").unlink(missing_ok=True)
+
+
 def cover_image_key(cover_id: str, ext: str = "jpg") -> str:
     return f"covers/{cover_id}.{ext}"
 

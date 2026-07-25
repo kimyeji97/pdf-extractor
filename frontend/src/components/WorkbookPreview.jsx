@@ -14,6 +14,7 @@ import {
   LABEL_HEIGHT_PT,
   LAYOUT_SPEC, DEFAULT_LAYOUT,
   calcCellRect, topLeftFit, questionsPerPage,
+  MIN_CELL_SCALE, MAX_CELL_SCALE, CELL_SCALE_STEP, clampCellScale,
 } from "../utils/workbookLayout";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
@@ -38,6 +39,7 @@ function usePageVisible(ref) {
 
 function WorkbookPage({
   pi, pageItems, pageCount, qpp, cols, layout, previewWidth, pageHeightPx, labelHpx, scale, dividerXs,
+  onScaleChange,
 }) {
   const ref = useRef(null);
   const visible = usePageVisible(ref);
@@ -78,6 +80,8 @@ function WorkbookPage({
             const cellWpx  = cw * scale;
             const cellHpx  = cellH * scale;
             const imgYpx   = cellYpx + labelHpx;
+            // 항목별 사용자 지정 배율 (미지정 = 1배)
+            const cellScale = clampCellScale(item?.scale ?? 1);
             const imgHpx   = cellHpx - labelHpx;
 
             // 출처 레이블 텍스트: "번호번. 문제집이름. p페이지. 문항이름" (REQ-C07)
@@ -145,22 +149,69 @@ function WorkbookPage({
                   {labelText}
                 </div>
 
-                {/* 문항 이미지 */}
-                <img
-                  src={`${API_ROOT}${item.thumbnailUrl}`}
-                  alt={item.displayTitle || `문항 ${item.questionNum}`}
-                  className="wbp-cell-img"
+                {/* 문항 이미지 — 셀 크기로 클리핑하고, 안쪽 이미지에만 배율 적용.
+                    좌상단 고정이라 확대 시 우/하단이 셀 경계에서 잘린다.
+                    PDF 생성(pdf_service)도 동일한 방식으로 원본 clip을 줄여 맞춘다. */}
+                <div
+                  className="wbp-cell-clip"
                   style={{
-                    position:       "absolute",
-                    left:           cellXpx,
-                    top:            imgYpx,
-                    width:          cellWpx,
-                    height:         imgHpx,
-                    objectFit:      "contain",
-                    objectPosition: "left top",
+                    position: "absolute",
+                    left:     cellXpx,
+                    top:      imgYpx,
+                    width:    cellWpx,
+                    height:   imgHpx,
+                    overflow: "hidden",
                   }}
-                  loading="lazy"
-                />
+                >
+                  <img
+                    src={`${API_ROOT}${item.thumbnailUrl}`}
+                    alt={item.displayTitle || `문항 ${item.questionNum}`}
+                    className="wbp-cell-img"
+                    style={{
+                      display:        "block",
+                      width:          cellWpx * cellScale,
+                      height:         imgHpx * cellScale,
+                      objectFit:      "contain",
+                      objectPosition: "left top",
+                    }}
+                    loading="lazy"
+                  />
+                </div>
+
+                {/* 배율 조절 (2026-07-25) — 셀에 마우스를 올리면 나타남 */}
+                {onScaleChange && (
+                  <div
+                    className="wbp-scale-ctl"
+                    style={{
+                      position: "absolute",
+                      left:     cellXpx,
+                      top:      imgYpx,
+                      width:    cellWpx,
+                      height:   imgHpx,
+                    }}
+                  >
+                    <div className="wbp-scale-btns">
+                      {/* 이전 값 기준으로 계산하도록 updater를 넘긴다 —
+                          숫자를 넘기면 빠르게 연타할 때 리렌더 전 값(stale)이 쓰여 1회만 반영된다 */}
+                      <button
+                        type="button" title="축소"
+                        onClick={() => onScaleChange(item.questionId, (s) => s - CELL_SCALE_STEP)}
+                        disabled={cellScale <= MIN_CELL_SCALE}
+                      >−</button>
+                      <span title="현재 배율">{Math.round(cellScale * 100)}%</span>
+                      <button
+                        type="button" title="확대"
+                        onClick={() => onScaleChange(item.questionId, (s) => s + CELL_SCALE_STEP)}
+                        disabled={cellScale >= MAX_CELL_SCALE}
+                      >＋</button>
+                      <button
+                        type="button" title="배율 초기화"
+                        onClick={() => onScaleChange(item.questionId, 1)}
+                        disabled={cellScale === 1}
+                      >⟲</button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -184,7 +235,9 @@ function WorkbookPage({
   );
 }
 
-export default function WorkbookPreview({ selections = [], layout = DEFAULT_LAYOUT, previewWidth = 340 }) {
+export default function WorkbookPreview({
+  selections = [], layout = DEFAULT_LAYOUT, previewWidth = 340, onScaleChange,
+}) {
   if (selections.length === 0) {
     return <div className="wbp-empty">문항을 선택하면 미리보기가 표시됩니다.</div>;
   }
@@ -225,6 +278,7 @@ export default function WorkbookPreview({ selections = [], layout = DEFAULT_LAYO
           labelHpx={labelHpx}
           scale={scale}
           dividerXs={dividerXs}
+          onScaleChange={onScaleChange}
         />
       ))}
     </>

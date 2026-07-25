@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { listJobs, updateJobMeta } from "../api/client";
+import { listJobs } from "../api/client";
 import usePaginatedList from "../hooks/usePaginatedList";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 
@@ -46,43 +46,9 @@ function BoundariesBadge({ boundariesStatus, totalQuestionCount }) {
   );
 }
 
-function JobCard({ job, isSelected, onSelect, onMetaUpdated }) {
+// 이름/유형 편집은 문항 분석 목록으로 옮겼다(2026-07-25) — 편집 화면에서는 조회만 한다.
+function JobCard({ job, isSelected, onSelect }) {
   const statusLabel = job.status === "PENDING" ? null : (STATUS_LABEL[job.status] || job.status);
-
-  const [editing, setEditing]           = useState(false);
-  const [editName, setEditName]         = useState(job.workbook_name || "");
-  const [editTypes, setEditTypes]       = useState((job.workbook_types || []).join(", "));
-  const [saving, setSaving]             = useState(false);
-
-  const handleEditClick = (e) => {
-    e.stopPropagation();
-    setEditName(job.workbook_name || "");
-    setEditTypes((job.workbook_types || []).join(", "));
-    setEditing(true);
-  };
-
-  const handleSave = async (e) => {
-    e.stopPropagation();
-    setSaving(true);
-    try {
-      const types = editTypes.split(",").map((s) => s.trim()).filter(Boolean);
-      await updateJobMeta(job.job_id, {
-        workbook_name: editName.trim() || null,
-        workbook_types: types.length > 0 ? types : null,
-      });
-      setEditing(false);
-      onMetaUpdated();
-    } catch {
-      // 저장 실패 시 그대로 유지
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCancel = (e) => {
-    e.stopPropagation();
-    setEditing(false);
-  };
 
   return (
     <li
@@ -90,7 +56,7 @@ function JobCard({ job, isSelected, onSelect, onMetaUpdated }) {
         ...styles.card,
         ...(isSelected ? styles.cardSelected : {}),
       }}
-      onClick={() => !editing && onSelect(job.job_id, job.filename, job.workbook_name)}
+      onClick={() => onSelect(job.job_id, job.filename, job.workbook_name)}
     >
       {/* 상단: 문제집 이름 (메인) */}
       <div style={styles.cardMain}>
@@ -107,53 +73,21 @@ function JobCard({ job, isSelected, onSelect, onMetaUpdated }) {
             boundariesStatus={job.boundaries_status}
             totalQuestionCount={job.total_question_count}
           />
-          <button style={styles.editBtn} onClick={handleEditClick} title="이름/유형 편집">
-            ✎
-          </button>
         </div>
       </div>
 
       {/* 파일명 + 유형 표시 */}
-      {!editing && (
-        <div style={styles.metaRow}>
-          <span style={styles.metaText} title={job.filename}>{job.filename || "unknown.pdf"}</span>
-          {job.workbook_types?.length > 0 && (
-            <span style={styles.metaType}> · {job.workbook_types.join(", ")}</span>
-          )}
-        </div>
-      )}
+      <div style={styles.metaRow}>
+        <span style={styles.metaText} title={job.filename}>{job.filename || "unknown.pdf"}</span>
+        {job.workbook_types?.length > 0 && (
+          <span style={styles.metaType}> · {job.workbook_types.join(", ")}</span>
+        )}
+      </div>
 
       {/* 업로드 시간 */}
-      {!editing && job.uploaded_at && (
+      {job.uploaded_at && (
         <div style={styles.cardSub}>
           <span style={styles.time}>{relativeTime(job.uploaded_at)}</span>
-        </div>
-      )}
-
-      {/* 인라인 편집 폼 */}
-      {editing && (
-        <div style={styles.editForm} onClick={(e) => e.stopPropagation()}>
-          <input
-            style={styles.editInput}
-            placeholder="문제집 이름"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            autoFocus
-          />
-          <input
-            style={styles.editInput}
-            placeholder="문제집 유형 (쉼표로 구분)"
-            value={editTypes}
-            onChange={(e) => setEditTypes(e.target.value)}
-          />
-          <div style={styles.editActions}>
-            <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
-              {saving ? "저장 중..." : "저장"}
-            </button>
-            <button style={styles.cancelBtn} onClick={handleCancel} disabled={saving}>
-              취소
-            </button>
-          </div>
         </div>
       )}
     </li>
@@ -236,7 +170,6 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
                 job={job}
                 isSelected={selectedJobId === job.job_id}
                 onSelect={onSelect}
-                onMetaUpdated={fetchJobs}
               />
             ))}
           </ul>
@@ -345,17 +278,6 @@ const styles = {
     flexShrink: 0,
     whiteSpace: "nowrap",
   },
-  editBtn: {
-    fontSize: 11,
-    padding: "1px 5px",
-    cursor: "pointer",
-    borderRadius: 3,
-    border: "1px solid #ddd",
-    background: "#f5f5f5",
-    color: "#666",
-    flexShrink: 0,
-    lineHeight: 1.4,
-  },
   metaRow: {
     marginTop: 2,
     fontSize: 10,
@@ -394,43 +316,6 @@ const styles = {
   time: {
     fontSize: 10,
     color: "#aaa",
-  },
-  editForm: {
-    marginTop: 6,
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  editInput: {
-    fontSize: 11,
-    padding: "4px 6px",
-    border: "1px solid #ccc",
-    borderRadius: 4,
-    width: "100%",
-    boxSizing: "border-box",
-  },
-  editActions: {
-    display: "flex",
-    gap: 4,
-    justifyContent: "flex-end",
-  },
-  saveBtn: {
-    fontSize: 11,
-    padding: "3px 10px",
-    cursor: "pointer",
-    borderRadius: 4,
-    border: "none",
-    background: "#4a90e2",
-    color: "#fff",
-  },
-  cancelBtn: {
-    fontSize: 11,
-    padding: "3px 10px",
-    cursor: "pointer",
-    borderRadius: 4,
-    border: "1px solid #ddd",
-    background: "#fff",
-    color: "#555",
   },
   empty: {
     color: "#ccc",

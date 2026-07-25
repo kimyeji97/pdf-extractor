@@ -96,6 +96,33 @@ def _delete(key: str) -> None:
         pass
 
 
+def _delete_prefix(prefix: str) -> int:
+    """접두사 아래 모든 오브젝트를 삭제하고 삭제 건수를 반환한다.
+
+    썸네일처럼 job당 수백 개가 쌓이는 경로를 지울 때 사용한다.
+    delete_objects는 요청당 1,000개가 상한이라 배치로 나눠 보낸다.
+    """
+    paginator = r2.get_paginator("list_objects_v2")
+    deleted = 0
+    batch: List[dict] = []
+
+    def _flush():
+        nonlocal deleted, batch
+        if not batch:
+            return
+        r2.delete_objects(Bucket=BUCKET, Delete={"Objects": batch, "Quiet": True})
+        deleted += len(batch)
+        batch = []
+
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            batch.append({"Key": obj["Key"]})
+            if len(batch) >= 1000:
+                _flush()
+    _flush()
+    return deleted
+
+
 def _get_bytes_or_none(key: str) -> Optional[bytes]:
     try:
         resp = r2.get_object(Bucket=BUCKET, Key=key)
@@ -402,6 +429,36 @@ def get_cover_image(cover_id: str) -> Optional[tuple]:
 def delete_cover(cover_id: str) -> None:
     for ext in ["jpg", "jpeg", "png", "json"]:
         _delete(_key(COVERS_PREFIX, f"{cover_id}.{ext}"))
+
+
+# ── job / 문제집 삭제 ─────────────────────────────────────
+
+def delete_job(job_id: str) -> None:
+    """
+    job과 연관된 오브젝트를 전부 삭제한다 (원본·결과·상태·경계·썸네일·수동문항·페이지캐시).
+
+    source/export 어느 쪽이든 키 구조가 같아 한 함수로 처리한다.
+    """
+    for key in (
+        _key(STATUS_PREFIX, f"{job_id}.json"),
+        _key(BOUNDARIES_PREFIX, f"{job_id}.json"),
+        _key(PAGE_INFO_PREFIX, f"{job_id}.json"),
+        _key(MANUAL_QUESTIONS_PREFIX, f"{job_id}.json"),
+    ):
+        _delete(key)
+
+    for prefix in (
+        _key(UPLOADS_PREFIX, job_id) + "/",
+        _key(RESULTS_PREFIX, job_id) + "/",
+        _key(THUMBNAILS_PREFIX, job_id) + "/",
+    ):
+        _delete_prefix(prefix)
+
+    logger.info("[R2] job deleted | job_id=%s", job_id)
+
+
+def delete_workbook(workbook_id: str) -> None:
+    _delete(_key(WORKBOOKS_PREFIX, f"{workbook_id}.json"))
 
 
 def cover_image_key(cover_id: str, ext: str = "jpg") -> str:

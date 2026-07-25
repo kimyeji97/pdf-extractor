@@ -854,12 +854,66 @@ body {
   flex-shrink: 0;
   /* width는 JS로 설정 */
 }
-.wbp-cell-img {
-  position: absolute;
-  object-fit: contain;
+/* 셀 클리핑 박스 — 배율 확대 시 셀 밖으로 넘치는 부분을 잘라낸다 (2026-07-25) */
+.wbp-cell-clip {
   background: #f8fafc;
   border: 1px solid #e4e8ef;
   border-radius: 2px;
+  box-sizing: border-box;
+}
+.wbp-cell-img {
+  object-fit: contain;
+}
+
+/* 배율 조절 오버레이 — 평소엔 숨고 셀에 마우스를 올리면 나타난다 */
+.wbp-scale-ctl {
+  position: absolute;
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+.wbp-scale-ctl:hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+.wbp-scale-btns {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 3px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 4px rgba(28, 37, 46, 0.24);
+  font-size: 10px;
+  color: #475569;
+}
+.wbp-scale-btns span {
+  min-width: 30px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.wbp-scale-btns button {
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  border: 1px solid #d7dde5;
+  border-radius: 3px;
+  background: #fff;
+  color: #475569;
+  font-size: 10px;
+}
+.wbp-scale-btns button:hover:not(:disabled) {
+  border-color: #1877f2;
+  color: #1877f2;
+}
+.wbp-scale-btns button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .wbp-cell-empty {
   position: absolute;

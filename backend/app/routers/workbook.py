@@ -1,7 +1,8 @@
 """
-GET  /api/workbooks          - 문제집 이력 목록 (REQ-21)
-GET  /api/workbooks/{id}     - 문제집 메타데이터 단건 (REQ-20 편집 복원)
-POST /api/workbooks          - 문제집 메타데이터 저장 (extract-v2 완료 후 프론트에서 호출)
+GET    /api/workbooks        - 문제집 이력 목록 (REQ-21)
+GET    /api/workbooks/{id}   - 문제집 메타데이터 단건 (REQ-20 편집 복원)
+POST   /api/workbooks        - 문제집 메타데이터 저장 (extract-v2 완료 후 프론트에서 호출)
+DELETE /api/workbooks/{id}   - 문제집 + 결과 PDF(export job) 삭제 (REQ-C08)
 
 저장 트리거:
   extract-v2 DONE 확인 후 프론트엔드가 POST /api/workbooks를 호출하여 저장한다.
@@ -14,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from app.models.schemas import (
     WorkbookMeta, WorkbookSelectionItem, WorkbookSummary, WorkbookListResponse,
@@ -53,6 +55,26 @@ def list_workbooks(
     return WorkbookListResponse(
         items=summaries[skip: skip + limit], total=total, skip=skip, limit=limit
     )
+
+
+@router.delete("/workbooks/{workbook_id}", status_code=204)
+def delete_workbook(workbook_id: str):
+    """
+    문제집과 연관된 저장물을 전부 삭제한다 (REQ-C08).
+
+    문제집 메타뿐 아니라 이 문제집이 만들어 낸 **결과 PDF(export job)** 까지 함께 지운다.
+    원본 소스 job은 다른 문제집도 참조하므로 건드리지 않는다.
+    """
+    data = storage.get_workbook(workbook_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"문제집 {workbook_id}를 찾을 수 없습니다.")
+
+    result_job_id = data.get("result_job_id")
+    if result_job_id:
+        storage.delete_job(result_job_id)
+
+    storage.delete_workbook(workbook_id)
+    return Response(status_code=204)
 
 
 @router.get("/workbooks/{workbook_id}", response_model=WorkbookMeta)

@@ -25,6 +25,7 @@ from app.utils.question_parser import (
     QuestionBoundary,
 )
 from app.services import textract_service
+from app.utils.layout_spec import MIN_CELL_SCALE, MAX_CELL_SCALE
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -273,6 +274,15 @@ def _insert_cropped_page(
 # v2: 복수 소스 PDF 빌드
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def _sel_scale(sel) -> float:
+    """선택 항목의 배율을 안전 범위로 clamp한다 (미지정/구버전 저장분은 1.0)."""
+    try:
+        value = float(getattr(sel, "scale", None) or 1.0)
+    except (TypeError, ValueError):
+        return 1.0
+    return min(max(value, MIN_CELL_SCALE), MAX_CELL_SCALE)
+
+
 @dataclass
 class SourcedCropRegion:
     """
@@ -288,6 +298,7 @@ class SourcedCropRegion:
     x1: float
     y1: float
     source_label: str = ""      # 셀 상단에 표시할 출처 문자열 (예: "Q1 · 수학문제집 · p.3")
+    scale: float = 1.0          # 셀 안에서의 확대/축소 배율 (좌상단 고정, 1.0=기본 맞춤)
 
 
 def _build_pdf_from_multi_sources(
@@ -432,6 +443,7 @@ def extract_questions_v2(
                 page_index=sel.page_num,
                 x0=cr.x0, y0=cr.y0, x1=cr.x1, y1=cr.y1,
                 source_label=src_label,
+                scale=_sel_scale(sel),
             ))
             success_count += 1
             continue
@@ -449,6 +461,7 @@ def extract_questions_v2(
                 page_index=sel.page_num,
                 x0=r["x0"], y0=r["y0"], x1=r["x1"], y1=r["y1"],
                 source_label=src_label,
+                scale=_sel_scale(sel),
             ))
             success_count += 1
             continue
@@ -473,6 +486,7 @@ def extract_questions_v2(
             page_index=target.page_index,
             x0=target.col_x0, y0=target.y_top, x1=target.col_x1, y1=target.y_bottom,
             source_label=src_label,
+            scale=_sel_scale(sel),
         ))
         success_count += 1
 
@@ -631,8 +645,27 @@ def _build_grid_pdf(
         # Canvas와 완전히 동일한 수식으로 미리보기 ↔ PDF 출력 일치 보장
         dst_x, dst_y, dst_w, dst_h = top_left_fit(src_w, src_h, cell_x, img_cell_y, cell_w, img_cell_h)
 
-        dst_rect  = fitz.Rect(dst_x, dst_y, dst_x + dst_w, dst_y + dst_h)
-        clip_rect = fitz.Rect(region.x0, region.y0, region.x1, region.y1)
+        # ── 사용자 지정 배율 (좌상단 고정, 2026-07-25) ──────────────
+        # 확대하면 셀 밖으로 넘치므로 셀 경계에서 잘라야 한다. show_pdf_page에는
+        # 대상 클리핑이 없어서, 넘치는 만큼 **원본 clip을 줄이는** 방식으로 구현한다.
+        # (보이는 비율 = 원본에서 가져올 비율) → 벡터 그대로 유지되고 이웃 셀 침범도 없다.
+        cell_scale = getattr(region, "scale", 1.0) or 1.0
+        scaled_w = dst_w * cell_scale
+        scaled_h = dst_h * cell_scale
+
+        vis_w = min(scaled_w, cell_x + cell_w - dst_x)
+        vis_h = min(scaled_h, img_cell_y + img_cell_h - dst_y)
+        if vis_w <= 0 or vis_h <= 0:
+            continue
+
+        src_vis_w = src_w * (vis_w / scaled_w) if scaled_w > 0 else src_w
+        src_vis_h = src_h * (vis_h / scaled_h) if scaled_h > 0 else src_h
+
+        dst_rect  = fitz.Rect(dst_x, dst_y, dst_x + vis_w, dst_y + vis_h)
+        clip_rect = fitz.Rect(
+            region.x0, region.y0,
+            region.x0 + src_vis_w, region.y0 + src_vis_h,
+        )
 
         # 벡터 기반 크롭 삽입 (래스터화 없음)
         current_page.show_pdf_page(

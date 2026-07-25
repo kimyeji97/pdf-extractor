@@ -1,6 +1,7 @@
 """
 GET    /api/jobs                                                         - 업로드된 파일 목록 조회
 GET    /api/jobs/{job_id}                                                - 단일 job 정보 조회
+DELETE /api/jobs/{job_id}                                                - job + 연관 저장물 전체 삭제
 PATCH  /api/jobs/{job_id}                                                - job 메타데이터 수정 (workbook_name, workbook_types)
 POST   /api/jobs/{job_id}/refresh                                        - 전체 문서 재감지 (비동기)
 GET    /api/jobs/{job_id}/pages                                          - 페이지 목록 + 썸네일 URL
@@ -143,6 +144,23 @@ def get_job(job_id: str):
         workbook_types=job.workbook_types,
         original_pdf_url=original_pdf_url,
     )
+
+
+@router.delete("/jobs/{job_id}", status_code=204)
+def delete_job(job_id: str):
+    """
+    job과 연관된 저장물을 전부 삭제한다.
+
+    원본 PDF·결과 PDF·상태·경계 캐시·썸네일·수동 문항·페이지 메타 캐시가 모두 지워지며
+    되돌릴 수 없다. 이 job의 문항을 담고 있던 문제집은 남지만, 참조가 끊겨
+    편집 화면에서 해당 문항 썸네일이 표시되지 않는다(문제집 자체는 열린다).
+    """
+    job = storage.get_status(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+
+    storage.delete_job(job_id)
+    return Response(status_code=204)
 
 
 # ── job 메타데이터 수정 ──────────────────────────────────────

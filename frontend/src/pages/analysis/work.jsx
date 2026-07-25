@@ -27,7 +27,7 @@ import { Icon } from "@iconify/react";
 
 import QuestionAnalysisPanel from "components/QuestionAnalysisPanel";
 import PdfPreviewPanel from "components/PdfPreviewPanel";
-import { getPages, refreshJobQuestions, getJobInfo, addManualQuestion } from "api/client";
+import { getPages, refreshJobQuestions, getJobInfo, addManualQuestion, getAllQuestions } from "api/client";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
 
@@ -105,6 +105,36 @@ export default function AnalysisWorkPage() {
   }, []);
 
   useEffect(() => { fetchPages(jobId); }, [jobId, fetchPages]);
+
+  // ── 페이지별 문항 통계 (수동 포함 개수 + 오탐 수) ──────
+  //
+  // getPages의 question_count는 job.questions_per_page에서 오는데, 이 값은
+  // 자동 감지 경계로만 만들어져 수동 추가 문항이 빠진다. 오탐 여부도 페이지
+  // 목록에는 없다. 전체 문항 일괄 API(REQ-P01)가 둘 다 갖고 있으므로
+  // 여기서 한 번 받아 페이지별로 집계한다.
+  // ③ QuestionListPanel도 같은 API를 쓰지만 apiFetch GET dedup(P02-03)이
+  // 동시 호출을 하나로 합쳐 준다.
+  const [pageStats, setPageStats] = useState({});
+
+  useEffect(() => {
+    if (!jobId) { setPageStats({}); return; }
+    let alive = true;
+    getAllQuestions(jobId)
+      .then((data) => {
+        if (!alive) return;
+        const stats = {};
+        for (const p of data.pages || []) {
+          const qs = p.questions || [];
+          stats[p.page_num] = {
+            total: qs.length,
+            falsePositive: qs.filter((q) => q.is_false_positive).length,
+          };
+        }
+        setPageStats(stats);
+      })
+      .catch(() => { if (alive) setPageStats({}); });   // 실패 시 기존 question_count로 폴백
+    return () => { alive = false; };
+  }, [jobId, panelRefreshTrigger]);
 
   // ── 원본 PDF URL 조회 ─────────────────────────────────
   useEffect(() => {
@@ -369,23 +399,47 @@ export default function AnalysisWorkPage() {
             )}
             {pages.map((page) => {
               const isSelected = selectedPage === page.page_num;
+              const stat = pageStats[page.page_num];
+              // 통계를 못 받았을 때만 목록 API의 개수(자동 감지분)로 폴백
+              const questionCount = stat ? stat.total : page.question_count;
+              const fpCount = stat?.falsePositive ?? 0;
               return (
                 <Box
                   key={page.page_num}
                   onClick={() => handlePageClick(page)}
                   sx={{
-                    px: 2, py: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
+                    px: 2, py: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.5,
                     borderBottom: 1, borderColor: "divider",
-                    bgcolor: isSelected ? "primary.lighter" : "transparent",
-                    "&:hover": { bgcolor: isSelected ? "primary.lighter" : "action.hover" },
+                    // 오탐 의심 문항이 있는 페이지는 좌측 띠 + 옅은 배경으로 표시
+                    borderLeft: 3,
+                    borderLeftColor: fpCount > 0 ? "warning.main" : "transparent",
+                    bgcolor: isSelected
+                      ? "primary.lighter"
+                      : fpCount > 0 ? "warning.lighter" : "transparent",
+                    "&:hover": {
+                      bgcolor: isSelected
+                        ? "primary.lighter"
+                        : fpCount > 0 ? "warning.lighter" : "action.hover",
+                    },
                   }}
                 >
                   <Typography variant="caption" fontWeight={isSelected ? 700 : 400} color={isSelected ? "primary.main" : "text.primary"}>
                     {page.page_num + 1}페이지
                   </Typography>
-                  {page.question_count != null && (
-                    <Chip label={`${page.question_count}문항`} size="small" variant="outlined" color={isSelected ? "primary" : "default"} sx={{ fontSize: 10, height: 18 }} />
-                  )}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    {fpCount > 0 && (
+                      <Tooltip title={`오탐 의심 ${fpCount}건`}>
+                        <Chip
+                          label={`오탐 ${fpCount}`}
+                          size="small" color="warning" variant="filled"
+                          sx={{ fontSize: 10, height: 18 }}
+                        />
+                      </Tooltip>
+                    )}
+                    {questionCount != null && (
+                      <Chip label={`${questionCount}문항`} size="small" variant="outlined" color={isSelected ? "primary" : "default"} sx={{ fontSize: 10, height: 18 }} />
+                    )}
+                  </Box>
                 </Box>
               );
             })}

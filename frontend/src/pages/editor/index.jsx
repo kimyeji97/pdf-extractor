@@ -32,6 +32,7 @@ import IconButton from "@mui/material/IconButton";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Icon } from "@iconify/react";
 
+import { clampCellScale } from "utils/workbookLayout";
 import FileListPanel from "components/FileListPanel";
 import QuestionListPanel from "components/QuestionListPanel";
 import WorkbookPreview from "components/WorkbookPreview";
@@ -208,13 +209,27 @@ export default function EditorPage() {
         if (meta.selections?.length) {
           setBasket(
             meta.selections.map((s, i) => ({
-              questionId: s.manual_id || String(s.question_num ?? i),
+              // question_id는 "{job_id}:{page}:{num}" 복합키(ADR-0002).
+              // 예전 저장분이라 없으면 같은 규칙으로 조립한다 —
+              // 파일별로 문항 번호가 겹치므로 번호만 쓰면 멀티 파일 문제집에서 키가 충돌한다.
+              questionId:
+                s.question_id ||
+                (s.manual_id
+                  ? `${s.job_id}:${s.page_num}:manual:${s.manual_id}`
+                  : `${s.job_id}:${s.page_num}:${s.question_num ?? i}`),
               questionNum: s.question_num,
               pageNum: s.page_num,
               jobId: s.job_id,
-              thumbnailUrl: null,
+              workbookName: s.workbook_name || "",
+              // 썸네일 URL은 결정적이라 저장할 필요 없이 여기서 조립한다.
+              // (저장된 selections에는 썸네일 필드가 없어 예전에는 null로 두었고,
+              //  그 탓에 생성 이력 → 편집 복원 시 이미지가 전부 비어 있었다)
+              thumbnailUrl: s.manual_id
+                ? `/api/jobs/${s.job_id}/pages/${s.page_num}/questions/manual/${s.manual_id}/thumbnail`
+                : `/api/jobs/${s.job_id}/pages/${s.page_num}/questions/${s.question_num}/thumbnail`,
               isManual: Boolean(s.manual_id),
               manualId: s.manual_id,
+              scale: s.scale ?? 1,
               displayTitle:
                 s.label ||
                 (s.manual_id ? "(수동 문항)" : `문항 ${s.question_num}`),
@@ -292,6 +307,19 @@ export default function EditorPage() {
     [jobId, selectedWorkbookName],
   );
 
+  // 미리보기 셀에서 문항별 배율 조절 (좌상단 고정) — PDF 생성에도 그대로 전달된다.
+  // next는 숫자 또는 (이전값) => 새값 형태의 updater. 연타 시 stale 값을 쓰지 않도록
+  // 항상 setBasket 콜백 안에서 이전 배율을 읽어 계산한다.
+  const handleScaleChange = useCallback((qId, next) => {
+    setBasket((prev) =>
+      prev.map((b) => {
+        if (b.questionId !== qId) return b;
+        const cur = b.scale ?? 1;
+        return { ...b, scale: clampCellScale(typeof next === "function" ? next(cur) : next) };
+      }),
+    );
+  }, []);
+
   const removeFromBasket = (qId) =>
     setBasket((prev) => prev.filter((b) => b.questionId !== qId));
 
@@ -332,6 +360,7 @@ export default function EditorPage() {
         questionNum: b.isManual ? undefined : b.questionNum,
         manualId: b.isManual ? b.manualId : undefined,
         label: b.displayTitle,
+        scale: b.scale ?? 1,
       }));
       const { job_id: exportJobId } = await startExtractV2(
         selections,
@@ -370,6 +399,7 @@ export default function EditorPage() {
                   manual_id: b.isManual ? b.manualId : undefined,
                   title: b.displayTitle,
                   workbook_name: b.workbookName || undefined,
+                  scale: b.scale ?? 1,
                 })),
               });
             } catch {}
@@ -859,6 +889,7 @@ export default function EditorPage() {
               selections={basket}
               layout={layout}
               previewWidth={340}
+              onScaleChange={handleScaleChange}
             />
           </Box>
         </Paper>

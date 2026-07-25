@@ -369,6 +369,24 @@ export async function getWorkbook(workbookId) {
 }
 
 /**
+ * DELETE /api/jobs/{jobId}
+ * 업로드한 문제집(원본 PDF)과 연관 저장물 전체 삭제 — 되돌릴 수 없음
+ */
+export async function deleteJob(jobId) {
+  const res = await apiFetch(`${BASE_URL}/jobs/${jobId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("문제집 삭제 실패");
+}
+
+/**
+ * DELETE /api/workbooks/{workbookId}
+ * 생성된 문제집과 결과 PDF 삭제 (REQ-C08) — 되돌릴 수 없음
+ */
+export async function deleteWorkbook(workbookId) {
+  const res = await apiFetch(`${BASE_URL}/workbooks/${workbookId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("문제집 삭제 실패");
+}
+
+/**
  * PATCH /api/jobs/{jobId}
  * job의 문제집 이름/유형 수정
  * @param {string} jobId
