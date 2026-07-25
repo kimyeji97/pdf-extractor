@@ -158,29 +158,56 @@ R2 `head_object`의 `LastModified`로 프리워밍이 실제 실행돼 신선한
 
 ---
 
-#### P03-03. 목록 API 페이지네이션  *(구 P02-03)*
+#### P03-03. 목록 API 페이지네이션  *(구 P02-03 / ✅ 적용 완료 — 2026-07-25)*
 
 | 항목 | 내용 |
 |------|------|
-| 파일 | `backend/app/routers/browse.py`(`list_jobs`), `backend/app/routers/workbook.py` |
-| 분류 | Backend · API 설계 |
+| 파일 | `backend/app/routers/browse.py`(`list_jobs`), `backend/app/routers/workbook.py`, `backend/app/services/s3_service.py`, `frontend/src/hooks/usePaginatedList.js`, `frontend/src/hooks/useDebouncedValue.js`, `frontend/src/pages/analysis/index.jsx`, `frontend/src/components/FileListPanel.jsx`, `frontend/src/pages/history/index.jsx` |
+| 분류 | Backend · API 설계 + Frontend UX |
 
 **현재 문제**
 
 `GET /api/jobs`, `GET /api/workbooks` 모두 전체 목록을 한 번에 반환한다. 누적 시 응답 크기·메모리가 선형 증가.
 
-**개선 방안**
-
-`skip`/`limit` 쿼리 파라미터 추가(기본 skip=0, limit=20).
+**적용 내용**
 
 ```
-GET /api/jobs?skip=0&limit=20&type=source
-응답: { "items": [...], "total": 150, "skip": 0, "limit": 20 }
+GET /api/jobs?job_type=SOURCE&skip=0&limit=20&name=&types=
+응답: { "items": [...], "total": 47, "skip": 0, "limit": 20 }
+
+GET /api/workbooks?skip=0&limit=20&name=
+응답: { "items": [...], "total": 35, "skip": 0, "limit": 20 }
 ```
 
-프론트도 무한 스크롤 or 페이지네이션 UI 대응 필요(→ P02 연계).
+1. **응답 형태 변경**: `{source_jobs, export_jobs}` → `{items, total, skip, limit}`.
+   기존 응답은 SOURCE/EXPORT를 한 번에 내려 각각 페이징이 불가능해, `job_type` 쿼리로 한쪽만 받는 형태로 바꿨다.
+   프론트는 `source_jobs`만 쓰고 `export_jobs`는 **아무도 소비하지 않던 것**을 확인하고 진행.
+2. **검색을 서버로 이관**: `name`(문제집 이름/파일명) · `types`(유형) 부분 일치.
+   기존 클라이언트 필터를 그대로 두면 아직 안 불러온 뒷 페이지가 검색되지 않는 기능 회귀가 생기기 때문. 프론트는 300ms 디바운스.
+3. **문제집 목록 응답에서 `selections` 제외**: 목록 전용 `WorkbookSummary` 모델 신설.
+   목록 화면은 selections를 쓰지 않는데 문항 수십~수백 건이 통째로 실려 있었다. 편집 복원용 selections는 단건 조회(`GET /api/workbooks/{id}`)에서 그대로 제공.
+4. **R2 목록 조회 병렬화** (`_get_json_many`, `ThreadPoolExecutor(12)`):
+   **페이지네이션만으로는 지연이 안 줄어든다**는 게 핵심. 정렬(uploaded_at/created_at 내림차순)을 하려면 어차피 전체 status JSON을 읽어야 하고, 이게 키 1건당 R2 GET 1회라 진짜 비용은 여기 있었다.
+5. **프론트 무한 스크롤**: 공용 훅 `usePaginatedList`(IntersectionObserver, rootMargin 200px) + `useDebouncedValue` 신설, 3개 목록 화면(분석 목록 / 편집 파일 목록 / 생성 이력)에 적용.
 
-**기대 효과**: 1,000+ 건 누적 시 메모리 80% 감소, 응답 속도 일정 유지
+**실측 결과**
+
+| 항목 | 수치 |
+|------|------|
+| R2 status JSON 16건 읽기 | 순차 1.311s → 병렬 0.314s (**4.2배**) |
+| R2 GET 1건 왕복 | ~82ms → 100건 누적 시 순차라면 ~8s |
+| 문제집 목록 응답(20건) | 3.9KB (단건 상세 1건이 5.7KB — selections 40개 포함) |
+| 실 데이터 응답 시간 | `GET /api/jobs` ~0.25s, `GET /api/workbooks` ~0.19s |
+
+**검증** (합성 데이터 SOURCE 47 + EXPORT 13 + 문제집 35건, 로컬 스토리지 + headless Chrome/CDP)
+
+- 분석 목록: 20 → 40 → 47건까지 이어붙인 뒤 요청 중단(초과 요청 없음)
+- 편집 파일 목록: 20 → 40 → 47, 유형 검색 '과학' → 9건
+- 생성 이력: 20 → 35, selections 없이도 문항 수 칩 정상 표시
+- 디바운스: 5글자 연속 입력 → 목록 요청 1회
+- 검색 조합(name+types) 서버 필터 정상, 결과 0건 처리 정상
+
+**주의**: `job_type`은 `JobType` enum 값이라 **대문자**(`SOURCE`/`EXPORT`)여야 한다. 소문자로 보내면 422 — 최초 구현에서 클라가 `source`를 보내 실패했다.
 
 ---
 
@@ -337,7 +364,7 @@ PDF 처리 엔드포인트에 30초 타임아웃(`asyncio.wait_for()` 또는 미
 | ✅ **High impact** | P03-02(페이지 메타 캐시), P03-01(프리워밍 — job당 PDF 다운로드 1회화) | 완료·병목 직격 |
 | ✅ **Quick win** | P03-05(단일 요청 중복 read 제거) | 재검토 결과 이미 해결돼 있어 조치 불필요 |
 | ✅ **동시성** | P03-04(추출 작업 ProcessPoolExecutor 분리) | 완료(§P03-04) |
-| **Scalability** | P03-03(페이지네이션) | 구조 변경 — 미착수, API 응답 형태 변경 필요 |
+| ✅ **Scalability** | P03-03(페이지네이션) | 완료 — 응답 형태 변경 + 서버 검색 이관 + 무한 스크롤 |
 | ✅ **Scalability** | P03-08(타임아웃 미들웨어) | 완료 |
 | ✅ **낮음(지연 무관)** | P03-07(DPI 96 적용) | 완료 |
 | ❌ **기각** | P03-06(adaptive 조건부) | 실제 검증 결과 문항 15개 누락 회귀 발견 → 미적용, 원복 |
@@ -361,6 +388,6 @@ PDF 처리 엔드포인트에 30초 타임아웃(`asyncio.wait_for()` 또는 미
 - ~~P03-01: 6~10초 병목이 스토리지 왕복 vs 전체 파싱 중 비중~~ → **프로파일링 완료: R2 전체 PDF 다운로드가 ~99%(~2초/8MB)**. 렌더 ~30ms·파싱 ~14ms로 무시 수준. 6~10초는 N회 전체 다운로드(카드/썸네일별) 누적.
 - P03-01: R2가 바이트 레인지/부분 다운로드를 지원하는지 → 전체 재다운로드 회피 가능 여부 (프리워밍으로 대부분 해소되므로 후순위)
 - ~~P03-01: 썸네일 프리워밍을 어느 시점에 어느 범위로 할지~~ → **결정·적용 완료: 업로드/재감지 직후(boundaries DONE 저장 후), 전 페이지 + 전체 감지 문항 범위로 프리워밍**. R2 PUT 건당 ~270ms라 순차 시 job당 3~4분 소요돼 `ThreadPoolExecutor(12)`로 병렬화.
-- P03-03: 프론트 UI를 무한 스크롤 vs 페이지 번호 중 선택(P02 연계)
+- ~~P03-03: 프론트 UI를 무한 스크롤 vs 페이지 번호 중 선택(P02 연계)~~ → **무한 스크롤로 결정**(사용자 선택). 카드 래핑 그리드(REQ-D06)와 잘 맞고, IntersectionObserver 패턴을 P02-01/07에서 이미 쓰고 있어 재사용. 검색은 **서버 이관**으로 결정 — 클라 필터를 두면 안 불러온 뒷 페이지가 검색되지 않기 때문.
 - ~~P03-04: ECS 0.5 vCPU에서 ProcessPoolExecutor 실효성~~ → **적용 완료(max_workers=2)**. 실측상 풀 경유 오버헤드는 미미(12.76s vs 직접호출 12.66s). vCPU 총량은 그대로지만 CPU 작업이 별도 프로세스로 빠져 메인 프로세스 GIL이 다른 요청 처리에 즉시 사용 가능해지는 효과는 유지.
 - 목표 SLA: "모든 통신 1초 이하" 대비 현실적 SLA 합의(콜드 스타트·대형 PDF 예외 허용치)
