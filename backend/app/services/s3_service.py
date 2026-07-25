@@ -17,6 +17,7 @@ R2 버킷 + R2_ROOT_PREFIX 조합으로 환경(dev/prod)을 구분한다.
 """
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, List
 import boto3
 from botocore.config import Config
@@ -105,6 +106,32 @@ def _get_bytes_or_none(key: str) -> Optional[bytes]:
         raise
 
 
+_LIST_FETCH_WORKERS = 12
+
+
+def _get_json_many(keys: List[str]) -> List[Optional[dict]]:
+    """
+    여러 JSON 오브젝트를 병렬로 읽는다 (REQ-P03-03).
+
+    목록 조회는 키 1건당 R2 GET 1회라 순차 처리하면 건수에 비례해 왕복이 쌓인다.
+    페이지네이션을 넣어도 정렬을 위해 전체를 읽어야 하는 건 그대로이므로,
+    지연을 줄이려면 이 단계를 병렬화해야 한다.
+    실패한 키는 None으로 남겨 호출부가 건너뛴다(손상 파일 무시 정책 유지).
+    """
+    if not keys:
+        return []
+
+    def _read(k: str) -> Optional[dict]:
+        try:
+            return _get_json(k)
+        except Exception:
+            return None
+
+    workers = min(_LIST_FETCH_WORKERS, len(keys))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        return list(ex.map(_read, keys))
+
+
 # ── Presigned / 다운로드 URL ──────────────────────────────
 
 def generate_upload_presigned_url(key: str, expires: int = 300) -> str:
@@ -161,9 +188,10 @@ def list_jobs() -> List[JobStatusFile]:
                 keys.append(k)
 
     jobs: List[JobStatusFile] = []
-    for k in keys:
+    for data in _get_json_many(keys):
+        if data is None:
+            continue
         try:
-            data = _get_json(k)
             jobs.append(JobStatusFile(**data))
         except Exception:
             continue
@@ -298,12 +326,7 @@ def list_workbooks() -> list:
             if k.endswith(".json"):
                 keys.append(k)
 
-    workbooks = []
-    for k in keys:
-        try:
-            workbooks.append(_get_json(k))
-        except Exception:
-            continue
+    workbooks = [w for w in _get_json_many(keys) if w is not None]
 
     workbooks.sort(key=lambda w: w.get("created_at", ""), reverse=True)
     return workbooks

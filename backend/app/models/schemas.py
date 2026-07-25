@@ -159,3 +159,27 @@ class WorkbookMeta(BaseModel):
     question_count: int
     filename: Optional[str] = None        # 사용자 입력 파일명 (REQ-C01)
     name: Optional[str] = None            # 문제집 이름 (이력 표시용)
+
+
+class WorkbookSummary(BaseModel):
+    """
+    문제집 이력 목록용 요약 모델 (REQ-P03-03).
+    WorkbookMeta에서 selections를 제외한 형태 — 목록 화면은 selections를 쓰지 않는데
+    문항 수십~수백 건이 통째로 실려 응답이 불필요하게 커지기 때문.
+    편집 복원에 필요한 selections는 단건 조회(GET /api/workbooks/{id})에서 제공한다.
+    """
+    workbook_id: str
+    created_at: datetime
+    layout: str
+    result_job_id: str
+    question_count: int
+    filename: Optional[str] = None
+    name: Optional[str] = None
+
+
+class WorkbookListResponse(BaseModel):
+    """페이지네이션된 문제집 이력 목록 (REQ-P03-03)"""
+    items: list[WorkbookSummary]
+    total: int
+    skip: int
+    limit: int

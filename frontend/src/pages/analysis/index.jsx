@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
@@ -17,6 +17,8 @@ import InputAdornment from "@mui/material/InputAdornment";
 import { Icon } from "@iconify/react";
 
 import UploadForm from "components/UploadForm";
+import usePaginatedList from "hooks/usePaginatedList";
+import useDebouncedValue from "hooks/useDebouncedValue";
 import { listJobs, requestUploadUrl, uploadPdf } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
@@ -183,9 +185,6 @@ function JobCard({ job, onClick }) {
 export default function AnalysisFilePage() {
   const navigate = useNavigate();
 
-  const [jobs, setJobs]       = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
   const [searchName, setSearchName] = useState("");
   const [searchType, setSearchType] = useState("");
 
@@ -197,36 +196,21 @@ export default function AnalysisFilePage() {
   const [uploadWorkbookTypes, setUploadWorkbookTypes] = useState("");
   const [selectedFile, setSelectedFile]               = useState(null);
 
-  const fetchJobs = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await listJobs();
-      setJobs(data.source_jobs ?? []);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // 검색은 서버가 처리한다 (REQ-P03-03) — 페이지 단위로만 받으므로
+  // 클라이언트 필터로는 아직 안 불러온 뒷 페이지를 찾을 수 없기 때문.
+  const debouncedName = useDebouncedValue(searchName, 300);
+  const debouncedType = useDebouncedValue(searchType, 300);
 
-  useEffect(() => { fetchJobs(); }, [fetchJobs]);
+  const fetchPage = useCallback(
+    (skip, limit) => listJobs({ skip, limit, name: debouncedName, types: debouncedType }),
+    [debouncedName, debouncedType],
+  );
 
-  const filteredJobs = useMemo(() => {
-    const nameLower = searchName.trim().toLowerCase();
-    const typeLower = searchType.trim().toLowerCase();
-    return jobs.filter((job) => {
-      if (nameLower) {
-        const name = (job.workbook_name || job.filename || "").toLowerCase();
-        if (!name.includes(nameLower)) return false;
-      }
-      if (typeLower) {
-        const types = (job.workbook_types || []).join(" ").toLowerCase();
-        if (!types.includes(typeLower)) return false;
-      }
-      return true;
-    });
-  }, [jobs, searchName, searchType]);
+  const {
+    items: jobs, total, loading, loadingMore, error, sentinelRef, reload: fetchJobs,
+  } = usePaginatedList(fetchPage);
+
+  const hasSearch = Boolean(debouncedName.trim() || debouncedType.trim());
 
   const handleCardClick = (job) => {
     navigate(`/analysis/${job.job_id}`, {
@@ -311,7 +295,7 @@ export default function AnalysisFilePage() {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mx: 2.5, mt: 1.5 }} onClose={() => setError("")}>
+        <Alert severity="error" sx={{ mx: 2.5, mt: 1.5 }}>
           {error}
         </Alert>
       )}
@@ -330,18 +314,36 @@ export default function AnalysisFilePage() {
             <CircularProgress size={24} />
           </Box>
         ) : (
-          filteredJobs.map((job) => (
+          jobs.map((job) => (
             <JobCard key={job.job_id} job={job} onClick={handleCardClick} />
           ))
         )}
 
-        {!loading && filteredJobs.length === 0 && (
+        {!loading && jobs.length === 0 && (
           <Box sx={{ display: "flex", alignItems: "center", pl: 2, color: "text.disabled" }}>
             <Typography variant="body2" color="text.disabled">
-              {jobs.length === 0 ? "업로드된 파일이 없습니다." : "검색 결과가 없습니다."}
+              {hasSearch ? "검색 결과가 없습니다." : "업로드된 파일이 없습니다."}
             </Typography>
           </Box>
         )}
+
+        {/* 무한 스크롤 센티널 (REQ-P03-03) — 보이면 다음 페이지를 이어붙인다 */}
+        <Box
+          ref={sentinelRef}
+          sx={{
+            width: "100%", display: "flex", justifyContent: "center",
+            alignItems: "center", gap: 1, py: loadingMore ? 2 : 0.5,
+          }}
+        >
+          {loadingMore && (
+            <>
+              <CircularProgress size={18} />
+              <Typography variant="caption" color="text.disabled">
+                {jobs.length} / {total}
+              </Typography>
+            </>
+          )}
+        </Box>
       </Box>
 
       {/* ── 업로드 다이얼로그 ──────────────────────────── */}

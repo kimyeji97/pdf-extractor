@@ -13,31 +13,46 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from app.models.schemas import WorkbookMeta, WorkbookSelectionItem
+from app.models.schemas import (
+    WorkbookMeta, WorkbookSelectionItem, WorkbookSummary, WorkbookListResponse,
+)
 from app.services import storage
 
 router = APIRouter()
 
 
-@router.get("/workbooks", response_model=list[WorkbookMeta])
-def list_workbooks():
+@router.get("/workbooks", response_model=WorkbookListResponse)
+def list_workbooks(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    name: Optional[str] = Query(None, description="문제집 이름 또는 파일명 부분 일치"),
+):
     """
-    생성된 문제집 이력 전체를 created_at 내림차순으로 반환한다 (REQ-21).
-    WorkbookHistoryView에서 목록을 표시할 때 사용한다.
+    생성된 문제집 이력을 created_at 내림차순으로 페이지 단위 반환한다 (REQ-21 / REQ-P03-03).
+    목록 화면은 selections를 쓰지 않으므로 WorkbookSummary(=selections 제외)로 응답한다.
     """
     raw_list = storage.list_workbooks()
-    result = []
+
+    summaries = []
     for w in raw_list:
         try:
-            # 저장된 JSON dict를 WorkbookMeta 모델로 변환
-            # selections 내부의 dict도 WorkbookSelectionItem으로 변환
-            w["selections"] = [WorkbookSelectionItem(**s) for s in w.get("selections", [])]
-            result.append(WorkbookMeta(**w))
+            summaries.append(WorkbookSummary(**w))
         except Exception:
             continue   # 손상된 파일은 조용히 스킵
-    return result
+
+    name_lower = (name or "").strip().lower()
+    if name_lower:
+        summaries = [
+            w for w in summaries
+            if name_lower in (w.name or w.filename or "").lower()
+        ]
+
+    total = len(summaries)
+    return WorkbookListResponse(
+        items=summaries[skip: skip + limit], total=total, skip=skip, limit=limit
+    )
 
 
 @router.get("/workbooks/{workbook_id}", response_model=WorkbookMeta)

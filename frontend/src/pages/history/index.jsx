@@ -4,7 +4,7 @@
  * 문제집 목록 선택 시 react-pdf 기반 PDF 뷰어로 미리보기.
  * 확대/축소, 페이지 번호 입력 이동, 스크롤 탐색 지원.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
@@ -21,6 +21,7 @@ import Tooltip from "@mui/material/Tooltip";
 import { Icon } from "@iconify/react";
 
 import PdfPreviewPanel from "components/PdfPreviewPanel";
+import usePaginatedList from "hooks/usePaginatedList";
 import { getWorkbooks, getStatus } from "api/client";
 
 function fmtDate(iso) {
@@ -33,24 +34,17 @@ function fmtDate(iso) {
 
 export default function HistoryPage() {
   const navigate = useNavigate();
-  const [workbooks, setWorkbooks]         = useState([]);
-  const [loading, setLoading]             = useState(false);
-  const [error, setError]                 = useState("");
   const [downloadingId, setDownloadingId] = useState(null);
   const [selectedWb, setSelectedWb]       = useState(null);
   const [pdfUrl, setPdfUrl]               = useState(null);
   const [pdfLoading, setPdfLoading]       = useState(false);
 
-  const fetchWorkbooks = useCallback(async () => {
-    setLoading(true); setError("");
-    try {
-      const data = await getWorkbooks();
-      setWorkbooks([...(data || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
-    } catch (e) { setError(e.message || "목록 조회 실패"); }
-    finally     { setLoading(false); }
-  }, []);
+  // 서버가 created_at 내림차순으로 페이지를 반환하므로 클라 재정렬은 불필요 (REQ-P03-03)
+  const fetchPage = useCallback((skip, limit) => getWorkbooks({ skip, limit }), []);
 
-  useEffect(() => { fetchWorkbooks(); }, [fetchWorkbooks]);
+  const {
+    items: workbooks, total, loading, loadingMore, error, sentinelRef, reload: fetchWorkbooks,
+  } = usePaginatedList(fetchPage);
 
   const handleDownload = async (wb) => {
     if (!wb.result_job_id) return;
@@ -155,6 +149,21 @@ export default function HistoryPage() {
               </Box>
             ))}
           </List>
+
+          {/* 무한 스크롤 센티널 (REQ-P03-03) */}
+          <Box
+            ref={sentinelRef}
+            sx={{ py: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 1, minHeight: 8 }}
+          >
+            {loadingMore && (
+              <>
+                <CircularProgress size={16} />
+                <Typography variant="caption" color="text.disabled">
+                  {workbooks.length} / {total}
+                </Typography>
+              </>
+            )}
+          </Box>
         </Box>
       </Paper>
 

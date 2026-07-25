@@ -1,5 +1,7 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { listJobs, updateJobMeta } from "../api/client";
+import usePaginatedList from "../hooks/usePaginatedList";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 
 const STATUS_LABEL = {
   PENDING:    null,
@@ -166,44 +168,33 @@ function JobCard({ job, isSelected, onSelect, onMetaUpdated }) {
  * }} props
  */
 export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger = 0 }) {
-  const [sourceJobs, setSourceJobs] = useState([]);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState("");
   const [searchName, setSearchName] = useState("");
   const [searchType, setSearchType] = useState("");
 
-  const fetchJobs = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await listJobs();
-      setSourceJobs(data.source_jobs ?? []);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // 검색은 서버가 처리한다 (REQ-P03-03)
+  const debouncedName = useDebouncedValue(searchName, 300);
+  const debouncedType = useDebouncedValue(searchType, 300);
 
+  const fetchPage = useCallback(
+    (skip, limit) => listJobs({ skip, limit, name: debouncedName, types: debouncedType }),
+    [debouncedName, debouncedType],
+  );
+
+  const {
+    items: sourceJobs, total, loading, loadingMore, error, sentinelRef, reload: fetchJobs,
+  } = usePaginatedList(fetchPage);
+
+  // 부모가 refreshTrigger를 올리면(업로드 등) 목록을 처음부터 다시 받는다.
+  // 값이 실제로 바뀐 경우에만 재조회 — fetchJobs 참조 변경(검색어 변경)만으로는
+  // 훅이 이미 재로드하므로 여기서 또 부르면 중복 요청이 된다.
+  const lastTriggerRef = useRef(refreshTrigger);
   useEffect(() => {
+    if (lastTriggerRef.current === refreshTrigger) return;
+    lastTriggerRef.current = refreshTrigger;
     fetchJobs();
-  }, [fetchJobs, refreshTrigger]);
+  }, [refreshTrigger, fetchJobs]);
 
-  const filteredJobs = useMemo(() => {
-    const nameLower = searchName.trim().toLowerCase();
-    const typeLower = searchType.trim().toLowerCase();
-    return sourceJobs.filter((job) => {
-      if (nameLower) {
-        const name = (job.workbook_name || job.filename || "").toLowerCase();
-        if (!name.includes(nameLower)) return false;
-      }
-      if (typeLower) {
-        const types = (job.workbook_types || []).join(" ").toLowerCase();
-        if (!types.includes(typeLower)) return false;
-      }
-      return true;
-    });
-  }, [sourceJobs, searchName, searchType]);
+  const hasSearch = Boolean(debouncedName.trim() || debouncedType.trim());
 
   return (
     <div style={styles.container}>
@@ -235,11 +226,11 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
       <div style={styles.scrollArea}>
         {error && <p style={styles.error}>{error}</p>}
 
-        {!loading && filteredJobs.length === 0 ? (
-          <p style={styles.empty}>{sourceJobs.length === 0 ? "업로드된 파일 없음" : "검색 결과 없음"}</p>
+        {!loading && sourceJobs.length === 0 ? (
+          <p style={styles.empty}>{hasSearch ? "검색 결과 없음" : "업로드된 파일 없음"}</p>
         ) : (
           <ul style={styles.list}>
-            {filteredJobs.map((job) => (
+            {sourceJobs.map((job) => (
               <JobCard
                 key={job.job_id}
                 job={job}
@@ -250,6 +241,11 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
             ))}
           </ul>
         )}
+
+        {/* 무한 스크롤 센티널 (REQ-P03-03) */}
+        <div ref={sentinelRef} style={styles.sentinel}>
+          {loadingMore && `불러오는 중… (${sourceJobs.length}/${total})`}
+        </div>
       </div>
     </div>
   );
@@ -275,6 +271,13 @@ const styles = {
     flex: 1,
     minHeight: 0,
     overflowY: "auto",
+  },
+  sentinel: {
+    minHeight: 8,
+    padding: "6px 0",
+    textAlign: "center",
+    fontSize: 11,
+    color: "#999",
   },
   sectionLabel: {
     fontSize: 12,

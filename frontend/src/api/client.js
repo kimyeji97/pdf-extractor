@@ -62,12 +62,20 @@ export async function requestUploadUrl(filename, meta = {}) {
 
 /**
  * GET /api/jobs
- * 업로드된 파일 목록 반환
+ * 업로드된 파일 목록 반환 (페이지네이션 + 서버 검색, REQ-P03-03)
+ * job_type은 백엔드 JobType enum 값이라 대문자여야 한다 (소문자는 422).
+ * @param {{ jobType?: "SOURCE"|"EXPORT", skip?: number, limit?: number,
+ *           name?: string, types?: string }} [opts]
  */
-export async function listJobs() {
-  const res = await apiFetch(`${BASE_URL}/jobs`);
+export async function listJobs(opts = {}) {
+  const { jobType = "SOURCE", skip = 0, limit = 20, name = "", types = "" } = opts;
+  const qs = new URLSearchParams({ job_type: jobType, skip: String(skip), limit: String(limit) });
+  if (name.trim()) qs.set("name", name.trim());
+  if (types.trim()) qs.set("types", types.trim());
+
+  const res = await apiFetch(`${BASE_URL}/jobs?${qs}`);
   if (!res.ok) throw new Error("파일 목록 조회 실패");
-  return res.json(); // { source_jobs: [...], export_jobs: [...] }
+  return res.json(); // { items: [...], total, skip, limit }
 }
 
 /**
@@ -336,12 +344,18 @@ export async function bulkDeleteQuestions(jobId, pageNum, questionNums = [], man
 
 /**
  * GET /api/workbooks
- * 생성된 문제집 이력 목록 (REQ-21)
+ * 생성된 문제집 이력 목록 (REQ-21 / 페이지네이션 REQ-P03-03)
+ * 목록 응답은 selections를 제외한 요약(WorkbookSummary)이다.
+ * @param {{ skip?: number, limit?: number, name?: string }} [opts]
  */
-export async function getWorkbooks() {
-  const res = await apiFetch(`${BASE_URL}/workbooks`);
+export async function getWorkbooks(opts = {}) {
+  const { skip = 0, limit = 20, name = "" } = opts;
+  const qs = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+  if (name.trim()) qs.set("name", name.trim());
+
+  const res = await apiFetch(`${BASE_URL}/workbooks?${qs}`);
   if (!res.ok) throw new Error("문제집 이력 조회 실패");
-  return res.json(); // WorkbookMeta[]
+  return res.json(); // { items: [...], total, skip, limit }
 }
 
 /**

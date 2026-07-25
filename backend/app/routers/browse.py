@@ -56,17 +56,47 @@ class JobSummary(BaseModel):
 
 
 class JobListResponse(BaseModel):
-    source_jobs: List[JobSummary]
-    export_jobs: List[JobSummary]
+    """페이지네이션된 job 목록 (REQ-P03-03)"""
+    items: List[JobSummary]
+    total: int          # 필터 적용 후 전체 건수 (페이지 크기와 무관)
+    skip: int
+    limit: int
 
 
 @router.get("/jobs", response_model=JobListResponse)
-def list_jobs():
-    """업로드된 PDF 파일 목록을 최신 순으로 반환 (원본/결과 분리)"""
-    job_files = storage.list_jobs()
+def list_jobs(
+    job_type: JobType = Query(JobType.SOURCE, description="SOURCE(업로드 원본) / EXPORT(생성 결과)"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    name: Optional[str] = Query(None, description="문제집 이름 또는 파일명 부분 일치"),
+    types: Optional[str] = Query(None, description="문제집 유형 부분 일치"),
+):
+    """
+    업로드된 PDF 파일 목록을 최신 순으로 반환 (REQ-P03-03).
 
-    def to_summary(j) -> JobSummary:
-        return JobSummary(
+    검색(name/types)은 서버에서 적용한 뒤 페이지를 자른다.
+    프론트가 페이지 단위로만 받으므로 클라이언트 필터로는 뒷 페이지를 찾을 수 없기 때문.
+    """
+    job_files = [j for j in storage.list_jobs() if j.job_type == job_type]
+
+    name_lower = (name or "").strip().lower()
+    types_lower = (types or "").strip().lower()
+    if name_lower:
+        job_files = [
+            j for j in job_files
+            if name_lower in (j.workbook_name or j.filename or "").lower()
+        ]
+    if types_lower:
+        job_files = [
+            j for j in job_files
+            if types_lower in " ".join(j.workbook_types or []).lower()
+        ]
+
+    total = len(job_files)
+    page = job_files[skip: skip + limit]
+
+    items = [
+        JobSummary(
             job_id=j.job_id,
             filename=j.filename,
             status=j.status,
@@ -78,11 +108,10 @@ def list_jobs():
             workbook_name=j.workbook_name,
             workbook_types=j.workbook_types,
         )
+        for j in page
+    ]
 
-    source_jobs = [to_summary(j) for j in job_files if j.job_type == JobType.SOURCE]
-    export_jobs = [to_summary(j) for j in job_files if j.job_type == JobType.EXPORT]
-
-    return JobListResponse(source_jobs=source_jobs, export_jobs=export_jobs)
+    return JobListResponse(items=items, total=total, skip=skip, limit=limit)
 
 
 @router.get("/jobs/{job_id}", response_model=JobSummary)
