@@ -4,7 +4,7 @@
 |------|------|
 | 날짜 | 2026-07-25 |
 | 작성자 | kimyeji97 |
-| 상태 | 계획 확정 (§8 결정 완료, Phase 1 착수 대기) |
+| 상태 | 진행 중 — Phase 1·2·3-1·3-2·3-3 완료, 다음은 Phase 3-4 (2026-07-26) |
 | 대상 템플릿 | [Minimal Dashboard Free](https://mui.com/store/items/minimal-dashboard-free/) / `github.com/minimal-ui-kit/material-kit-react` |
 | 관련 | REQ-D06(표지 1패널), REQ-P02(클라 성능), REQ-P03-03(무한 스크롤), REQ-F07(뷰어 좌표 계약), REQ-B04·B05·B08(높이 체인) |
 
@@ -167,6 +167,64 @@
 | 9 | `scrollToPage`는 대상+다음 페이지만 강제 렌더 | REQ-P02-01 버그 수정 | 페이지 점프가 한 페이지 짧게 안착 |
 
 > 특히 #3·#5는 **"안 쓰는 CSS인 줄 알고 지웠다가" 터진 사례**다. `App.css` 1,061줄을 정리할 때 클래스 단위로 사용처를 확인하고 지운다.
+
+---
+
+## 4-1. 진행 현황 (2026-07-26)
+
+| Phase | 상태 | 커밋 |
+|-------|------|------|
+| Phase 1 기반 교체 (테마 + 레이아웃 셸) | ✅ 완료 | `bcc2e35` |
+| Phase 2 스타일 계층 통일 | ✅ 완료 | `d457ede` |
+| Phase 3-1 분석 목록 (책 카드) | ✅ 완료 | `2c8f8fc` |
+| Phase 3-2 표지 관리 / 3-3 생성 이력 | ✅ 완료 | `169ceea` |
+| **Phase 3-4 문항 분석 작업** | ⏭ 다음 | — |
+| Phase 3-5 문제집 편집 | 대기 | — |
+| Phase 4 추가 기능 | 대기 | — |
+
+### Phase 1 결과 (`bcc2e35`)
+
+- **테마는 템플릿 원본 그대로** 이식(palette·typography·shadows·custom-shadows·components + create-theme·theme-config·theme-provider). 레이아웃은 core 조립 primitives를 그대로 쓰고 dashboard layout·nav만 우리 4개 라우트에 맞춰 새로 작성.
+- `minimal-shared` 설치 — 헬퍼(varAlpha/setFont/pxToRem/mergeClasses)를 재구현하지 않았다. 폰트는 `@fontsource`로 자체 호스팅해 **index.html의 Google Fonts 링크 제거**(외부 CDN 의존 없음).
+- **높이 체인이 핵심 적응 지점**: 템플릿은 body가 스크롤되는 문서형 전제. root(100dvh) → sidebarContainer → main 전 구간에 `flex:1`/`minHeight:0`/`overflow:hidden`을 걸어 바깥이 절대 스크롤되지 않게 했다.
+- 헤더 72→56px, 본문 패딩 0, 헤더에 현재 화면 이름 표기(빈 헤더 방지). 우측은 D08/F09/REQ-27 자리로 비워 둠.
+- MUI 7.3에서 `shape.borderRadius` 타입이 `number | string`으로 넓어져 `Number()`로 감쌈(템플릿은 7.0 기준).
+- **123파일 삭제 / 24파일 추가, 메인 번들 955KB → 495KB.**
+
+> **부수 발견**: 도달성 분석 중 우리 코드의 죽은 파일을 찾았다 — `QuestionPicker`(624줄)·`SelectionBasket`(366줄)·`StatusPoller`·`QuestionInput`·`NavMenu`. §3-1에서 Phase 3 마이그레이션 대상으로 잡아 둔 파일들이라 **남은 작업량이 ~1,100줄 줄었다**.
+
+### Phase 2 결과 (`d457ede`)
+
+- 인라인 `const styles = {}` **0개**(FileListPanel을 sx로 재작성).
+- 하드코딩 hex **JSX 48개 → 0개**.
+- **App.css 1,115 → 707줄**: 클래스 114개 사용처를 전수 조사해 미사용 43개(규칙 59개) 제거. 회귀(`c090d2a`) 교훈대로 동적 클래스 조합을 먼저 확인하고 진행.
+- `body`의 font-family/background/color 제거 — 테마(CssBaseline + palette)가 소유할 값이 App.css와 이중 관리되고 있었다.
+- **예외**: `WorkbookPreview`의 색은 `PAPER` 상수로 이름만 붙이고 값 유지. UI 색이 아니라 **생성될 PDF 지면을 재현한 값**이고(라벨 배경은 `pdf_service`의 `fill=(0.96,0.96,0.98)`과 짝), 다크 모드에서도 종이는 흰색이어야 한다(§8 결정 #5).
+
+### Phase 3-1~3-3 결과 (`2c8f8fc`, `169ceea`)
+
+- **`BookCard` 공용 컴포넌트** 신설(172×226, 책등 띠 + 광택 + 페이지 스택). 3개 목록 화면이 공유.
+- **책등 색은 이름 해시로 확정**(§8-3 미결 해소). 근거 — 실데이터의 `workbook_types`가 자유 입력이라 5권에 13종(`테스트`/`인쇄용`/`컬러배경`/`A`/`B`/`CD`…)이고 고정 분류가 없어 유형→색 매핑이 의미를 갖지 못한다. 책마다 색이 고정되는 편이 "찾기 쉬움"이라는 책 은유의 목적에 맞다.
+- **두께 = 문항 수** (<200: 2층, <500: 3층, 그 이상 4층, 감지 전/실패 1층). **카드 폭은 172px 고정** — 실측 확인. 되돌리려면 `thicknessOf()` 한 곳만 상수화.
+- 액션은 **호버 시에만** 노출(`focus-within` 포함). 172px 표지에 버튼 2~3개가 상시 떠 있으면 배지·표지를 가린다 — 생성 이력에서 실제로 확인하고 수정.
+- 표지 관리: 페이지 안의 중복 제목 제거(앱 헤더가 이미 표시).
+- **백엔드 1건 보완** — 썸네일 엔드포인트가 항상 `uploads/`만 읽어 EXPORT job은 404였다. 생성 이력 카드의 표지가 곧 결과 PDF 첫 페이지라 `_pdf_key_of()`로 `job_type`에 따라 `results/`를 읽도록 분기(검증: HTTP 200, 794×1123 PNG).
+
+### 계약 검증 현황 (§4)
+
+Phase 1·2 종료 시점에 브라우저(dev 서버 + headless Chrome/CDP)로 확인:
+
+| 계약 | 결과 |
+|------|------|
+| #1 높이 체인 | ✅ 5개 라우트 전부 문서 스크롤 없음(root 높이 = 창 높이) |
+| #2 뷰어 flex 컬럼 부모 | ✅ display:flex / column / 스크롤 가능 |
+| #3 `.pdf-page-wrapper` position | ✅ relative |
+| #6 가상화 | ✅ 132페이지 중 캔버스 2~3개 |
+| #9 scrollToPage | ✅ 50→49, 100→99 (0-based, 오차 없음) |
+| 무한 스크롤·서버 검색 | ✅ 정상 |
+| 배율·썸네일 복원 | ✅ 100%→130%→초기화, 썸네일 20개 |
+
+> #4(좌표 공식)·#5(qlist 클래스)·#7(memo)·#8은 Phase 3-4·3-5에서 해당 화면을 건드릴 때 집중 검증한다.
 
 ---
 
@@ -339,7 +397,7 @@ DM Sans는 라틴 전용이라 한글은 폴백 폰트로 렌더된다. 방치�
 
 - Phase 1 착수 시 `layouts/dashboard/nav.tsx`의 네비 구성을 우리 4개 라우트(분석·편집·이력·표지)에 맞춰 재작성 — 템플릿 데모 메뉴는 버린다.
 - ~~책 카드 시안 확정 (§5-1)~~ → **B안(책등+두께) 확정**
-- 책등 색 매핑 — 유형 미지정 비율을 실제 데이터로 확인 후 회색 고정 vs 이름 해시 결정
+- ~~책등 색 매핑~~ → **이름 해시로 확정**(2026-07-26). 실데이터의 유형이 자유 입력이라 분류로 쓸 수 없었다(§4-1)
 - 문제집 삭제(REQ-C08) 착수 시 삭제 범위 결정 — 메타만 vs 결과 PDF·export job 포함
 
 ---
