@@ -20,83 +20,60 @@ import Alert from "@mui/material/Alert";
 import Tooltip from "@mui/material/Tooltip";
 import { Icon } from "@iconify/react";
 
+import BookCard, { BOOK_CARD_W } from "components/BookCard";
 import { listCovers, uploadCover, deleteCover } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
 
-const CARD_W   = 180;
-const CARD_H   = 280;
-const THUMB_H  = 232; // 나머지(48)는 이름 영역
+const COVER_H = 226;   // BookCard 표지 높이와 맞춘다
 
 function UploadCard({ onClick }) {
   return (
-    <Box
-      onClick={onClick}
-      sx={{
-        width: CARD_W, height: CARD_H, flexShrink: 0,
-        border: "2px dashed", borderColor: "divider", borderRadius: 2,
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", gap: 1,
-        cursor: "pointer", color: "text.disabled",
-        transition: "all 0.15s",
-        "&:hover": { borderColor: "primary.main", color: "primary.main", bgcolor: "action.hover" },
-      }}
-    >
-      <Icon icon="material-symbols:add-rounded" style={{ fontSize: 36 }} />
-      <Typography variant="caption" fontWeight={600}>표지 업로드</Typography>
+    <Box sx={{ width: BOOK_CARD_W, flexShrink: 0 }}>
+      <Box
+        onClick={onClick}
+        sx={{
+          height: COVER_H,
+          border: "2px dashed", borderColor: "divider",
+          borderRadius: "3px 8px 8px 3px",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 1,
+          cursor: "pointer", color: "text.disabled",
+          transition: "all 0.15s",
+          "&:hover": { borderColor: "primary.main", color: "primary.main", bgcolor: "action.hover" },
+        }}
+      >
+        <Icon icon="material-symbols:add-rounded" style={{ fontSize: 36 }} />
+        <Typography variant="caption" fontWeight={600}>표지 업로드</Typography>
+      </Box>
     </Box>
   );
 }
 
+// 표지는 실제 책 표지 이미지라 두께 정보가 없다 — 가장 얇은 1층으로 통일한다
+// (분석 목록의 책은 문항 수에 따라 두꺼워지므로 자연히 구분된다)
 function CoverCard({ cover, onDelete }) {
-  const [loaded, setLoaded] = useState(false);
   return (
-    <Box
-      sx={{
-        width: CARD_W, height: CARD_H, flexShrink: 0,
-        border: 1, borderColor: "divider", borderRadius: 2,
-        display: "flex", flexDirection: "column",
-        bgcolor: "background.paper", overflow: "hidden", position: "relative",
-        transition: "all 0.15s",
-        "&:hover": { borderColor: "primary.main", boxShadow: "0 4px 12px rgba(0,0,0,0.12)" },
-        "&:hover .cover-delete-btn": { opacity: 1 },
-      }}
-    >
-      {/* 썸네일 */}
-      <Box sx={{ height: THUMB_H, flexShrink: 0, position: "relative", bgcolor: "action.hover", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-        {!loaded && <Box className="img-skeleton" sx={{ position: "absolute", inset: 0 }} />}
-        <Box
-          component="img"
-          src={`${API_ROOT}${cover.thumbnail_url}`}
-          alt={cover.name || "표지"}
-          onLoad={() => setLoaded(true)}
-          sx={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: loaded ? "block" : "none" }}
-        />
-      </Box>
-
-      {/* 이름 */}
-      <Box sx={{ flex: 1, display: "flex", alignItems: "center", px: 1.25, minHeight: 0 }}>
-        <Typography variant="caption" noWrap title={cover.name} sx={{ width: "100%" }}>
-          {cover.name || "이름 없음"}
-        </Typography>
-      </Box>
-
-      {/* 삭제 (hover) */}
-      <IconButton
-        className="cover-delete-btn"
-        size="small"
-        onClick={() => onDelete(cover.cover_id)}
-        sx={{
-          position: "absolute", top: 6, right: 6,
-          bgcolor: "error.main", color: "common.white",
-          opacity: 0, transition: "opacity 0.15s",
-          width: 24, height: 24,
-          "&:hover": { bgcolor: "error.dark" },
-        }}
-      >
-        <Icon icon="material-symbols:close-rounded" style={{ fontSize: 15 }} />
-      </IconButton>
-    </Box>
+    <BookCard
+      coverUrl={`${API_ROOT}${cover.thumbnail_url}`}
+      title={cover.name || "이름 없음"}
+      colorKey={cover.cover_id}
+      questionCount={null}
+      actions={
+        <Tooltip title="삭제">
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); onDelete(cover.cover_id); }}
+            sx={{
+              bgcolor: "background.paper", color: "error.main",
+              opacity: 0.92, "&:hover": { opacity: 1 },
+            }}
+          >
+            <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
+      }
+    />
   );
 }
 
@@ -175,7 +152,10 @@ export default function FormatPage() {
         display: "flex", gap: 1.5, alignItems: "center", justifyContent: "space-between",
         flexShrink: 0, bgcolor: "background.paper",
       }}>
-        <Typography variant="subtitle2" fontWeight={700}>표지 관리</Typography>
+        {/* 화면 이름은 앱 헤더가 표시하므로 여기서는 중복하지 않는다 (REQ-D07 Phase 1) */}
+        <Typography variant="caption" color="text.secondary">
+          문제집 생성 시 첫 페이지로 넣을 표지를 관리합니다.
+        </Typography>
         <Tooltip title="새로고침">
           <IconButton size="small" onClick={fetchCovers} disabled={loading}>
             {loading

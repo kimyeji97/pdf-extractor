@@ -66,6 +66,7 @@ function thicknessOf(count) {
  *   colorKey?: string,
  *   disabled?: boolean,
  *   loading?: boolean,
+ *   selected?: boolean,
  *   actions?: React.ReactNode,
  *   onClick?: () => void,
  * }} props
@@ -80,6 +81,7 @@ export default function BookCard({
   colorKey,
   disabled = false,
   loading = false,
+  selected = false,
   actions,
   onClick,
 }) {
@@ -99,6 +101,11 @@ export default function BookCard({
         flexShrink: 0,
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'transform .15s',
+        // 액션은 평소 숨기고 카드에 마우스를 올릴 때만 보여 준다 —
+        // 172px 표지에 버튼 2~3개가 상시 떠 있으면 배지·표지를 가린다.
+        '& .book-card-actions': { opacity: 0, transition: 'opacity .12s' },
+        '&:hover .book-card-actions': { opacity: 1 },
+        '&:focus-within .book-card-actions': { opacity: 1 },
         ...(!disabled && { '&:hover': { transform: 'translateY(-3px)' } }),
       }}
     >
@@ -132,8 +139,9 @@ export default function BookCard({
             borderRadius: '3px 8px 8px 3px',
             bgcolor: 'action.hover',
             boxShadow: (theme) => theme.customShadows?.card,
-            border: 1,
-            borderColor: 'divider',
+            // 선택 상태는 표지 테두리로 표시한다 (생성 이력의 목록↔뷰어 연동용)
+            border: selected ? 2 : 1,
+            borderColor: selected ? 'primary.main' : 'divider',
           }}
         >
           {!coverLoaded && !coverFailed && coverUrl && (
@@ -195,7 +203,12 @@ export default function BookCard({
 
           {/* 액션 (편집·삭제 등) */}
           {actions && (
-            <Box sx={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 0.5 }}>{actions}</Box>
+            <Box
+              className="book-card-actions"
+              sx={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 0.5 }}
+            >
+              {actions}
+            </Box>
           )}
 
           {/* 진행 중 딤 */}

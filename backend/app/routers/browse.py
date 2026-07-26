@@ -363,6 +363,19 @@ def list_pages(job_id: str):
 
 # ── 썸네일 ────────────────────────────────────────────────
 
+def _pdf_key_of(job) -> str:
+    """
+    job의 PDF가 실제로 놓인 키를 돌려준다.
+
+    업로드 원본은 uploads/, extract-v2가 만든 결과는 results/에 있다.
+    원본 키만 보면 EXPORT job의 썸네일이 항상 404가 나서, 생성 이력 목록에
+    결과 PDF 표지를 못 보여준다(REQ-D07 Phase 3-3).
+    """
+    if job.job_type == JobType.EXPORT:
+        return job.result_key or storage.result_key(job.job_id)
+    return storage.original_key(job.job_id)
+
+
 @router.get("/jobs/{job_id}/pages/{page_num}/thumbnail")
 def get_thumbnail(job_id: str, page_num: int, dpi: int = Query(default=96, ge=72, le=300)):
     """썸네일 PNG 반환 — 캐시 우선, 없으면 생성 후 캐시 저장"""
@@ -375,8 +388,8 @@ def get_thumbnail(job_id: str, page_num: int, dpi: int = Query(default=96, ge=72
     if cached is not None:
         return Response(content=cached, media_type="image/png")
 
-    # 생성
-    pdf_bytes = storage.read_file(storage.original_key(job_id))
+    # 생성 (EXPORT job은 results/에 있으므로 키를 갈라 읽는다)
+    pdf_bytes = storage.read_file(_pdf_key_of(job))
     try:
         png_bytes = thumbnail_service.get_page_thumbnail(pdf_bytes, page_num, dpi)
     except IndexError:

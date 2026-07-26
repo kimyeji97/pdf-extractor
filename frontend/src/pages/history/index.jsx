@@ -13,10 +13,6 @@ import IconButton from "@mui/material/IconButton";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
-import List from "@mui/material/List";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemText from "@mui/material/ListItemText";
-import Divider from "@mui/material/Divider";
 import Tooltip from "@mui/material/Tooltip";
 import { Icon } from "@iconify/react";
 
@@ -27,6 +23,7 @@ import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 
 import PdfPreviewPanel from "components/PdfPreviewPanel";
+import BookCard from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 
@@ -37,6 +34,10 @@ function fmtDate(iso) {
   } catch { return iso; }
 }
 
+
+const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
+
+const actionSx = { bgcolor: "background.paper", opacity: 0.92, "&:hover": { opacity: 1 } };
 
 export default function HistoryPage() {
   const navigate = useNavigate();
@@ -108,8 +109,14 @@ export default function HistoryPage() {
   return (
     <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
-      {/* ── 목록 패널 ───────────────────────────────── */}
-      <Paper elevation={0} sx={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider" }}>
+      {/* ── 목록 패널 (책 카드 그리드, REQ-D07 Phase 3-3) ─── */}
+      <Paper
+        elevation={0}
+        sx={{
+          width: 420, flexShrink: 0, display: "flex", flexDirection: "column",
+          overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider",
+        }}
+      >
         <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Typography variant="subtitle2" fontWeight={700}>생성된 문제집 이력</Typography>
           <Tooltip title="새로고침">
@@ -119,8 +126,8 @@ export default function HistoryPage() {
           </Tooltip>
         </Box>
 
-        <Box sx={{ flex: 1, overflowY: "auto" }}>
-          {error && <Alert severity="error" sx={{ m: 1.5 }}>{error}</Alert>}
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 2 }}>
+          {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
           {!loading && !error && workbooks.length === 0 && (
             <Box sx={{ p: 4, textAlign: "center", color: "text.disabled" }}>
               <Icon icon="material-symbols:history-rounded" style={{ fontSize: 40 }} />
@@ -133,64 +140,59 @@ export default function HistoryPage() {
             </Box>
           )}
 
-          <List disablePadding>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, alignContent: "flex-start" }}>
             {workbooks.map((wb, idx) => (
-              <Box key={wb.workbook_id ?? idx}>
-                <ListItemButton
-                  selected={selectedWb?.workbook_id === wb.workbook_id}
-                  onClick={() => handleSelectWb(wb)}
-                  sx={{ px: 2, py: 1.5, alignItems: "flex-start" }}
-                >
-                  <ListItemText
-                    // secondary는 기본이 <p>라 안에 Box(div)를 넣으면 DOM 중첩 경고가 난다.
-                    // primary도 Typography를 직접 넘기므로 둘 다 div로 렌더한다.
-                    slotProps={{
-                      primary: { component: 'div' },
-                      secondary: { component: 'div' },
-                    }}
-                    primary={
-                      <Typography variant="body2" fontWeight={600} noWrap>
-                        {wb.name || wb.filename || `문제집 #${idx + 1}`}
-                      </Typography>
-                    }
-                    secondary={
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
-                        <Chip label={wb.layout || "-"} size="small" variant="outlined" sx={{ fontSize: 11 }} />
-                        <Chip label={`${wb.question_count ?? "?"}문항`} size="small" variant="outlined" sx={{ fontSize: 11 }} />
-                        <Typography variant="caption" color="text.disabled" sx={{ alignSelf: "center" }}>{fmtDate(wb.created_at)}</Typography>
-                      </Box>
-                    }
-                  />
-                  <Box sx={{ display: "flex", gap: 0.5, ml: 1, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+              <BookCard
+                key={wb.workbook_id ?? idx}
+                // 표지는 생성된 결과 PDF의 첫 페이지 (EXPORT job도 썸네일을 내주도록 백엔드 보완)
+                coverUrl={wb.result_job_id ? `${API_ROOT}/api/jobs/${wb.result_job_id}/pages/0/thumbnail` : undefined}
+                title={wb.name || wb.filename || `문제집 #${idx + 1}`}
+                subtitle={fmtDate(wb.created_at)}
+                tags={[wb.layout || "-"]}
+                badge={{ label: `${wb.question_count ?? "?"}문항`, color: "primary" }}
+                questionCount={wb.question_count ?? null}
+                colorKey={wb.workbook_id}
+                selected={selectedWb?.workbook_id === wb.workbook_id}
+                onClick={() => handleSelectWb(wb)}
+                actions={
+                  <>
                     <Tooltip title="PDF 재다운로드">
                       <span>
                         <IconButton
-                          size="small" color="primary"
+                          size="small"
                           disabled={!wb.result_job_id || downloadingId === wb.workbook_id}
-                          onClick={() => handleDownload(wb)}
+                          onClick={(e) => { e.stopPropagation(); handleDownload(wb); }}
+                          sx={actionSx}
                         >
                           {downloadingId === wb.workbook_id
-                            ? <CircularProgress size={16} />
-                            : <Icon icon="material-symbols:download-rounded" style={{ fontSize: 18 }} />}
+                            ? <CircularProgress size={14} />
+                            : <Icon icon="material-symbols:download-rounded" style={{ fontSize: 16 }} />}
                         </IconButton>
                       </span>
                     </Tooltip>
                     <Tooltip title="편집으로 불러오기">
-                      <IconButton size="small" onClick={() => navigate('/editor', { state: { initialWorkbookId: wb.workbook_id } })}>
-                        <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 18 }} />
+                      <IconButton
+                        size="small"
+                        onClick={(e) => { e.stopPropagation(); navigate("/editor", { state: { initialWorkbookId: wb.workbook_id } }); }}
+                        sx={actionSx}
+                      >
+                        <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 16 }} />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="삭제">
-                      <IconButton size="small" color="error" onClick={() => setDeleteTarget(wb)}>
-                        <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 18 }} />
+                      <IconButton
+                        size="small"
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(wb); }}
+                        sx={{ ...actionSx, color: "error.main" }}
+                      >
+                        <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />
                       </IconButton>
                     </Tooltip>
-                  </Box>
-                </ListItemButton>
-                <Divider />
-              </Box>
+                  </>
+                }
+              />
             ))}
-          </List>
+          </Box>
 
           {/* 무한 스크롤 센티널 (REQ-P03-03) */}
           <Box
