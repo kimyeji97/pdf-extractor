@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { Outlet, RouteObject, createBrowserRouter, useLocation } from 'react-router';
 import App from 'App';
-import MainLayout from 'layouts/main-layout';
+import DashboardLayout from 'layouts/dashboard';
 import PageLoader from 'components/loading/PageLoader';
 import paths from './paths';
 
@@ -27,9 +27,9 @@ export const routes: RouteObject[] = [
       {
         path: '/',
         element: (
-          <MainLayout>
+          <DashboardLayout>
             <SuspenseOutlet />
-          </MainLayout>
+          </DashboardLayout>
         ),
         children: [
           { index: true,                 element: <AnalysisPage /> },

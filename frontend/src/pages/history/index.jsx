@@ -142,6 +142,12 @@ export default function HistoryPage() {
                   sx={{ px: 2, py: 1.5, alignItems: "flex-start" }}
                 >
                   <ListItemText
+                    // secondary는 기본이 <p>라 안에 Box(div)를 넣으면 DOM 중첩 경고가 난다.
+                    // primary도 Typography를 직접 넘기므로 둘 다 div로 렌더한다.
+                    slotProps={{
+                      primary: { component: 'div' },
+                      secondary: { component: 'div' },
+                    }}
                     primary={
                       <Typography variant="body2" fontWeight={600} noWrap>
                         {wb.name || wb.filename || `문제집 #${idx + 1}`}
