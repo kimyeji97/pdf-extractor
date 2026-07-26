@@ -17,6 +17,7 @@ import InputAdornment from "@mui/material/InputAdornment";
 import { Icon } from "@iconify/react";
 
 import UploadForm from "components/UploadForm";
+import BookCard, { BOOK_CARD_W } from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
@@ -35,30 +36,30 @@ function relativeTime(isoString) {
   return `${Math.floor(hour / 24)}일 전`;
 }
 
-const CARD_W  = 180;
-const CARD_H  = 280;
+const COVER_H = 226;   // BookCard 표지 높이와 맞춘다
 
 function UploadCard({ onClick }) {
   return (
-    <Box
-      onClick={onClick}
-      sx={{
-        width: CARD_W, height: CARD_H, flexShrink: 0,
-        border: "2px dashed", borderColor: "divider", borderRadius: 2,
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", gap: 1,
-        cursor: "pointer", color: "text.disabled",
-        transition: "all 0.15s",
-        "&:hover": { borderColor: "primary.main", color: "primary.main", bgcolor: "action.hover" },
-      }}
-    >
-      <Icon icon="material-symbols:add-rounded" style={{ fontSize: 36 }} />
-      <Typography variant="caption" fontWeight={600}>PDF 업로드</Typography>
+    <Box sx={{ width: BOOK_CARD_W, flexShrink: 0 }}>
+      <Box
+        onClick={onClick}
+        sx={{
+          height: COVER_H,
+          border: "2px dashed", borderColor: "divider",
+          borderRadius: "3px 8px 8px 3px",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 1,
+          cursor: "pointer", color: "text.disabled",
+          transition: "all 0.15s",
+          "&:hover": { borderColor: "primary.main", color: "primary.main", bgcolor: "action.hover" },
+        }}
+      >
+        <Icon icon="material-symbols:add-rounded" style={{ fontSize: 36 }} />
+        <Typography variant="caption" fontWeight={600}>PDF 업로드</Typography>
+      </Box>
     </Box>
   );
 }
-
-const THUMB_H = 180;
 
 function isAnalyzing(job) {
   // 문항 분석이 완료/실패되면 job.status와 무관하게 클릭 가능
@@ -66,91 +67,49 @@ function isAnalyzing(job) {
   return true;
 }
 
+// 감지 상태 → 표지 위 배지
+const BOUNDARY_BADGE = {
+  PROCESSING: { label: "분석 중", color: "warning" },
+  PENDING:    { label: "처리 중", color: "warning" },
+  FAILED:     { label: "분석 실패", color: "error" },
+};
+
 function JobCard({ job, onClick, onEdit, onDelete }) {
   // 썸네일 URL은 결정적(deterministic)이라 /pages 호출 없이 직접 조립한다 (REQ-P02-02).
   // 카드 N개 = 전체 PDF N번 재다운로드+파싱이던 목록 로딩 병목 제거.
-  const thumbUrl = `${API_ROOT}/api/jobs/${job.job_id}/pages/0/thumbnail`;
-  const [thumbLoaded, setThumbLoaded] = useState(false);
-  const [thumbFailed, setThumbFailed] = useState(false);
-  const hasTypes = job.workbook_types?.length > 0;
-  const dimmed   = isAnalyzing(job);
+  const coverUrl = `${API_ROOT}/api/jobs/${job.job_id}/pages/0/thumbnail`;
+  const analyzing = isAnalyzing(job);
+  const done = job.boundaries_status === "DONE";
+
+  const badge = done && job.total_question_count != null
+    ? { label: `${job.total_question_count}문항`, color: "primary" }
+    : BOUNDARY_BADGE[job.boundaries_status];
+
+  const actionSx = {
+    bgcolor: "background.paper", opacity: 0.92,
+    "&:hover": { opacity: 1 },
+  };
 
   return (
-    <Box
-      onClick={() => !dimmed && onClick(job)}
-      sx={{
-        width: CARD_W, height: CARD_H, flexShrink: 0,
-        border: 1, borderColor: "divider", borderRadius: 2,
-        display: "flex", flexDirection: "column",
-        cursor: dimmed ? "not-allowed" : "pointer",
-        bgcolor: "background.paper",
-        overflow: "hidden",
-        position: "relative",
-        transition: "all 0.15s",
-        ...(!dimmed && {
-          "&:hover": {
-            borderColor: "primary.main",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            transform: "translateY(-2px)",
-          },
-        }),
-      }}
-    >
-      {/* 썸네일 영역 */}
-      <Box
-        sx={{
-          height: THUMB_H, flexShrink: 0, position: "relative",
-          bgcolor: "action.hover", overflow: "hidden",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}
-      >
-        {!thumbLoaded && (
-          thumbFailed
-            ? <Icon icon="material-symbols:description-outline-rounded" style={{ fontSize: 40, color: "var(--mui-palette-text-disabled)" }} />
-            : <Box className="img-skeleton" sx={{ position: "absolute", inset: 0 }} />
-        )}
-        {!thumbFailed && (
-          <Box
-            component="img"
-            src={thumbUrl}
-            onLoad={() => setThumbLoaded(true)}
-            onError={() => setThumbFailed(true)}
-            sx={{
-              position: "absolute", inset: 0,
-              width: "100%", height: "100%",
-              objectFit: "cover", objectPosition: "top center",
-              display: thumbLoaded ? "block" : "none",
-            }}
-          />
-        )}
-
-        {/* 상태 배지 (썸네일 위 오버레이) */}
-        <Box sx={{ position: "absolute", top: 6, left: 6, display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-          {job.boundaries_status === "DONE" && job.total_question_count != null && (
-            <Chip
-              label={`${job.total_question_count}문항`}
-              size="small" color="primary"
-              sx={{ fontSize: 10, height: 18, bgcolor: "primary.main", color: "common.white" }}
-            />
-          )}
-          {job.boundaries_status === "PROCESSING" && (
-            <Chip label="분석 중" size="small" color="warning" sx={{ fontSize: 10, height: 18 }} />
-          )}
-          {job.boundaries_status === "PENDING" && (
-            <Chip label="처리 중" size="small" color="warning" sx={{ fontSize: 10, height: 18 }} />
-          )}
-          {job.boundaries_status === "FAILED" && (
-            <Chip label="분석 실패" size="small" color="error" sx={{ fontSize: 10, height: 18 }} />
-          )}
-        </Box>
-
-        {/* 편집·삭제 — 이름/유형 편집은 문제집 편집 ①에서 옮겨 옴 (2026-07-25) */}
-        <Box sx={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 0.5 }}>
+    <BookCard
+      coverUrl={coverUrl}
+      title={job.workbook_name || job.filename || "unknown.pdf"}
+      subtitle={relativeTime(job.uploaded_at)}
+      tags={job.workbook_types || []}
+      badge={badge}
+      // 두께는 감지된 문항 수에 연동한다 (감지 전/실패는 가장 얇게)
+      questionCount={done ? job.total_question_count : null}
+      colorKey={job.job_id}
+      disabled={analyzing}
+      loading={analyzing}
+      onClick={() => onClick(job)}
+      actions={
+        <>
           <Tooltip title="이름·유형 편집">
             <IconButton
               size="small"
               onClick={(e) => { e.stopPropagation(); onEdit(job); }}
-              sx={{ bgcolor: "background.paper", opacity: 0.92, "&:hover": { opacity: 1 } }}
+              sx={actionSx}
             >
               <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 16 }} />
             </IconButton>
@@ -159,48 +118,14 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
             <IconButton
               size="small"
               onClick={(e) => { e.stopPropagation(); onDelete(job); }}
-              sx={{ bgcolor: "background.paper", color: "error.main", opacity: 0.92, "&:hover": { opacity: 1 } }}
+              sx={{ ...actionSx, color: "error.main" }}
             >
               <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
-        </Box>
-      </Box>
-
-      {/* 정보 영역 */}
-      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", p: 1.5, minHeight: 0 }}>
-        <Typography
-          variant="body2" fontWeight={700}
-          sx={{ mb: 0.75, wordBreak: "break-word", lineHeight: 1.4 }}
-          title={job.workbook_name || job.filename}
-        >
-          {job.workbook_name || job.filename || "unknown.pdf"}
-        </Typography>
-
-        {hasTypes && (
-          <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mb: 0.5 }}>
-            {job.workbook_types.slice(0, 3).map((t) => (
-              <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
-            ))}
-          </Box>
-        )}
-
-        <Typography variant="caption" color="text.disabled" sx={{ mt: "auto", display: "block" }}>
-          {relativeTime(job.uploaded_at)}
-        </Typography>
-      </Box>
-
-      {/* 딤 오버레이 */}
-      {dimmed && (
-        <Box sx={{
-          position: "absolute", inset: 0,
-          bgcolor: "rgba(255,255,255,0.55)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <CircularProgress size={24} thickness={4} />
-        </Box>
-      )}
-    </Box>
+        </>
+      }
+    />
   );
 }
 
