@@ -72,7 +72,7 @@ export default function UploadForm({ onFileSelected, selectedFile, disabled }) {
           <>
             <Icon
               icon="material-symbols:check-circle-outline-rounded"
-              style={{ fontSize: 44, color: "var(--mui-palette-success-main, #2e7d32)" }}
+              style={{ fontSize: 44, color: "var(--mui-palette-success-main)" }}
             />
             <Typography variant="body2" fontWeight={600} textAlign="center">
               {selectedFile.name}
@@ -96,7 +96,9 @@ export default function UploadForm({ onFileSelected, selectedFile, disabled }) {
               icon="material-symbols:cloud-upload-outline-rounded"
               style={{
                 fontSize: 48,
-                color: active ? "var(--mui-palette-primary-main, #7c6ef5)" : "#a5a8f3",
+                color: active
+                  ? "var(--mui-palette-primary-main)"
+                  : "var(--mui-palette-primary-light)",
               }}
             />
             <Typography variant="body1" fontWeight={500} textAlign="center" sx={{ mt: 0.5 }}>
@@ -112,10 +114,10 @@ export default function UploadForm({ onFileSelected, selectedFile, disabled }) {
               sx={{
                 mt: 1,
                 px: 4, borderRadius: 5,
-                bgcolor: "#7986cb",
-                color: "#fff",
+                bgcolor: "primary.main",
+                color: "primary.contrastText",
                 fontWeight: 600,
-                "&:hover": { bgcolor: "#5c6bc0" },
+                "&:hover": { bgcolor: "primary.dark" },
               }}
             >
               browse

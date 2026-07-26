@@ -8,140 +8,12 @@
 }
 
 body {
-  font-family: "Pretendard", "Apple SD Gothic Neo", sans-serif;
-  background: #f5f7fa;
-  color: #1a1a1a;
+  /* 폰트·색·배경은 테마(CssBaseline + palette)가 소유한다 — 여기서 지정하지 않는다.
+     셸이 100dvh 고정이라 문서 자체는 스크롤되지 않아야 하므로 overflow만 남긴다. */
   overflow: hidden;
-}
-
-/* ━━━ 앱 전체 레이아웃 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-.app-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-/* ── 상단 헤더 + 탭 네비게이션 ───────────────────────── */
-.app-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 20px;
-  background: #fff;
-  border-bottom: 1px solid #e4e8ef;
-  flex-shrink: 0;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  min-height: 48px;
-}
-.app-header h1 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #1a1a1a;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-/* ── NavMenu 탭 ─────────────────────────────────────── */
-.nav-menu {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  margin-left: 16px;
-  height: 100%;
-}
-
-.nav-tab {
-  padding: 0 20px;
-  height: 100%;
-  border: none;
-  border-bottom: 3px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: #666;
-  white-space: nowrap;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
-}
-.nav-tab:hover {
-  color: #1a1a1a;
-}
-.nav-tab--active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
-  font-weight: 600;
-}
-
-/* ── 뷰 컨테이너 (hide-not-unmount 공통) ──────────────── */
-.view-layout {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  overflow: hidden;
-}
-
-.view-context-bar {
-  padding: 6px 20px;
-  background: #f0f6ff;
-  border-bottom: 1px solid #c8daf7;
-  font-size: 0.82rem;
-  color: #4a90e2;
-  flex-shrink: 0;
 }
 
 /* 스켈레톤 플레이스홀더 (WorkbookEditorView, WorkbookHistoryView) */
-.view-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  background: #f5f7fa;
-}
-.placeholder-content {
-  text-align: center;
-  color: #888;
-}
-.placeholder-icon {
-  font-size: 3rem;
-  margin-bottom: 16px;
-}
-.placeholder-content h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
-}
-.placeholder-content p {
-  font-size: 0.9rem;
-  line-height: 1.6;
-  margin-bottom: 4px;
-}
-.placeholder-note {
-  font-size: 0.78rem;
-  color: #aaa;
-  margin-top: 8px;
-}
-.placeholder-note code {
-  background: #e8edf5;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: monospace;
-  font-size: 0.85em;
-}
-
-/* ── 3패널 컨테이너 ─────────────────────────────────── */
-.panels {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  /* 하단 바스켓 영역 높이만큼 패딩 */
-  padding-bottom: 52px;
-}
-
 /* ── 패널 공통 ──────────────────────────────────────── */
 .panel {
   display: flex;
@@ -149,145 +21,15 @@ body {
   overflow: hidden;
   background: #fff;
 }
-/* resize-handle이 구분선 역할을 대신하므로 border-right 제거 */
-
-/* 패널 헤더 (고정) */
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-bottom: 1px solid #e4e8ef;
-  background: #f8fafc;
-  flex-shrink: 0;
-  min-height: 42px;
-}
 .panel-title {
   font-weight: 700;
   font-size: 13px;
   color: #333;
 }
-.panel-hint {
-  font-size: 11px;
-  color: #aaa;
-}
-
-/* 패널 본문 (스크롤) */
-.panel-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-}
-
-/* ── 리사이즈 핸들 ───────────────────────────────────── */
-.resize-handle {
-  width: 5px;
-  flex-shrink: 0;
-  background: #e4e8ef;
-  cursor: col-resize;
-  position: relative;
-  z-index: 10;
-  transition: background 0.15s;
-  /* 클릭 영역을 살짝 넓혀 UX 향상 */
-}
-.resize-handle::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -3px;
-  right: -3px;
-}
-.resize-handle:hover {
-  background: #4a90e2;
-}
-
-/* ── 빈 상태 (패널 미선택 안내) ────────────────────── */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 180px;
-  gap: 10px;
-  color: #ccc;
-}
 .empty-icon {
   font-size: 36px;
   line-height: 1;
 }
-.empty-state p {
-  font-size: 13px;
-  color: #bbb;
-  text-align: center;
-  line-height: 1.5;
-}
-
-/* ── 업로드 구분선 ──────────────────────────────────── */
-.upload-section {
-  margin-top: 20px;
-}
-.upload-divider {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: #bbb;
-  margin-bottom: 10px;
-}
-.upload-divider::before,
-.upload-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: #ebebeb;
-}
-
-/* ── 업로드 존 ──────────────────────────────────────── */
-.upload-zone {
-  border: 2px dashed #d0d6e0;
-  border-radius: 8px;
-  padding: 20px 10px;
-  text-align: center;
-  cursor: pointer;
-  transition:
-    border-color 0.2s,
-    background 0.2s;
-  color: #aaa;
-  font-size: 0.78rem;
-  line-height: 1.6;
-}
-.upload-zone:hover {
-  border-color: #4a90e2;
-  background: #f0f6ff;
-}
-.upload-zone.dragging {
-  border-color: #4a90e2;
-  background: #e8f0ff;
-}
-.upload-zone.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── 메시지 공통 ─────────────────────────────────────── */
-.info-msg {
-  margin-top: 8px;
-  color: #4a90e2;
-  font-size: 12px;
-}
-.success-msg {
-  margin-top: 8px;
-  color: #22c55e;
-  font-size: 12px;
-}
-.error-msg {
-  margin-top: 6px;
-  color: #ef4444;
-  font-size: 12px;
-}
-
 /* ── 스피너 (shimmer 애니메이션) ────────────────────── */
 @keyframes shimmer {
   0% {
@@ -301,18 +43,6 @@ body {
   to {
     transform: rotate(360deg);
   }
-}
-
-/* ── 스크롤바 스타일 ─────────────────────────────────── */
-.panel-body::-webkit-scrollbar {
-  width: 5px;
-}
-.panel-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-.panel-body::-webkit-scrollbar-thumb {
-  background: #d8dce4;
-  border-radius: 4px;
 }
 
 /* ━━━ QuestionAnalysisPanel (qap-*) ━━━━━━━━━━━━━━━━━━━━ */
@@ -344,10 +74,6 @@ body {
   padding: 0 2px;
 }
 
-.qap-toolbar-right {
-  margin-left: auto;
-}
-
 /* ── 버튼 공통 ─────────────────────────────────────── */
 .qap-btn {
   padding: 4px 10px;
@@ -372,14 +98,6 @@ body {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.qap-btn--primary {
-  background: #2563eb;
-  color: #fff;
-  border-color: #2563eb;
-}
-.qap-btn--primary:hover:not(:disabled) {
-  background: #1d4ed8;
-}
 .qap-btn--danger {
   color: #ef4444;
   border-color: #fca5a5;
@@ -387,29 +105,6 @@ body {
 .qap-btn--danger:hover:not(:disabled) {
   background: #fef2f2;
   border-color: #ef4444;
-}
-.qap-btn--active {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #2563eb;
-  font-weight: 600;
-}
-.qap-btn--small {
-  padding: 2px 8px;
-  font-size: 11px;
-}
-.qap-btn--basket {
-  padding: 2px 8px;
-  font-size: 11px;
-}
-.qap-btn--in-basket {
-  background: #ecfdf5;
-  border-color: #6ee7b7;
-  color: #059669;
-}
-.qap-btn--in-basket:hover:not(:disabled) {
-  background: #d1fae5;
-  border-color: #10b981;
 }
 
 /* ── 토스트 (Undo) ─────────────────────────────────── */
@@ -455,79 +150,10 @@ body {
   font-size: 12px;
   flex-shrink: 0;
 }
-.qap-banner--info {
-  background: #eff6ff;
-  color: #2563eb;
-  border-bottom: 1px solid #bfdbfe;
-}
 .qap-banner--error {
   background: #fef2f2;
   color: #dc2626;
   border-bottom: 1px solid #fca5a5;
-}
-
-/* ── 드로우 모드 ────────────────────────────────────── */
-.qap-draw-section {
-  flex-shrink: 0;
-  border-bottom: 1px solid #e4e8ef;
-  background: #f8fafc;
-  padding: 8px 10px;
-}
-.qap-draw-hint {
-  font-size: 11px;
-  color: #64748b;
-  margin-bottom: 6px;
-}
-.qap-page-img-wrap {
-  position: relative;
-  display: block;
-  width: 100%;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  overflow: hidden;
-  cursor: default;
-}
-.qap-page-img {
-  display: block;
-  width: 100%;
-  height: auto;
-  object-fit: contain;
-  user-select: none;
-  pointer-events: none;
-}
-.qap-overlay {
-  position: absolute;
-  inset: 0;
-  cursor: crosshair;
-}
-.qap-manual-form {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-.qap-manual-input {
-  flex: 1;
-  width: 100%;
-  min-width: 120px;
-  padding: 5px 10px;
-  font-size: 12px;
-  border: 1px solid #d0d6e0;
-  border-radius: 4px;
-  outline: none;
-}
-.qap-manual-input:focus {
-  border-color: #2563eb;
-}
-.qap-manual-error {
-  font-size: 11px;
-  color: #dc2626;
-}
-.qap-error {
-  font-size: 12px;
-  color: #dc2626;
-  margin: 4px 0;
 }
 
 /* ── 문항 목록 ──────────────────────────────────────── */
@@ -713,30 +339,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-.qlist-filter-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-}
-.qlist-page-chip {
-  font-size: 11px;
-  padding: 2px 6px;
-  border: 1px solid #d0d6e0;
-  border-radius: 12px;
-  background: #fff;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.1s;
-}
-.qlist-page-chip:hover {
-  border-color: #4a90e2;
-  color: #2563eb;
-}
-.qlist-page-chip--active {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
 }
 .qlist-filter-input-row {
   display: flex;
@@ -925,15 +527,6 @@ body {
   border-radius: 2px;
   font-size: 10px;
   color: #cbd5e1;
-}
-.wbp-cell-num {
-  position: absolute;
-  bottom: 3px;
-  right: 4px;
-  font-size: 9px;
-  color: #94a3b8;
-  line-height: 1;
-  pointer-events: none;
 }
 .wbp-empty {
   color: #94a3b8;

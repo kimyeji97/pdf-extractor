@@ -19,6 +19,20 @@ import {
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
 
+/**
+ * 지면 색 (REQ-D07 Phase 2)
+ *
+ * 이 값들은 **UI 색이 아니라 생성될 PDF 지면을 재현한 값**이라 테마 토큰으로 바꾸지 않는다.
+ * 라벨 배경은 pdf_service의 draw_rect fill=(0.96,0.96,0.98)과 짝을 이룬다.
+ * 다크 모드에서도 종이는 흰색이어야 하므로 그대로 둔다(§8 결정 #5 — 뷰어·미리보기는 밝게 유지).
+ */
+const PAPER = {
+  labelBg:     "#f3f4f6",
+  labelText:   "#475569",
+  labelTextMuted: "#64748b",
+  pageNumber:  "#94a3b8",
+};
+
 // 뷰포트 근처(위아래 300px)에 들어온 페이지만 실제 셀·이미지를 렌더링한다 (REQ-P02-07).
 // 한 번 보인 페이지는 계속 렌더 유지(다시 스크롤해 지나갈 때 깜빡임 방지).
 function usePageVisible(ref) {
@@ -102,14 +116,14 @@ function WorkbookPage({
                       top:        cellYpx,
                       width:      cellWpx,
                       height:     labelHpx,
-                      background: "#f3f4f6",
+                      background: PAPER.labelBg,
                       display:    "flex",
                       alignItems: "center",
                       paddingLeft: 3,
                       overflow:   "hidden",
                       whiteSpace: "nowrap",
                       fontSize:   Math.max(10, 14 * scale),
-                      color:      "#64748b",
+                      color:      PAPER.labelTextMuted,
                       boxSizing:  "border-box",
                     }}
                   >
@@ -135,14 +149,14 @@ function WorkbookPage({
                     top:        cellYpx,
                     width:      cellWpx,
                     height:     labelHpx,
-                    background: "#f3f4f6",
+                    background: PAPER.labelBg,
                     display:    "flex",
                     alignItems: "center",
                     paddingLeft: 3,
                     overflow:   "hidden",
                     whiteSpace: "nowrap",
                     fontSize:   Math.max(10, 14 * scale),
-                    color:      "#475569",
+                    color:      PAPER.labelText,
                     boxSizing:  "border-box",
                   }}
                 >
@@ -223,7 +237,7 @@ function WorkbookPage({
               bottom:     4,
               right:      6,
               fontSize:   9 * scale,
-              color:      "#94a3b8",
+              color:      PAPER.pageNumber,
               lineHeight: 1,
             }}
           >

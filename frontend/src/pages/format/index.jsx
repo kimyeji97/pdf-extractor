@@ -88,7 +88,7 @@ function CoverCard({ cover, onDelete }) {
         onClick={() => onDelete(cover.cover_id)}
         sx={{
           position: "absolute", top: 6, right: 6,
-          bgcolor: "error.main", color: "#fff",
+          bgcolor: "error.main", color: "common.white",
           opacity: 0, transition: "opacity 0.15s",
           width: 24, height: 24,
           "&:hover": { bgcolor: "error.dark" },

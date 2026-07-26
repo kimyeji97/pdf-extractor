@@ -155,7 +155,7 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
 
       <div className="qlist-body">
         {loading && <div className="qlist-loading">문항 목록 로딩 중...</div>}
-        {error   && <div className="qlist-loading" style={{ color: "#dc2626" }}>{error}</div>}
+        {error   && <div className="qlist-loading" style={{ color: "var(--mui-palette-error-main)" }}>{error}</div>}
 
         {!loading && !error && filteredGroups.length === 0 && (
           <div className="qlist-empty">감지된 문항이 없습니다.</div>

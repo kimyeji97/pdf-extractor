@@ -106,7 +106,7 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
       >
         {!thumbLoaded && (
           thumbFailed
-            ? <Icon icon="material-symbols:description-outline-rounded" style={{ fontSize: 40, color: "#ccc" }} />
+            ? <Icon icon="material-symbols:description-outline-rounded" style={{ fontSize: 40, color: "var(--mui-palette-text-disabled)" }} />
             : <Box className="img-skeleton" sx={{ position: "absolute", inset: 0 }} />
         )}
         {!thumbFailed && (
@@ -130,7 +130,7 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
             <Chip
               label={`${job.total_question_count}문항`}
               size="small" color="primary"
-              sx={{ fontSize: 10, height: 18, bgcolor: "primary.main", color: "#fff" }}
+              sx={{ fontSize: 10, height: 18, bgcolor: "primary.main", color: "common.white" }}
             />
           )}
           {job.boundaries_status === "PROCESSING" && (
@@ -150,7 +150,7 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
             <IconButton
               size="small"
               onClick={(e) => { e.stopPropagation(); onEdit(job); }}
-              sx={{ bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
+              sx={{ bgcolor: "background.paper", opacity: 0.92, "&:hover": { opacity: 1 } }}
             >
               <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 16 }} />
             </IconButton>
@@ -159,7 +159,7 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
             <IconButton
               size="small"
               onClick={(e) => { e.stopPropagation(); onDelete(job); }}
-              sx={{ bgcolor: "rgba(255,255,255,0.9)", color: "error.main", "&:hover": { bgcolor: "#fff" } }}
+              sx={{ bgcolor: "background.paper", color: "error.main", opacity: 0.92, "&:hover": { opacity: 1 } }}
             >
               <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />
             </IconButton>
@@ -340,7 +340,7 @@ export default function AnalysisFilePage() {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Icon icon="material-symbols:search-rounded" style={{ fontSize: 16, color: "#aaa" }} />
+                <Icon icon="material-symbols:search-rounded" style={{ fontSize: 16, color: "var(--mui-palette-text-disabled)" }} />
               </InputAdornment>
             ),
           }}
@@ -354,7 +354,7 @@ export default function AnalysisFilePage() {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Icon icon="material-symbols:label-outline-rounded" style={{ fontSize: 16, color: "#aaa" }} />
+                <Icon icon="material-symbols:label-outline-rounded" style={{ fontSize: 16, color: "var(--mui-palette-text-disabled)" }} />
               </InputAdornment>
             ),
           }}

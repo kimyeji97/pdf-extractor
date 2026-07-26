@@ -1,20 +1,39 @@
+/**
+ * 문제집 편집 ① 파일 선택 패널
+ *
+ * REQ-D07 Phase 2에서 인라인 style 객체를 MUI sx + 테마 토큰으로 옮겼다.
+ * 하드코딩 색을 없애야 다크 모드(REQ-D08)가 가능해진다.
+ *
+ * 스크롤 계약: container(flex 컬럼) → scrollArea(flex:1, minHeight:0, overflowY:auto).
+ * 이 체인이 끊기면 목록이 페이지 전체로 늘어나며 내부 스크롤이 사라진다(REQ-B04·B08).
+ */
 import { useEffect, useState, useCallback, useRef } from "react";
+
+import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
+import Alert from "@mui/material/Alert";
+import Tooltip from "@mui/material/Tooltip";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import IconButton from "@mui/material/IconButton";
+import CircularProgress from "@mui/material/CircularProgress";
+import { Icon } from "@iconify/react";
+
 import { listJobs } from "../api/client";
 import usePaginatedList from "../hooks/usePaginatedList";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 
-const STATUS_LABEL = {
-  PENDING:    null,
-  PROCESSING: "처리 중",
-  DONE:       "완료",
-  FAILED:     "실패",
+// 상태 → MUI 시맨틱 컬러 (하드코딩 hex 대신 팔레트를 쓴다)
+const STATUS_CHIP = {
+  PROCESSING: { label: "처리 중", color: "warning" },
+  DONE:       { label: "완료",    color: "success" },
+  FAILED:     { label: "실패",    color: "error" },
 };
 
-const STATUS_COLOR = {
-  PENDING:    "#b0b8c8",
-  PROCESSING: "#e6a817",
-  DONE:       "#2e8b57",
-  FAILED:     "#c0392b",
+const BOUNDARIES_CHIP = {
+  PENDING:    { label: "감지 대기", color: "default" },
+  PROCESSING: { label: "감지 중…",  color: "warning" },
+  FAILED:     { label: "감지 실패", color: "error" },
 };
 
 function relativeTime(isoString) {
@@ -29,68 +48,70 @@ function relativeTime(isoString) {
   return `${Math.floor(hour / 24)}일 전`;
 }
 
+const chipSx = { fontSize: 10, height: 18 };
+
 function BoundariesBadge({ boundariesStatus, totalQuestionCount }) {
   if (!boundariesStatus) return null;
-  const map = {
-    PENDING:    { text: "문항 감지 대기", bg: "#b0b8c8" },
-    PROCESSING: { text: "감지 중...",     bg: "#e6a817" },
-    DONE:       { text: `${totalQuestionCount ?? 0}문항`, bg: "#4a90e2" },
-    FAILED:     { text: "감지 실패",      bg: "#c0392b" },
-  };
-  const entry = map[boundariesStatus];
+
+  if (boundariesStatus === "DONE") {
+    return <Chip label={`${totalQuestionCount ?? 0}문항`} size="small" color="primary" sx={chipSx} />;
+  }
+  const entry = BOUNDARIES_CHIP[boundariesStatus];
   if (!entry) return null;
-  return (
-    <span style={{ ...styles.badge, background: entry.bg, marginLeft: 4 }}>
-      {entry.text}
-    </span>
-  );
+  return <Chip label={entry.label} size="small" color={entry.color} variant="outlined" sx={chipSx} />;
 }
 
-// 이름/유형 편집은 문항 분석 목록으로 옮겼다(2026-07-25) — 편집 화면에서는 조회만 한다.
 function JobCard({ job, isSelected, onSelect }) {
-  const statusLabel = job.status === "PENDING" ? null : (STATUS_LABEL[job.status] || job.status);
+  // PENDING은 업로드 직후 잠깐이라 별도 표시하지 않는다
+  const status = job.status === "PENDING" ? null : STATUS_CHIP[job.status];
 
   return (
-    <li
-      style={{
-        ...styles.card,
-        ...(isSelected ? styles.cardSelected : {}),
-      }}
+    <Box
+      component="li"
       onClick={() => onSelect(job.job_id, job.filename, job.workbook_name)}
+      sx={{
+        listStyle: "none",
+        px: 1.25, py: 1,
+        borderRadius: 1.5,
+        cursor: "pointer",
+        border: 1,
+        borderColor: isSelected ? "primary.main" : "divider",
+        bgcolor: isSelected ? "primary.lighter" : "background.paper",
+        transition: "border-color .15s, background-color .15s",
+        "&:hover": { borderColor: isSelected ? "primary.main" : "text.disabled" },
+      }}
     >
-      {/* 상단: 문제집 이름 (메인) */}
-      <div style={styles.cardMain}>
-        <span style={styles.workbookName} title={job.workbook_name || job.filename || "unknown.pdf"}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 0.75 }}>
+        <Typography
+          variant="caption"
+          fontWeight={600}
+          noWrap
+          title={job.workbook_name || job.filename || "unknown.pdf"}
+          sx={{ minWidth: 0, color: "text.primary" }}
+        >
           {job.workbook_name || job.filename || "unknown.pdf"}
-        </span>
-        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 3 }}>
-          {statusLabel && (
-            <span style={{ ...styles.badge, background: STATUS_COLOR[job.status] || "#888" }}>
-              {statusLabel}
-            </span>
-          )}
+        </Typography>
+
+        <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 0.5 }}>
+          {status && <Chip label={status.label} size="small" color={status.color} sx={chipSx} />}
           <BoundariesBadge
             boundariesStatus={job.boundaries_status}
             totalQuestionCount={job.total_question_count}
           />
-        </div>
-      </div>
+        </Box>
+      </Box>
 
-      {/* 파일명 + 유형 표시 */}
-      <div style={styles.metaRow}>
-        <span style={styles.metaText} title={job.filename}>{job.filename || "unknown.pdf"}</span>
-        {job.workbook_types?.length > 0 && (
-          <span style={styles.metaType}> · {job.workbook_types.join(", ")}</span>
-        )}
-      </div>
+      <Typography variant="caption" color="text.disabled" noWrap sx={{ display: "block", mt: 0.25 }}>
+        <span title={job.filename}>{job.filename || "unknown.pdf"}</span>
+        {job.workbook_types?.length > 0 && ` · ${job.workbook_types.join(", ")}`}
+      </Typography>
 
-      {/* 업로드 시간 */}
       {job.uploaded_at && (
-        <div style={styles.cardSub}>
-          <span style={styles.time}>{relativeTime(job.uploaded_at)}</span>
-        </div>
+        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 0.25 }}>
+          {relativeTime(job.uploaded_at)}
+        </Typography>
       )}
-    </li>
+    </Box>
   );
 }
 
@@ -131,39 +152,53 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
   const hasSearch = Boolean(debouncedName.trim() || debouncedType.trim());
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <span style={styles.sectionLabel}>📂 업로드된 파일</span>
-        <button style={styles.refreshBtn} onClick={fetchJobs} disabled={loading}>
-          {loading ? "..." : "↺"}
-        </button>
-      </div>
+    <Box sx={{ width: 1, height: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <Box
+        sx={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 0.5, pb: 0.75, mb: 1, flexShrink: 0,
+          borderBottom: 1, borderColor: "divider",
+        }}
+      >
+        <Typography variant="caption" fontWeight={700} color="text.secondary">
+          업로드된 파일
+        </Typography>
+        <Tooltip title="새로고침">
+          <span>
+            <IconButton size="small" onClick={fetchJobs} disabled={loading}>
+              {loading
+                ? <CircularProgress size={14} />
+                : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 16 }} />}
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
 
       {/* 검색 필터 */}
-      <div style={styles.searchBox}>
-        <input
-          style={styles.searchInput}
-          type="text"
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, mb: 1, flexShrink: 0 }}>
+        <TextField
+          size="small" fullWidth
           placeholder="문제집 이름 검색"
           value={searchName}
           onChange={(e) => setSearchName(e.target.value)}
         />
-        <input
-          style={styles.searchInput}
-          type="text"
+        <TextField
+          size="small" fullWidth
           placeholder="유형 검색"
           value={searchType}
           onChange={(e) => setSearchType(e.target.value)}
         />
-      </div>
+      </Box>
 
-      <div style={styles.scrollArea}>
-        {error && <p style={styles.error}>{error}</p>}
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        {error && <Alert severity="error" sx={{ py: 0, mb: 1 }}>{error}</Alert>}
 
         {!loading && sourceJobs.length === 0 ? (
-          <p style={styles.empty}>{hasSearch ? "검색 결과 없음" : "업로드된 파일 없음"}</p>
+          <Typography variant="body2" color="text.disabled" align="center" sx={{ py: 2 }}>
+            {hasSearch ? "검색 결과 없음" : "업로드된 파일 없음"}
+          </Typography>
         ) : (
-          <ul style={styles.list}>
+          <Box component="ul" sx={{ m: 0, p: 0, display: "flex", flexDirection: "column", gap: 0.75 }}>
             {sourceJobs.map((job) => (
               <JobCard
                 key={job.job_id}
@@ -172,159 +207,18 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
                 onSelect={onSelect}
               />
             ))}
-          </ul>
+          </Box>
         )}
 
         {/* 무한 스크롤 센티널 (REQ-P03-03) */}
-        <div ref={sentinelRef} style={styles.sentinel}>
-          {loadingMore && `불러오는 중… (${sourceJobs.length}/${total})`}
-        </div>
-      </div>
-    </div>
+        <Box ref={sentinelRef} sx={{ minHeight: 8, py: 0.75, textAlign: "center" }}>
+          {loadingMore && (
+            <Typography variant="caption" color="text.disabled">
+              불러오는 중… ({sourceJobs.length}/{total})
+            </Typography>
+          )}
+        </Box>
+      </Box>
+    </Box>
   );
 }
-
-const styles = {
-  container: {
-    width: "100%",
-    height: "100%",
-    display: "flex",
-    flexDirection: "column",
-    minHeight: 0,
-    boxSizing: "border-box",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-    flexShrink: 0,
-  },
-  scrollArea: {
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-  },
-  sentinel: {
-    minHeight: 8,
-    padding: "6px 0",
-    textAlign: "center",
-    fontSize: 11,
-    color: "#999",
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#555",
-    display: "block",
-    paddingBottom: 6,
-    borderBottom: "1px solid #eee",
-    marginBottom: 8,
-    width: "100%",
-  },
-  refreshBtn: {
-    fontSize: 13,
-    padding: "2px 8px",
-    cursor: "pointer",
-    borderRadius: 4,
-    border: "1px solid #ddd",
-    background: "#fff",
-    color: "#555",
-    flexShrink: 0,
-    marginLeft: 6,
-    marginBottom: 6,
-  },
-  list: {
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  },
-  card: {
-    border: "1px solid #e8e8e8",
-    borderRadius: 6,
-    padding: "7px 9px",
-    cursor: "pointer",
-    background: "#fff",
-    transition: "border-color 0.15s, box-shadow 0.15s",
-  },
-  cardSelected: {
-    borderColor: "#4a90e2",
-    background: "#f0f6ff",
-    boxShadow: "0 0 0 2px rgba(74,144,226,0.18)",
-  },
-  cardMain: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 6,
-  },
-  workbookName: {
-    fontSize: 12,
-    fontWeight: 600,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    minWidth: 0,
-    color: "#222",
-  },
-  badge: {
-    fontSize: 10,
-    color: "#fff",
-    borderRadius: 3,
-    padding: "2px 5px",
-    flexShrink: 0,
-    whiteSpace: "nowrap",
-  },
-  metaRow: {
-    marginTop: 2,
-    fontSize: 10,
-    color: "#999",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  metaText: {
-    fontSize: 10,
-    color: "#999",
-  },
-  metaType: {
-    fontSize: 10,
-    color: "#aaa",
-  },
-  searchBox: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    marginBottom: 8,
-    flexShrink: 0,
-  },
-  searchInput: {
-    fontSize: 11,
-    padding: "4px 7px",
-    border: "1px solid #ddd",
-    borderRadius: 4,
-    width: "100%",
-    boxSizing: "border-box",
-    background: "#fafafa",
-  },
-  cardSub: {
-    marginTop: 3,
-  },
-  time: {
-    fontSize: 10,
-    color: "#aaa",
-  },
-  empty: {
-    color: "#ccc",
-    fontSize: 13,
-    textAlign: "center",
-    padding: "16px 0",
-  },
-  error: {
-    color: "#c0392b",
-    fontSize: 12,
-  },
-};
