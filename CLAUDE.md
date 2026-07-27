@@ -303,7 +303,7 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
 조회는 `/progress [오늘|어제|금주|전주|N일|REQ번호]`, 기록은 `/checkpoint`.
 
 - 미래 작업(아직 REQ 번호 없음): `docs/예정된작업.md`
-- 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1·2·3-1·3-2·3-3 완료, **다음은 Phase 3-4**
+- 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1·2·3-1~3-4 완료, **다음은 Phase 3-5**
   (상세: [D07 스펙](docs/specs/20260725-REQ-D07-minimal-template-adoption.md) §4-1)
 
 ## 계약 (깨면 회귀하는 것들)
