@@ -2,14 +2,29 @@
  * 문항 분석 패널 (REQ-11~15, D01~D03)
  *
  * v3.3:
- *   - drawMode (수동 추가 드래그) 기능은 부모(pages/analysis/work.jsx ② 미리보기)가 담당
- *   - 이 컴포넌트는 툴바 + 문항 카드 목록만 담당
+ *   - drawMode (수동 추가 드래그) 기능은 부모(pages/analysis/work.jsx 미리보기)가 담당
+ *   - 이 컴포넌트는 헤더 + 문항 카드 목록만 담당
+ *
+ * REQ-D07 Phase 3-4: 순수 CSS(qap-*) + 생 DOM → MUI + 테마 토큰.
+ *   카드/헤더 어휘는 Phase 3-1~3-3(BookCard·목록 패널)과 맞춘다.
  *
  * Props:
  *   jobId, pageNum, pageInfo  — 현재 페이지 식별
  *   refreshTrigger            — 부모가 재감지/수동추가 완료 시 증가시키는 카운터
  */
 import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import Alert from "@mui/material/Alert";
+import Checkbox from "@mui/material/Checkbox";
+import Skeleton from "@mui/material/Skeleton";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
+import { Icon } from "@iconify/react";
+
 import {
   getPageQuestions,
   updateQuestionTitle,
@@ -24,22 +39,35 @@ function CardImg({ src, alt }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError]   = useState(false);
   return (
-    <div className="qap-card-img">
-      {!loaded && !error && <div className="qap-img-skeleton" />}
-      {error && (
-        <div className="qap-card-img-error">
-          <span style={{ fontSize: 18 }}>🖼</span>
-          <span>이미지를 불러올 수 없습니다</span>
-        </div>
+    <Box sx={{ position: "relative", minHeight: loaded && !error ? 0 : 80, bgcolor: "background.neutral" }}>
+      {!loaded && !error && (
+        /* shimmer는 App.css의 .img-skeleton을 공용으로 쓴다 (BookCard와 동일) */
+        <Box className="img-skeleton" sx={{ position: "absolute", inset: 0, borderRadius: 0 }} />
       )}
-      <img
+      {error && (
+        <Box
+          sx={{
+            py: 2.5, display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: 0.5,
+            color: "text.disabled",
+          }}
+        >
+          <Icon icon="material-symbols:broken-image-outline-rounded" style={{ fontSize: 22 }} />
+          <Typography variant="caption">이미지를 불러올 수 없습니다</Typography>
+        </Box>
+      )}
+      <Box
+        component="img"
         src={src}
         alt={alt}
         onLoad={() => setLoaded(true)}
         onError={() => { setError(true); setLoaded(false); }}
-        style={{ display: loaded && !error ? "block" : "none" }}
+        sx={{
+          display: loaded && !error ? "block" : "none",
+          width: "100%", height: "auto", verticalAlign: "middle",
+        }}
       />
-    </div>
+    </Box>
   );
 }
 
@@ -52,35 +80,48 @@ const QuestionCard = memo(
     onToggleCheck, onStartEdit, onCommitEdit, onCancelEdit, onEditingValueChange,
   }) {
     const displayTitle = q.title || (q.is_manual ? "(수동 문항)" : `문항 ${q.question_num}`);
+    const fp = q.is_false_positive;
     return (
-      <div
-        className={[
-          "qap-card",
-          q.is_false_positive ? "qap-card--fp" : "",
-          isChecked            ? "qap-card--checked" : "",
-        ].join(" ")}
+      <Paper
+        variant="outlined"
+        sx={{
+          overflow: "hidden",
+          // 목록이 flex 컬럼이라 카드가 flex 아이템으로 축소된다. 축소되면 카드의
+          // overflow:hidden이 문항 이미지를 잘라 버리므로(REQ-D01 대형 이미지가 깨짐)
+          // 축소를 명시적으로 막는다.
+          flexShrink: 0,
+          transition: "border-color 0.15s, box-shadow 0.15s",
+          ...(fp && { borderColor: "warning.light", bgcolor: "warning.lighter" }),
+          ...(isChecked && { borderColor: "primary.main", boxShadow: (t) => `0 0 0 1px ${t.palette.primary.main}` }),
+          "&:hover": { borderColor: isChecked ? "primary.main" : "text.disabled" },
+        }}
       >
         {/* 상단 행: 체크박스 + 배지 + 타이틀 */}
-        <div className="qap-card-header">
-          <input
-            type="checkbox"
-            className="qap-card-check"
-            checked={isChecked}
-            onChange={() => onToggleCheck(q.question_id)}
-            title={q.is_false_positive ? "오탐지 의심 문항입니다. 이미지를 확인한 뒤 선택하여 삭제할 수 있습니다." : ""}
-          />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1, py: 0.75 }}>
+          <Tooltip
+            title={fp ? "오탐지 의심 문항입니다. 이미지를 확인한 뒤 선택하여 삭제할 수 있습니다." : ""}
+          >
+            <Checkbox
+              size="small"
+              checked={isChecked}
+              onChange={() => onToggleCheck(q.question_id)}
+              sx={{ p: 0.25, flexShrink: 0 }}
+            />
+          </Tooltip>
 
-          <div className="qap-card-badges">
-            {q.is_manual && <span className="qap-badge qap-badge--manual">수동</span>}
-            {q.is_false_positive && (
-              <span className="qap-badge qap-badge--fp">오탐지 의심</span>
-            )}
-          </div>
+          {q.is_manual && (
+            <Chip label="수동" size="small" color="info" variant="outlined" sx={{ height: 18, fontSize: 10, flexShrink: 0 }} />
+          )}
+          {fp && (
+            <Chip label="오탐지 의심" size="small" color="warning" sx={{ height: 18, fontSize: 10, flexShrink: 0 }} />
+          )}
 
           {isEditing ? (
-            <input
-              type="text"
-              className="qap-title-input"
+            <TextField
+              size="small"
+              variant="standard"
+              fullWidth
+              autoFocus
               value={editingValue}
               onChange={(e) => onEditingValueChange(e.target.value)}
               onKeyDown={(e) => {
@@ -88,28 +129,39 @@ const QuestionCard = memo(
                 if (e.key === "Escape") onCancelEdit();
               }}
               onBlur={() => onCommitEdit(q)}
-              autoFocus
+              slotProps={{ input: { sx: { fontSize: 12 } } }}
             />
           ) : (
-            <span
-              className="qap-card-title"
-              title="더블클릭하여 타이틀 수정"
-              onDoubleClick={() => !q.is_false_positive && onStartEdit(q)}
+            <Typography
+              variant="caption"
+              noWrap
+              title={fp ? displayTitle : "더블클릭하여 타이틀 수정"}
+              onDoubleClick={() => !fp && onStartEdit(q)}
+              sx={{
+                flex: 1, minWidth: 0, fontWeight: 600,
+                cursor: fp ? "default" : "text",
+                borderRadius: 0.5, px: 0.5,
+                "&:hover": fp ? undefined : { bgcolor: "action.hover" },
+              }}
             >
               {displayTitle}
-            </span>
+            </Typography>
           )}
-        </div>
+        </Box>
 
-        {/* 문항 이미지 */}
+        {/* 문항 이미지 (REQ-D01: 대형 이미지) */}
         <CardImg src={`${API_ROOT}${q.thumbnail_url}`} alt={displayTitle} />
 
-        {q.is_false_positive && (
-          <p className="qap-fp-note">
+        {fp && (
+          <Typography
+            variant="caption"
+            component="p"
+            sx={{ px: 1.25, py: 0.75, color: "warning.darker", bgcolor: "warning.lighter", lineHeight: 1.4 }}
+          >
             오탐지일 수 있습니다. 문항 이미지를 확인 후 필요하면 삭제하세요.
-          </p>
+          </Typography>
         )}
-      </div>
+      </Paper>
     );
   },
   (prev, next) =>
@@ -256,61 +308,72 @@ export default function QuestionAnalysisPanel({
   const checkedCount = checkedIds.size;
 
   return (
-    <div className="qap-container">
+    <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
 
-      {/* ── 툴바 ─────────────────────────────────────────── */}
-      <div className="qap-toolbar">
-        <span className="panel-title" style={{ marginRight: 8 }}>③ 문항 목록</span>
+      {/* ── 헤더 ─────────────────────────────────────────── */}
+      <Box
+        sx={{
+          px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", flexShrink: 0,
+          display: "flex", alignItems: "center", gap: 1,
+        }}
+      >
+        <Icon icon="material-symbols:list-alt-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
+        <Typography variant="subtitle2" fontWeight={700} noWrap>문항 목록</Typography>
+        {questions.length > 0 && (
+          <Chip label={questions.length} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
+        )}
 
-        <label className="qap-check-all" title="전체 선택/해제">
-          <input
-            type="checkbox"
-            checked={allChecked}
-            onChange={toggleAll}
-            disabled={allCheckable.length === 0}
-          />
-        </label>
+        <Box sx={{ flex: 1 }} />
 
-        <button
-          className={`qap-btn qap-btn--danger${checkedCount === 0 ? " qap-btn--disabled" : ""}`}
+        <Tooltip title="전체 선택/해제">
+          <span>
+            <Checkbox
+              size="small"
+              checked={allChecked}
+              onChange={toggleAll}
+              disabled={allCheckable.length === 0}
+              sx={{ p: 0.5 }}
+            />
+          </span>
+        </Tooltip>
+        <Button
+          size="small"
+          variant="outlined"
+          color="error"
           onClick={handleDeleteSelected}
           disabled={checkedCount === 0}
+          startIcon={<Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />}
+          sx={{ flexShrink: 0, px: 1.25, fontSize: 12, whiteSpace: "nowrap" }}
         >
-          삭제 ({checkedCount}개)
-        </button>
-      </div>
+          삭제 {checkedCount > 0 && `(${checkedCount})`}
+        </Button>
+      </Box>
 
-      {/* ── Undo 토스트 ───────────────────────────────────── */}
-      {undoToast && (
-        <div className="qap-toast">
-          <span>{undoToast.message}</span>
-          <button
-            className="qap-toast-undo"
-            onClick={() => {
-              clearTimeout(undoTimerRef.current);
-              setUndoToast(null);
-              undoToast.onUndo?.();
-            }}
-          >
-            되돌리기
-          </button>
-        </div>
-      )}
-
-      {error && <div className="qap-banner qap-banner--error">{error}</div>}
+      {error && <Alert severity="error" sx={{ borderRadius: 0, py: 0, fontSize: 12, flexShrink: 0 }}>{error}</Alert>}
 
       {/* ── 문항 목록 ─────────────────────────────────────── */}
-      <div className="qap-list">
-        {loading
-          ? Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="qap-skeleton" />
-            ))
-          : questions.length === 0 && !loading && (
-              <div className="qap-empty">
-                <p>감지된 문항이 없습니다.</p>
-                <p>② 미리보기에서 "수동 추가"로 직접 지정할 수 있습니다.</p>
-              </div>
-            )}
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 1.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
+        {loading &&
+          Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} variant="rounded" height={140} sx={{ flexShrink: 0 }} />
+          ))}
+
+        {!loading && questions.length === 0 && (
+          <Box
+            sx={{
+              flex: 1, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 1.5, color: "text.disabled", px: 2,
+            }}
+          >
+            <Icon icon="material-symbols:search-off-rounded" style={{ fontSize: 40 }} />
+            <Typography variant="body2" textAlign="center" color="text.secondary">
+              감지된 문항이 없습니다.
+            </Typography>
+            <Typography variant="caption" textAlign="center" color="text.disabled">
+              미리보기에서 &quot;수동 추가&quot;로 직접 지정할 수 있습니다.
+            </Typography>
+          </Box>
+        )}
 
         {questions.map((q) => (
           <QuestionCard
@@ -326,8 +389,33 @@ export default function QuestionAnalysisPanel({
             onEditingValueChange={setEditingValue}
           />
         ))}
-      </div>
-    </div>
+      </Box>
+
+      {/* ── Undo 토스트 (패널 하단 플로팅) ─────────────────── */}
+      {undoToast && (
+        <Paper
+          elevation={8}
+          sx={{
+            position: "absolute", left: 12, right: 12, bottom: 12, zIndex: 20,
+            px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1,
+            bgcolor: "grey.800", color: "common.white",
+          }}
+        >
+          <Typography variant="caption" sx={{ flex: 1 }}>{undoToast.message}</Typography>
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => {
+              clearTimeout(undoTimerRef.current);
+              setUndoToast(null);
+              undoToast.onUndo?.();
+            }}
+            sx={{ color: "primary.light", fontSize: 12, minWidth: 0, px: 1 }}
+          >
+            되돌리기
+          </Button>
+        </Paper>
+      )}
+    </Box>
   );
 }
-

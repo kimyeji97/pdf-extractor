@@ -2,11 +2,11 @@
  * 문항 분석 - 작업 페이지 (/analysis/:jobId)
  *
  * 파일 선택 페이지(/)에서 파일을 고른 뒤 진입.
- * ① 페이지 목록  ② 페이지 미리보기(PDF 뷰어, REQ-F07)  ③ 문항 목록  3패널 구성.
+ * 페이지 목록 · 페이지 미리보기(PDF 뷰어, REQ-F07) · 문항 목록  3패널 구성.
  * 뒤로 가기 → 파일 선택 페이지로 복귀 (사이드바 메뉴 유지).
  *
- * REQ-F07: ② 미리보기를 페이지 썸네일 → PdfPreviewPanel(react-pdf)로 전환.
- *   - ① 페이지 클릭 ↔ 뷰어 스크롤 양방향 동기화 (뷰어 스크롤 → ③ 자동 전환, 250ms 디바운스)
+ * REQ-F07: 미리보기를 페이지 썸네일 → PdfPreviewPanel(react-pdf)로 전환.
+ *   - 페이지 클릭 ↔ 뷰어 스크롤 양방향 동기화 (뷰어 스크롤 → 문항 목록 자동 전환, 250ms 디바운스)
  *   - 수동 문항 드래그 오버레이는 renderPageOverlay로 각 페이지 위에 렌더
  *   - 좌표 변환: PDF pt = CSS px / scale (react-pdf가 pt×scale로 렌더하므로)
  */
@@ -112,8 +112,6 @@ export default function AnalysisWorkPage() {
   // 자동 감지 경계로만 만들어져 수동 추가 문항이 빠진다. 오탐 여부도 페이지
   // 목록에는 없다. 전체 문항 일괄 API(REQ-P01)가 둘 다 갖고 있으므로
   // 여기서 한 번 받아 페이지별로 집계한다.
-  // ③ QuestionListPanel도 같은 API를 쓰지만 apiFetch GET dedup(P02-03)이
-  // 동시 호출을 하나로 합쳐 준다.
   const [pageStats, setPageStats] = useState({});
 
   useEffect(() => {
@@ -185,7 +183,7 @@ export default function AnalysisWorkPage() {
 
   const toggleDrawMode = () => { setDrawMode((v) => !v); handleCancelManual(); };
 
-  // ── 페이지 선택 (① 목록 클릭 → 뷰어 스크롤) ──────────
+  // ── 페이지 선택 (페이지 목록 클릭 → 뷰어 스크롤) ──────
   const handlePageClick = useCallback((page) => {
     setSelectedPage(page.page_num);
     setSelectedPageInfo(page);
@@ -194,7 +192,7 @@ export default function AnalysisWorkPage() {
     viewerRef.current?.scrollToPage(page.page_num + 1);
   }, [handleCancelManual]);
 
-  // ── 뷰어 스크롤 → ①·③ 자동 동기화 (250ms 디바운스) ──
+  // ── 뷰어 스크롤 → 페이지·문항 목록 동기화 (250ms 디바운스) ──
   const pageChangeTimer = useRef(null);
   const handleViewerPageChange = useCallback((pageNum1) => {
     clearTimeout(pageChangeTimer.current);
@@ -360,7 +358,7 @@ export default function AnalysisWorkPage() {
       {/* ── 3패널 ───────────────────────────────────── */}
       <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
-        {/* ① 페이지 목록 */}
+        {/* 페이지 목록 */}
         <Paper
           elevation={0}
           sx={{
@@ -372,10 +370,17 @@ export default function AnalysisWorkPage() {
           }}
         >
           {drawMode && (
-            <Box sx={{ position: "absolute", inset: 0, bgcolor: "rgba(255,255,255,0.55)", zIndex: 10, pointerEvents: "all" }} />
+            /* 수동 추가 중에는 좌우 패널을 딤 처리해 클릭을 막는다.
+               다크 모드(REQ-D08) 대비로 배경색은 토큰에서 가져온다. */
+            <Box sx={{ position: "absolute", inset: 0, bgcolor: "background.paper", opacity: 0.6, zIndex: 10, pointerEvents: "all" }} />
           )}
-          <Box sx={{ px: 2.5, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-            <Typography variant="subtitle2" fontWeight={700}>① 페이지</Typography>
+          <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+            <Icon icon="material-symbols:auto-stories-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
+            <Typography variant="subtitle2" fontWeight={700} noWrap>페이지</Typography>
+            {pages.length > 0 && (
+              <Chip label={pages.length} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
+            )}
+            <Box sx={{ flex: 1 }} />
             <Tooltip title="전체 재감지">
               <IconButton size="small" onClick={handleRefresh} disabled={refreshing}>
                 {refreshing ? <CircularProgress size={14} /> : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 16 }} />}
@@ -386,7 +391,7 @@ export default function AnalysisWorkPage() {
           {refreshError && <Alert severity="error" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>{refreshError}</Alert>}
           {pagesError   && <Alert severity="error" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>{pagesError}</Alert>}
 
-          <Box sx={{ flex: 1, overflowY: "auto" }}>
+          <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 0.75 }}>
             {pagesLoading && (
               <Box sx={{ p: 2, display: "flex", justifyContent: "center" }}>
                 <CircularProgress size={20} />
@@ -408,14 +413,15 @@ export default function AnalysisWorkPage() {
                   key={page.page_num}
                   onClick={() => handlePageClick(page)}
                   sx={{
-                    px: 2, py: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.5,
-                    borderBottom: 1, borderColor: "divider",
+                    px: 1.25, py: 0.875, mb: 0.25, borderRadius: 1,
+                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.5,
                     // 오탐 의심 문항이 있는 페이지는 좌측 띠 + 옅은 배경으로 표시
                     borderLeft: 3,
                     borderLeftColor: fpCount > 0 ? "warning.main" : "transparent",
                     bgcolor: isSelected
                       ? "primary.lighter"
                       : fpCount > 0 ? "warning.lighter" : "transparent",
+                    transition: "background-color 0.15s",
                     "&:hover": {
                       bgcolor: isSelected
                         ? "primary.lighter"
@@ -446,13 +452,15 @@ export default function AnalysisWorkPage() {
           </Box>
         </Paper>
 
-        {/* ② 페이지 미리보기 — PDF 뷰어 (REQ-F07, 남는 공간 채움) */}
+        {/* 페이지 미리보기 — PDF 뷰어 (REQ-F07, 남는 공간 채움) */}
         <Paper
           elevation={0}
           sx={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider", position: "relative" }}
         >
-          <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-            <Typography variant="subtitle2" fontWeight={700}>② 페이지 미리보기</Typography>
+          <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+            <Icon icon="material-symbols:image-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
+            <Typography variant="subtitle2" fontWeight={700} noWrap>페이지 미리보기</Typography>
+            <Box sx={{ flex: 1 }} />
             {pdfUrl && (
               <Button
                 size="small" variant={drawMode ? "contained" : "outlined"}
@@ -522,7 +530,7 @@ export default function AnalysisWorkPage() {
 
         <ResizeHandle onMouseDown={(e) => startResize("section3", -1, e)} />
 
-        {/* ③ 문항 목록 (리사이즈 대상, 200~800px) */}
+        {/* 문항 목록 (리사이즈 대상, 200~800px) */}
         <Paper
           elevation={0}
           sx={{
@@ -534,7 +542,9 @@ export default function AnalysisWorkPage() {
           }}
         >
           {drawMode && (
-            <Box sx={{ position: "absolute", inset: 0, bgcolor: "rgba(255,255,255,0.55)", zIndex: 10, pointerEvents: "all" }} />
+            /* 수동 추가 중에는 좌우 패널을 딤 처리해 클릭을 막는다.
+               다크 모드(REQ-D08) 대비로 배경색은 토큰에서 가져온다. */
+            <Box sx={{ position: "absolute", inset: 0, bgcolor: "background.paper", opacity: 0.6, zIndex: 10, pointerEvents: "all" }} />
           )}
           {selectedPage !== null && jobId ? (
             <QuestionAnalysisPanel
@@ -546,8 +556,9 @@ export default function AnalysisWorkPage() {
             />
           ) : (
             <>
-              <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
-                <Typography variant="subtitle2" fontWeight={700}>③ 문항 목록</Typography>
+              <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", flexShrink: 0, display: "flex", alignItems: "center", gap: 1 }}>
+                <Icon icon="material-symbols:list-alt-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
+                <Typography variant="subtitle2" fontWeight={700} noWrap>문항 목록</Typography>
               </Box>
               <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "text.disabled", gap: 1.5 }}>
                 <Icon icon="material-symbols:list-alt-outline-rounded" style={{ fontSize: 48 }} />

@@ -323,40 +323,45 @@ ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
    **마지막 페이지 오버레이가 전체 드래그를 가로챈다**(수동 문항 좌표가 마지막 페이지로 고정됨).
 4. **`qlist-*` CSS는 살아있는 코드다** — `QuestionListPanel`이 쓴다.
    과거 `wbe-*` 데드코드 정리 때 같은 블록에 섞여 있다가 함께 삭제된 적이 있다.
+5. **flex 컬럼 목록 안의 카드는 `flexShrink: 0`** — 안 걸면 카드가 기본 `flex-shrink:1`로 축소되고,
+   카드의 `overflow:hidden`이 축소된 만큼 **내부 이미지를 잘라낸다**(실측 카드 133px vs 이미지 415px).
+   **목록이 스크롤되지 않아 증상이 "이미지가 좀 짧다"로만 보인다** — 스크롤 여부만 측정하면 놓친다.
+   종전 순수 CSS 카드는 자기 자신이 `display:flex`라 min-content 높이가 버텨 줬다.
+   MUI `Paper`는 블록이라 그 보호가 사라진다. (REQ-D07 Phase 3-4)
 
 ### PDF 뷰어
 
-5. **좌표 변환은 `pt = cssPx / scale` 단일 공식** — react-pdf가 pt×scale로 렌더하기 때문.
-   실측 오차 <1px. 다른 공식을 끼워 넣지 말 것.
-6. **가상화 `scrollToPage`는 대상의 "이전" 페이지를 강제 렌더하지 않는다** —
+6. **좌표 변환은 `pt = cssPx / scale` 단일 공식** — react-pdf가 pt×scale로 렌더하기 때문.
+   실측 오차 <1px(Phase 3-4 재측정 시 왕복 0.00px). 다른 공식을 끼워 넣지 말 것.
+7. **가상화 `scrollToPage`는 대상의 "이전" 페이지를 강제 렌더하지 않는다** —
    렌더하면 그 페이지가 아직 0px인 상태로 누적 높이가 계산돼 **한 페이지 짧게 안착**한다.
    대상 + 다음 페이지만 렌더 큐에 넣는다.
 
 ### 백엔드
 
-7. **미들웨어 등록 순서** — `add_middleware`는 **나중에 등록한 것이 바깥쪽**이다.
+8. **미들웨어 등록 순서** — `add_middleware`는 **나중에 등록한 것이 바깥쪽**이다.
    `TimeoutMiddleware`를 `CORSMiddleware`보다 **먼저** 등록해야 CORS가 바깥을 감싸고,
    타임아웃 504 응답에도 CORS 헤더가 붙어 프론트가 CORS 에러가 아닌 진짜 504로 인식한다.
-8. **`job_type` 쿼리는 대문자 enum** (`SOURCE`/`EXPORT`). 소문자는 422.
-9. **PDF 한글 텍스트는 `TextWriter` + `fitz.Font("korea")`** — PyMuPDF 1.25.5에는
-   `Document.add_font`가 없어 helv로 폴백되고 한글이 점으로 깨진다.
-10. **문항 감지 정확도 > 성능** — adaptive 감지를 조건부로 건너뛰는 최적화는
+9. **`job_type` 쿼리는 대문자 enum** (`SOURCE`/`EXPORT`). 소문자는 422.
+10. **PDF 한글 텍스트는 `TextWriter` + `fitz.Font("korea")`** — PyMuPDF 1.25.5에는
+    `Document.add_font`가 없어 helv로 폴백되고 한글이 점으로 깨진다.
+11. **문항 감지 정확도 > 성능** — adaptive 감지를 조건부로 건너뛰는 최적화는
     문항 15개 누락을 유발해 기각했다(P03-06). 감지 경로에 성능 트레이드오프를 넣지 않는다.
 
 ### 동기화가 필요한 짝
 
-11. **라벨 문자열** — 프론트 `WorkbookPreview`와 백엔드 `pdf_service`가 같은 문자열을 그린다.
+12. **라벨 문자열** — 프론트 `WorkbookPreview`와 백엔드 `pdf_service`가 같은 문자열을 그린다.
     `sel.label` 단일 출처를 유지할 것.
-12. **배율 상수** — `backend/app/utils/layout_spec.py`의 `MIN/MAX_CELL_SCALE`·`CELL_SCALE_STEP` ↔
+13. **배율 상수** — `backend/app/utils/layout_spec.py`의 `MIN/MAX_CELL_SCALE`·`CELL_SCALE_STEP` ↔
     `frontend/src/utils/workbookLayout.js`.
-13. **`WorkbookPreview`의 `PAPER` 색은 토큰화하지 않는다** — UI 색이 아니라 생성될 PDF 지면을
+14. **`WorkbookPreview`의 `PAPER` 색은 토큰화하지 않는다** — UI 색이 아니라 생성될 PDF 지면을
     재현한 값이고 `pdf_service`의 라벨 배경과 짝을 이룬다.
 
 ### 데이터
 
-14. **썸네일 URL은 결정적이다** (`/api/jobs/{id}/pages/{n}/thumbnail`) —
+15. **썸네일 URL은 결정적이다** (`/api/jobs/{id}/pages/{n}/thumbnail`) —
     URL을 얻으려고 목록 API를 추가 호출하지 말 것(REQ-P02-02에서 제거한 낭비).
-15. **문항 ID는 복합키** (ADR-0002) — `{job_id}:{page}:{num}`, 수동은 `…:manual:{uuid}`.
+16. **문항 ID는 복합키** (ADR-0002) — `{job_id}:{page}:{num}`, 수동은 `…:manual:{uuid}`.
     번호만 쓰면 멀티 파일 문제집에서 키가 충돌한다.
 
 ## 상시 이슈
