@@ -1,5 +1,5 @@
 /**
- * 문제집 편집 ① 파일 선택 패널
+ * 파일 선택 패널 (문제집 편집 화면 좌측)
  *
  * REQ-D07 Phase 2에서 인라인 style 객체를 MUI sx + 테마 토큰으로 옮겼다.
  * 하드코딩 색을 없애야 다크 모드(REQ-D08)가 가능해진다.
@@ -61,7 +61,7 @@ function BoundariesBadge({ boundariesStatus, totalQuestionCount }) {
   return <Chip label={entry.label} size="small" color={entry.color} variant="outlined" sx={chipSx} />;
 }
 
-function JobCard({ job, isSelected, onSelect }) {
+function JobCard({ job, isSelected, selectedCount = 0, onSelect }) {
   // PENDING은 업로드 직후 잠깐이라 별도 표시하지 않는다
   const status = job.status === "PENDING" ? null : STATUS_CHIP[job.status];
 
@@ -74,6 +74,7 @@ function JobCard({ job, isSelected, onSelect }) {
         px: 1.25, py: 1,
         borderRadius: 1.5,
         cursor: "pointer",
+        flexShrink: 0,   // 계약 #5 — flex 컬럼 안에서 카드가 축소되지 않게
         border: 1,
         borderColor: isSelected ? "primary.main" : "divider",
         bgcolor: isSelected ? "primary.lighter" : "background.paper",
@@ -106,11 +107,24 @@ function JobCard({ job, isSelected, onSelect }) {
         {job.workbook_types?.length > 0 && ` · ${job.workbook_types.join(", ")}`}
       </Typography>
 
-      {job.uploaded_at && (
-        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 0.25 }}>
-          {relativeTime(job.uploaded_at)}
-        </Typography>
-      )}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.25 }}>
+        {job.uploaded_at && (
+          <Typography variant="caption" color="text.disabled">
+            {relativeTime(job.uploaded_at)}
+          </Typography>
+        )}
+        {/* 멀티 파일 선택 노출(REQ-D07 조건 ②) — 다른 파일로 넘어가도 선택은
+            유지되는데 화면에 흔적이 없어 "선택이 날아갔나" 싶게 만들던 지점이다.
+            선택이 살아 있는 파일에만 배지를 띄운다. */}
+        {selectedCount > 0 && (
+          <Chip
+            label={`${selectedCount}개 선택됨`}
+            size="small"
+            color="primary"
+            sx={{ ...chipSx, ml: "auto" }}
+          />
+        )}
+      </Box>
     </Box>
   );
 }
@@ -119,10 +133,16 @@ function JobCard({ job, isSelected, onSelect }) {
  * @param {{
  *   selectedJobId: string | null,
  *   onSelect: (jobId: string, filename: string, workbookName?: string) => void,
- *   refreshTrigger: number
+ *   refreshTrigger: number,
+ *   selectedCounts?: Record<string, number>   // jobId → 선택된 문항 수 (편집 화면 전용)
  * }} props
  */
-export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger = 0 }) {
+export default function FileListPanel({
+  selectedJobId,
+  onSelect,
+  refreshTrigger = 0,
+  selectedCounts,
+}) {
   const [searchName, setSearchName] = useState("");
   const [searchType, setSearchType] = useState("");
 
@@ -153,41 +173,34 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
 
   return (
     <Box sx={{ width: 1, height: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <Box
-        sx={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          gap: 0.5, pb: 0.75, mb: 1, flexShrink: 0,
-          borderBottom: 1, borderColor: "divider",
-        }}
-      >
-        <Typography variant="caption" fontWeight={700} color="text.secondary">
-          업로드된 파일
-        </Typography>
+      {/* 검색 필터 — 검색은 서버가 처리한다(REQ-P03-03).
+          "업로드된 파일" 부제목은 두지 않는다. 패널 헤더가 이미 '파일 선택'이라
+          제목이 두 줄로 겹친다(Phase 3-2에서 표지 관리에 같은 정리를 했다).
+          새로고침 버튼만 검색 줄 옆에 남긴다. */}
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, mb: 1, flexShrink: 0 }}>
+        <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.75 }}>
+          <TextField
+            size="small" fullWidth
+            placeholder="문제집 이름 검색"
+            value={searchName}
+            onChange={(e) => setSearchName(e.target.value)}
+          />
+          <TextField
+            size="small" fullWidth
+            placeholder="유형 검색"
+            value={searchType}
+            onChange={(e) => setSearchType(e.target.value)}
+          />
+        </Box>
         <Tooltip title="새로고침">
           <span>
-            <IconButton size="small" onClick={fetchJobs} disabled={loading}>
+            <IconButton size="small" onClick={fetchJobs} disabled={loading} sx={{ mt: 0.5 }}>
               {loading
                 ? <CircularProgress size={14} />
                 : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 16 }} />}
             </IconButton>
           </span>
         </Tooltip>
-      </Box>
-
-      {/* 검색 필터 */}
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, mb: 1, flexShrink: 0 }}>
-        <TextField
-          size="small" fullWidth
-          placeholder="문제집 이름 검색"
-          value={searchName}
-          onChange={(e) => setSearchName(e.target.value)}
-        />
-        <TextField
-          size="small" fullWidth
-          placeholder="유형 검색"
-          value={searchType}
-          onChange={(e) => setSearchType(e.target.value)}
-        />
       </Box>
 
       <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
@@ -204,6 +217,7 @@ export default function FileListPanel({ selectedJobId, onSelect, refreshTrigger 
                 key={job.job_id}
                 job={job}
                 isSelected={selectedJobId === job.job_id}
+                selectedCount={selectedCounts?.[job.job_id] ?? 0}
                 onSelect={onSelect}
               />
             ))}

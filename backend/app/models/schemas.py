@@ -148,6 +148,10 @@ class WorkbookSelectionItem(BaseModel):
     manual_id: Optional[str] = None       # 수동 추가 문항 UUID
     title: Optional[str] = None           # 저장 당시 타이틀 스냅샷
     workbook_name: Optional[str] = None   # 출처 문제집 이름 (출처 표시용)
+    # 출처 원본 파일명. workbook_name은 사용자 자유 입력이라 **고유하지 않다**
+    # (실데이터에 서로 다른 두 파일이 똑같이 "테스트03"인 사례 존재). 편집 화면에서
+    # 같은 이름의 출처가 섞였을 때 이 값으로 구분해 보여준다. (REQ-D07 Phase 3-5)
+    source_filename: Optional[str] = None
     scale: float = 1.0                    # 셀 내 확대/축소 배율 (2026-07-25)
 
 

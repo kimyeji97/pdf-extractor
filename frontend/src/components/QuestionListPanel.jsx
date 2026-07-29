@@ -6,8 +6,32 @@
  *
  * 페이지 필터: 텍스트 입력으로 구간(3-10) 또는 개별(1,3,5) 지정.
  * 썸네일: 로딩 시간 단축을 위해 표시하지 않는다.
+ *
+ * REQ-D07 Phase 3-5에서 순수 CSS(`qlist-*`)를 MUI + 테마 토큰으로 전환했다.
+ * 편집 화면에 마지막으로 남아 있던 하드코딩 색(22개)이 여기 있었고, 그게 남아 있는 한
+ * 다크 모드(REQ-D08)에서 이 패널만 흰 배경으로 튄다. 전환과 함께 App.css의
+ * `qlist-*` 블록 122줄을 제거했으므로 **클래스명으로 되돌리지 말 것** —
+ * CLAUDE.md 계약 #4("qlist-*는 살아있는 코드")는 이 커밋으로 수명을 다했다.
+ *
+ * ━━━ 보존 계약 ━━━
+ * - 스크롤 체인: container(flex 컬럼, minHeight:0) → body(flex:1, minHeight:0, overflowY:auto).
+ *   한 군데만 빠져도 목록이 페이지 전체로 늘어나며 내부 스크롤이 죽는다(계약 #1).
+ * - `QuestionItem`의 `React.memo` 비교자(계약 #7). 600+ 문항에서 체크 하나에 전체가
+ *   리렌더되는 것을 막는다(REQ-P02-04). 비교 대상 prop을 늘리면 반드시 비교자도 같이 고칠 것.
  */
 import { useEffect, useState, useMemo, memo } from "react";
+
+import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
+import Alert from "@mui/material/Alert";
+import Checkbox from "@mui/material/Checkbox";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import CircularProgress from "@mui/material/CircularProgress";
+import { Icon } from "@iconify/react";
+
 import { getAllQuestions } from "../api/client";
 
 // 체크박스 하나만 토글해도 전체 목록이 리렌더되는 것을 막기 위해 항목을
@@ -17,15 +41,47 @@ const QuestionItem = memo(
   function QuestionItem({ q, pageNum, isSelected, onToggle }) {
     const displayTitle = q.title || (q.is_manual ? "(수동 문항)" : `문항 ${q.question_num}`);
     return (
-      <label className={`qlist-item${isSelected ? " qlist-item--checked" : ""}`}>
-        <input
-          type="checkbox"
+      <Box
+        component="label"
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 0.75,
+          px: 0.75,
+          py: 0.25,
+          borderRadius: 1,
+          cursor: "pointer",
+          flexShrink: 0,
+          transition: "background-color 0.1s",
+          bgcolor: isSelected ? "primary.lighter" : "transparent",
+          color: isSelected ? "primary.dark" : "text.primary",
+          "&:hover": { bgcolor: isSelected ? "primary.lighter" : "action.hover" },
+        }}
+      >
+        <Checkbox
+          size="small"
           checked={isSelected}
           onChange={() => onToggle?.({ ...q, _pageNum: pageNum })}
+          sx={{ p: 0.25, flexShrink: 0 }}
         />
-        <span className="qlist-item-label">{displayTitle}</span>
-        {q.is_manual && <span className="qlist-badge-manual">수동</span>}
-      </label>
+        <Typography
+          variant="caption"
+          noWrap
+          title={displayTitle}
+          sx={{ flex: 1, minWidth: 0, color: "inherit" }}
+        >
+          {displayTitle}
+        </Typography>
+        {q.is_manual && (
+          <Chip
+            label="수동"
+            size="small"
+            color="primary"
+            variant="outlined"
+            sx={{ fontSize: 10, height: 16, flexShrink: 0 }}
+          />
+        )}
+      </Box>
     );
   },
   (prev, next) => prev.isSelected === next.isSelected && prev.q.question_id === next.q.question_id,
@@ -51,6 +107,29 @@ function parsePageInput(input) {
     }
   });
   return pages;
+}
+
+/** 선택할 파일이 없을 때의 안내 (jobId 미지정) */
+function EmptyState({ children }) {
+  return (
+    <Box
+      sx={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 1.5,
+        p: 3,
+        color: "text.disabled",
+      }}
+    >
+      <Icon icon="material-symbols:checklist-rounded" style={{ fontSize: 40 }} />
+      <Typography variant="body2" color="text.secondary" textAlign="center">
+        {children}
+      </Typography>
+    </Box>
+  );
 }
 
 export default function QuestionListPanel({ jobId, selections = [], onToggle }) {
@@ -122,48 +201,61 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
 
   if (!jobId) {
     return (
-      <div className="qlist-loading">
+      <EmptyState>
         왼쪽 파일 목록에서<br />PDF를 선택하세요
-      </div>
+      </EmptyState>
     );
   }
 
   return (
-    <div className="qlist-container">
+    /* 스크롤 체인의 시작점 — flex 컬럼 + minHeight:0 (계약 #1) */
+    <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* 페이지 필터 — 텍스트 입력 */}
-      <div className="qlist-filter-wrap">
-        <div className="qlist-filter-input-row">
-          <input
-            className="qlist-page-input"
-            type="text"
-            placeholder={totalPages > 0 ? `페이지 입력 (1-${totalPages}) — 예: 1-5,8,10` : "페이지 입력 — 예: 1-5,8,10"}
-            value={pageInput}
-            onChange={(e) => setPageInput(e.target.value)}
-            onKeyDown={handlePageInputKeyDown}
-          />
-          {filterPages.size > 0 && (
-            <button
-              className="qlist-clear-filter"
-              onClick={handleClearFilter}
-              title="필터 초기화"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      </div>
+      <Box sx={{ px: 1, py: 0.75, borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
+        <TextField
+          size="small"
+          fullWidth
+          placeholder={totalPages > 0 ? `페이지 (1-${totalPages}) — 예: 1-5,8,10` : "페이지 — 예: 1-5,8,10"}
+          value={pageInput}
+          onChange={(e) => setPageInput(e.target.value)}
+          onKeyDown={handlePageInputKeyDown}
+          InputProps={{
+            endAdornment: filterPages.size > 0 && (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={handleClearFilter} title="필터 초기화" sx={{ p: 0.25 }}>
+                  <Icon icon="material-symbols:close-rounded" style={{ fontSize: 15 }} />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Box>
 
-      <div className="qlist-body">
-        {loading && <div className="qlist-loading">문항 목록 로딩 중...</div>}
-        {error   && <div className="qlist-loading" style={{ color: "var(--mui-palette-error-main)" }}>{error}</div>}
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 1, py: 0.75 }}>
+        {loading && (
+          <Box sx={{ py: 3, display: "flex", justifyContent: "center" }}>
+            <CircularProgress size={20} />
+          </Box>
+        )}
+
+        {error && <Alert severity="error" sx={{ py: 0, fontSize: 11 }}>{error}</Alert>}
 
         {!loading && !error && filteredGroups.length === 0 && (
-          <div className="qlist-empty">감지된 문항이 없습니다.</div>
+          <Typography variant="caption" color="text.disabled" align="center" sx={{ display: "block", py: 3 }}>
+            {filterPages.size > 0 ? "해당 페이지에 문항이 없습니다." : "감지된 문항이 없습니다."}
+          </Typography>
         )}
 
         {filteredGroups.map((group) => (
-          <div key={group.pageNum} className="qlist-page-group">
-            <div className="qlist-page-label">{group.pageNum + 1}페이지</div>
+          <Box key={group.pageNum} sx={{ mb: 1, flexShrink: 0 }}>
+            <Typography
+              variant="caption"
+              fontWeight={700}
+              color="text.secondary"
+              sx={{ display: "block", pt: 0.5, pb: 0.25, mb: 0.5, borderBottom: 1, borderColor: "divider" }}
+            >
+              {group.pageNum + 1}페이지
+            </Typography>
 
             {group.questions.map((q) => (
               <QuestionItem
@@ -174,9 +266,9 @@ export default function QuestionListPanel({ jobId, selections = [], onToggle }) 
                 onToggle={onToggle}
               />
             ))}
-          </div>
+          </Box>
         ))}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

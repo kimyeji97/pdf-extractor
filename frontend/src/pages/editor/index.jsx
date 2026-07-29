@@ -1,22 +1,18 @@
 /**
- * 문제집 편집 페이지 (Aurora MUI 레이아웃 적용)
+ * 문제집 편집 페이지
+ *
+ * 파일 선택 · 문항 선택 · 순서 편집 · 미리보기 4패널.
+ *
+ * REQ-D07 Phase 3-5에서 패널 어휘를 Phase 3-4(문항 분석 작업)와 맞추고
+ * **멀티 파일 선택을 화면에 드러냈다**(조건 ②). 선택은 원래부터 파일을 넘나들며
+ * 유지됐지만 — `handleJobSelect`가 jobId만 바꾸고 basket을 건드리지 않는다 —
+ * 화면에 그 흔적이 없어 기능이 없는 것처럼 보였다. 노출 지점은 세 곳:
+ *   1. 컨텍스트 바 요약 (N개 선택 · M개 파일)
+ *   2. 파일 목록 카드의 "N개 선택됨" 배지
+ *   3. 순서 편집 항목의 출처 색점 + 이름 (SelectionOrderPanel)
  */
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "react-router";
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
@@ -25,16 +21,15 @@ import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
-import Stack from "@mui/material/Stack";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
-import IconButton from "@mui/material/IconButton";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Icon } from "@iconify/react";
 
 import { clampCellScale } from "utils/workbookLayout";
 import FileListPanel from "components/FileListPanel";
 import QuestionListPanel from "components/QuestionListPanel";
+import SelectionOrderPanel from "components/SelectionOrderPanel";
 import WorkbookPreview from "components/WorkbookPreview";
 import {
   startExtractV2,
@@ -63,110 +58,6 @@ const ResizeHandle = ({ onMouseDown }) => (
   />
 );
 
-// ── DnD 정렬 아이템 ───────────────────────────────────
-function SortableItem({ item, index, onRemove }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.questionId });
-  const label =
-    item.displayTitle ||
-    (item.isManual ? "(수동 문항)" : `문항 ${item.questionNum}`) +
-      ` · ${item.pageNum + 1}p`;
-
-  return (
-    <Box
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 1,
-        px: 1.5,
-        py: 1,
-        bgcolor: isDragging ? "action.selected" : "background.paper",
-        borderBottom: 1,
-        borderColor: "divider",
-        opacity: isDragging ? 0.8 : 1,
-        boxShadow: isDragging ? 3 : 0,
-      }}
-    >
-      <Box
-        {...attributes}
-        {...listeners}
-        sx={{
-          cursor: "grab",
-          color: "text.disabled",
-          fontSize: 18,
-          lineHeight: 1,
-        }}
-      >
-        ⠿
-      </Box>
-      <Typography
-        variant="caption"
-        sx={{ color: "text.secondary", minWidth: 20, textAlign: "center" }}
-      >
-        {index + 1}
-      </Typography>
-      {item.thumbnailUrl ? (
-        <Box
-          component="img"
-          src={`${API_ROOT}${item.thumbnailUrl}`}
-          alt={label}
-          draggable={false}
-          sx={{
-            width: 36,
-            height: 36,
-            objectFit: "cover",
-            borderRadius: 0.5,
-            border: 1,
-            borderColor: "divider",
-          }}
-        />
-      ) : (
-        <Box
-          sx={{
-            width: 36,
-            height: 36,
-            bgcolor: "action.hover",
-            borderRadius: 0.5,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 16,
-          }}
-        >
-          ✏️
-        </Box>
-      )}
-      <Typography
-        variant="caption"
-        sx={{
-          flex: 1,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-        title={label}
-      >
-        {label}
-      </Typography>
-      <IconButton
-        size="small"
-        onClick={() => onRemove(item.questionId)}
-        sx={{ color: "error.main", p: 0.25 }}
-      >
-        <Icon icon="material-symbols:close-rounded" style={{ fontSize: 16 }} />
-      </IconButton>
-    </Box>
-  );
-}
-
 export default function EditorPage() {
   const { state } = useLocation();
   const initialWorkbookId = state?.initialWorkbookId ?? null;
@@ -194,10 +85,6 @@ export default function EditorPage() {
   });
   const resizingRef = useRef(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-  );
-
   // REQ-20 복원 + 표지 목록 로드 — 서로 독립적이라 병렬 호출 (REQ-P02-06)
   useEffect(() => {
     Promise.all([
@@ -221,6 +108,7 @@ export default function EditorPage() {
               pageNum: s.page_num,
               jobId: s.job_id,
               workbookName: s.workbook_name || "",
+              sourceFilename: s.source_filename || "",
               // 썸네일 URL은 결정적이라 저장할 필요 없이 여기서 조립한다.
               // (저장된 selections에는 썸네일 필드가 없어 예전에는 null로 두었고,
               //  그 탓에 생성 이력 → 편집 복원 시 이미지가 전부 비어 있었다)
@@ -295,6 +183,7 @@ export default function EditorPage() {
             pageNum: q._pageNum,
             jobId,
             workbookName: selectedWorkbookName,
+            sourceFilename: selectedJobFilename || "",
             thumbnailUrl: q.thumbnail_url,
             isManual: q.is_manual,
             manualId: q.manual_id,
@@ -304,7 +193,7 @@ export default function EditorPage() {
         ];
       });
     },
-    [jobId, selectedWorkbookName],
+    [jobId, selectedWorkbookName, selectedJobFilename],
   );
 
   // 미리보기 셀에서 문항별 배율 조절 (좌상단 고정) — PDF 생성에도 그대로 전달된다.
@@ -320,20 +209,20 @@ export default function EditorPage() {
     );
   }, []);
 
-  const removeFromBasket = (qId) =>
-    setBasket((prev) => prev.filter((b) => b.questionId !== qId));
+  const removeFromBasket = useCallback(
+    (qId) => setBasket((prev) => prev.filter((b) => b.questionId !== qId)),
+    [],
+  );
+  const clearBasket = useCallback(() => setBasket([]), []);
 
-  const handleDragEnd = ({ active, over }) => {
-    if (over && active.id !== over.id) {
-      setBasket((prev) =>
-        arrayMove(
-          prev,
-          prev.findIndex((b) => b.questionId === active.id),
-          prev.findIndex((b) => b.questionId === over.id),
-        ),
-      );
-    }
-  };
+  // 멀티 파일 선택 노출(조건 ②) — 파일 목록 배지와 컨텍스트 바 요약이 함께 쓴다.
+  // 개수 판정은 이름이 아니라 jobId로 한다(이름이 비어 있는 예전 저장분이 있다).
+  const selectedCounts = useMemo(() => {
+    const counts = {};
+    for (const b of basket) counts[b.jobId] = (counts[b.jobId] || 0) + 1;
+    return counts;
+  }, [basket]);
+  const sourceFileCount = Object.keys(selectedCounts).length;
 
   const INVALID_CHARS = /[/\\:*?"<>|]/;
   const handleGenerate = async () => {
@@ -399,6 +288,7 @@ export default function EditorPage() {
                   manual_id: b.isManual ? b.manualId : undefined,
                   title: b.displayTitle,
                   workbook_name: b.workbookName || undefined,
+                  source_filename: b.sourceFilename || undefined,
                   scale: b.scale ?? 1,
                 })),
               });
@@ -436,8 +326,9 @@ export default function EditorPage() {
         overflow: "hidden",
       }}
     >
-      {/* 컨텍스트 바 */}
-      {selectedJobFilename && (
+      {/* 컨텍스트 바 — 현재 작업 중인 파일 + 선택 요약.
+          선택이 있으면 파일을 아직 안 골랐어도 요약은 띄운다(생성 이력에서 복원한 경우). */}
+      {(selectedJobFilename || basket.length > 0) && (
         <Box
           sx={{
             px: 2.5,
@@ -451,16 +342,31 @@ export default function EditorPage() {
             flexShrink: 0,
           }}
         >
-          <Icon
-            icon="material-symbols:description-outline-rounded"
-            style={{ fontSize: 16 }}
-          />
-          <Typography variant="caption" color="primary.main" fontWeight={600}>
-            {selectedJobFilename}
-          </Typography>
+          {selectedJobFilename && (
+            <>
+              <Icon
+                icon="material-symbols:description-outline-rounded"
+                style={{ fontSize: 16 }}
+              />
+              <Typography
+                variant="caption"
+                color="primary.main"
+                fontWeight={600}
+                noWrap
+                title={selectedJobFilename}
+                sx={{ maxWidth: 320 }}
+              >
+                {selectedWorkbookName || selectedJobFilename}
+              </Typography>
+            </>
+          )}
           {basket.length > 0 && (
             <Chip
-              label={`${basket.length}개 선택`}
+              label={
+                sourceFileCount > 1
+                  ? `${basket.length}개 선택 · ${sourceFileCount}개 파일`
+                  : `${basket.length}개 선택`
+              }
               size="small"
               color="primary"
             />
@@ -469,7 +375,7 @@ export default function EditorPage() {
       )}
 
       <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
-        {/* ① 파일 목록 */}
+        {/* 파일 선택 */}
         <Paper
           elevation={0}
           sx={{
@@ -485,18 +391,32 @@ export default function EditorPage() {
         >
           <Box
             sx={{
-              px: 2.5,
+              px: 2,
               py: 1.25,
               borderBottom: 1,
               borderColor: "divider",
               display: "flex",
               alignItems: "center",
               gap: 1,
+              flexShrink: 0,
             }}
           >
-            <Typography variant="subtitle2" fontWeight={700}>
-              ① 파일 선택
+            <Icon
+              icon="material-symbols:folder-open-outline-rounded"
+              style={{ fontSize: 18, flexShrink: 0 }}
+            />
+            <Typography variant="subtitle2" fontWeight={700} noWrap>
+              파일 선택
             </Typography>
+            {sourceFileCount > 1 && (
+              <Chip
+                label={`${sourceFileCount}개 파일`}
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ fontSize: 10, height: 18 }}
+              />
+            )}
           </Box>
           <Box
             sx={{
@@ -505,19 +425,22 @@ export default function EditorPage() {
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
+              px: 1.5,
+              pt: 1,
             }}
           >
             <FileListPanel
               selectedJobId={jobId}
               onSelect={handleJobSelect}
               refreshTrigger={refreshTrigger}
+              selectedCounts={selectedCounts}
             />
           </Box>
         </Paper>
 
         <ResizeHandle onMouseDown={(e) => startResize("files", e)} />
 
-        {/* ② 문항 목록 */}
+        {/* 문항 선택 */}
         <Paper
           elevation={0}
           sx={{
@@ -540,15 +463,23 @@ export default function EditorPage() {
               display: "flex",
               alignItems: "center",
               gap: 1,
+              flexShrink: 0,
             }}
           >
-            <Typography variant="subtitle2" fontWeight={700}>
-              ② 문항 선택
+            <Icon
+              icon="material-symbols:checklist-rounded"
+              style={{ fontSize: 18, flexShrink: 0 }}
+            />
+            <Typography variant="subtitle2" fontWeight={700} noWrap>
+              문항 선택
             </Typography>
-            {jobId && (
-              <Typography variant="caption" color="text.secondary">
-                체크하여 추가
-              </Typography>
+            {jobId && selectedCounts[jobId] > 0 && (
+              <Chip
+                label={`${selectedCounts[jobId]}개`}
+                size="small"
+                color="primary"
+                sx={{ fontSize: 10, height: 18 }}
+              />
             )}
           </Box>
           <Box
@@ -570,7 +501,7 @@ export default function EditorPage() {
 
         <ResizeHandle onMouseDown={(e) => startResize("qlist", e)} />
 
-        {/* ③ 순서 편집 (DnD) */}
+        {/* 순서 편집 (DnD) — 멀티 파일 출처 표시 포함 */}
         <Paper
           elevation={0}
           sx={{
@@ -584,86 +515,17 @@ export default function EditorPage() {
             borderColor: "divider",
           }}
         >
-          <Box
-            sx={{
-              px: 2,
-              py: 1.25,
-              borderBottom: 1,
-              borderColor: "divider",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Typography variant="subtitle2" fontWeight={700}>
-              ③ 순서 편집
-            </Typography>
-            {basket.length > 0 && (
-              <Button
-                size="small"
-                color="error"
-                onClick={() => setBasket([])}
-                sx={{ fontSize: 11, minWidth: 0 }}
-              >
-                전체 제거
-              </Button>
-            )}
-          </Box>
-          <Box
-            sx={{
-              px: 2,
-              py: 0.75,
-              borderBottom: 1,
-              borderColor: "divider",
-              flexShrink: 0,
-            }}
-          >
-            <Chip
-              label={`${basket.length}개 선택됨`}
-              size="small"
-              variant="outlined"
-            />
-          </Box>
-          <Box sx={{ flex: 1, overflowY: "auto" }}>
-            {basket.length === 0 ? (
-              <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
-                <Icon
-                  icon="material-symbols:playlist-add-rounded"
-                  style={{ fontSize: 36 }}
-                />
-                <Typography variant="caption" display="block" mt={1}>
-                  ②에서 문항을 체크하면
-                  <br />
-                  여기에 추가됩니다.
-                </Typography>
-              </Box>
-            ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={basket.map((b) => b.questionId)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {basket.map((item, idx) => (
-                    <SortableItem
-                      key={item.questionId}
-                      item={item}
-                      index={idx}
-                      onRemove={removeFromBasket}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
-            )}
-          </Box>
+          <SelectionOrderPanel
+            items={basket}
+            onReorder={setBasket}
+            onRemove={removeFromBasket}
+            onClear={clearBasket}
+          />
         </Paper>
 
         <ResizeHandle onMouseDown={(e) => startResize("basket", e)} />
 
-        {/* ④ 미리보기 + 컨트롤 */}
+        {/* 미리보기 + 컨트롤 */}
         <Paper
           elevation={0}
           sx={{
@@ -675,7 +537,10 @@ export default function EditorPage() {
             borderRadius: 0,
           }}
         >
-          {/* 파일명 바 */}
+          {/* 패널 헤더 겸 파일명 바.
+              아이콘 색은 상속(currentColor)에 맡긴다 — 여기 있던
+              `var(--aurora-palette-text-secondary)`는 Phase 1에서 Aurora 테마를
+              걷어내며 사라진 변수라 이미 아무 색도 먹지 않고 있었다. */}
           <Box
             sx={{
               px: 2,
@@ -690,10 +555,7 @@ export default function EditorPage() {
           >
             <Icon
               icon="material-symbols:edit-document-outline-rounded"
-              style={{
-                fontSize: 18,
-                color: "var(--aurora-palette-text-secondary)",
-              }}
+              style={{ fontSize: 18, flexShrink: 0 }}
             />
             <TextField
               size="small"
