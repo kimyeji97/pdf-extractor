@@ -16,29 +16,36 @@ import Typography from "@mui/material/Typography";
 import { Icon } from "@iconify/react";
 
 import { getStats } from "api/client";
+import { tintSx } from "theme/tint";
 
-// 배경은 팔레트의 lighter 계열을 쓴다 — 하드코딩 hex를 넣으면 다크 모드(REQ-D08)에서 튄다.
+/**
+ * ⚠️ 색조 배경에 `*.lighter` / `*.darker`를 쓰지 말 것 (REQ-D08에서 실제로 겪음).
+ *
+ * `palette.ts`의 `basePalette`(primary·success·warning·…)는 **light와 dark가 공유**한다.
+ * 모드별로 갈리는 것은 text·background·action 셋뿐이다. 그래서 `primary.lighter`는
+ * 다크에서도 `#D0ECFE` 그대로라 **어두운 화면에 파스텔 타일 3장이 박힌다.**
+ * 종전 주석은 "lighter를 쓰면 다크에서 안전하다"고 적혀 있었지만 사실이 아니었다.
+ *
+ * → `theme/tint.js`의 `tintSx`를 쓴다 (main 채널 알파 + 모드별 글자색).
+ */
 const TILES = [
   {
     key: "source_count",
     label: "업로드한 문제집",
     icon: "material-symbols:library-books-outline-rounded",
-    bg: "primary.lighter",
-    fg: "primary.dark",
+    color: "primary",
   },
   {
     key: "question_count",
     label: "감지된 문항",
     icon: "material-symbols:checklist-rounded",
-    bg: "success.lighter",
-    fg: "success.dark",
+    color: "success",
   },
   {
     key: "workbook_count",
     label: "생성한 문제집",
     icon: "material-symbols:picture-as-pdf-outline-rounded",
-    bg: "warning.lighter",
-    fg: "warning.dark",
+    color: "warning",
   },
 ];
 
@@ -68,7 +75,7 @@ export default function StatCards({ refreshTrigger = 0 }) {
         <Paper
           key={t.key}
           elevation={0}
-          sx={{
+          sx={(theme) => ({
             // 넓은 화면에서 카드 3장이 폭을 다 먹으면 숫자 사이 여백만 커져 읽기 나빠진다.
             // 좌측에 모아 두고 최대 폭을 묶는다.
             flex: "1 1 180px",
@@ -80,10 +87,9 @@ export default function StatCards({ refreshTrigger = 0 }) {
             alignItems: "center",
             gap: 1.5,
             borderRadius: 2,
-            bgcolor: t.bg,
-            color: t.fg,
-            boxShadow: (theme) => theme.customShadows?.card,
-          }}
+            boxShadow: theme.customShadows?.card,
+            ...tintSx(t.color)(theme),
+          })}
         >
           <Icon icon={t.icon} style={{ fontSize: 28, flexShrink: 0, opacity: 0.85 }} />
           <Box sx={{ minWidth: 0 }}>

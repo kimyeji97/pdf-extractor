@@ -13,6 +13,8 @@
  */
 import { useState } from 'react';
 
+import { varAlpha } from 'minimal-shared/utils';
+
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import Typography from '@mui/material/Typography';
@@ -217,7 +219,8 @@ export default function BookCard({
               sx={{
                 position: 'absolute',
                 inset: 0,
-                bgcolor: 'rgba(255,255,255,0.6)',
+                // 흰 딤은 다크에서 카드가 오히려 밝아진다 — 카드 지면색을 알파로 덮는다 (REQ-D08)
+                bgcolor: (t) => varAlpha(t.vars.palette.background.paperChannel, 0.6),
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

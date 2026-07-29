@@ -30,6 +30,7 @@ import QuestionAnalysisPanel from "components/QuestionAnalysisPanel";
 import PdfPreviewPanel from "components/PdfPreviewPanel";
 import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
 import { getPages, refreshJobQuestions, getJobInfo, addManualQuestion, getAllQuestions } from "api/client";
+import { tintBg } from "theme/tint";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
 
@@ -294,6 +295,7 @@ export default function AnalysisWorkPage() {
             position: "absolute",
             left: dragBox.left, top: dragBox.top, width: dragBox.width, height: dragBox.height,
             border: "2px dashed", borderColor: "primary.main",
+            // 항상 흰 PDF 지면 위에 그려지므로 다크에서도 밝은 색조를 유지한다 (REQ-D08 §3)
             bgcolor: "primary.lighter", opacity: 0.6, pointerEvents: "none",
           }} />
         )}
@@ -305,6 +307,7 @@ export default function AnalysisWorkPage() {
             width:  (pendingRegion.pt.x1 - pendingRegion.pt.x0) * scale,
             height: (pendingRegion.pt.y1 - pendingRegion.pt.y0) * scale,
             border: "2px solid", borderColor: "primary.main",
+            // 위와 동일 — 흰 지면 위 오버레이 (REQ-D08 §3)
             bgcolor: "primary.lighter", opacity: 0.5, pointerEvents: "none",
           }} />
         )}
@@ -420,14 +423,15 @@ export default function AnalysisWorkPage() {
                     // 오탐 의심 문항이 있는 페이지는 좌측 띠 + 옅은 배경으로 표시
                     borderLeft: 3,
                     borderLeftColor: fpCount > 0 ? "warning.main" : "transparent",
+                    // 색조는 tintBg로 — `*.lighter`는 두 모드가 공유해 다크에서 파스텔이 된다 (REQ-D08)
                     bgcolor: isSelected
-                      ? "primary.lighter"
-                      : fpCount > 0 ? "warning.lighter" : "transparent",
+                      ? tintBg("primary")
+                      : fpCount > 0 ? tintBg("warning") : "transparent",
                     transition: "background-color 0.15s",
                     "&:hover": {
                       bgcolor: isSelected
-                        ? "primary.lighter"
-                        : fpCount > 0 ? "warning.lighter" : "action.hover",
+                        ? tintBg("primary")
+                        : fpCount > 0 ? tintBg("warning") : "action.hover",
                     },
                   }}
                 >

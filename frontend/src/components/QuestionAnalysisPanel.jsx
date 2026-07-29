@@ -25,6 +25,8 @@ import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import { Icon } from "@iconify/react";
 
+import { tintBg, tintSx } from "theme/tint";
+
 import {
   getPageQuestions,
   updateQuestionTitle,
@@ -91,7 +93,7 @@ const QuestionCard = memo(
           // 축소를 명시적으로 막는다.
           flexShrink: 0,
           transition: "border-color 0.15s, box-shadow 0.15s",
-          ...(fp && { borderColor: "warning.light", bgcolor: "warning.lighter" }),
+          ...(fp && { borderColor: "warning.light", bgcolor: tintBg("warning") }),
           ...(isChecked && { borderColor: "primary.main", boxShadow: (t) => `0 0 0 1px ${t.palette.primary.main}` }),
           "&:hover": { borderColor: isChecked ? "primary.main" : "text.disabled" },
         }}
@@ -156,7 +158,7 @@ const QuestionCard = memo(
           <Typography
             variant="caption"
             component="p"
-            sx={{ px: 1.25, py: 0.75, color: "warning.darker", bgcolor: "warning.lighter", lineHeight: 1.4 }}
+            sx={(theme) => ({ px: 1.25, py: 0.75, lineHeight: 1.4, ...tintSx("warning")(theme) })}
           >
             오탐지일 수 있습니다. 문항 이미지를 확인 후 필요하면 삭제하세요.
           </Typography>

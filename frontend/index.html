@@ -8,6 +8,37 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <!-- 폰트는 fontsource 패키지로 자체 호스팅한다 (main.tsx). 외부 CDN 의존 없음 — REQ-D07 -->
+
+    <!--
+      REQ-D08 사전 페인트 스크립트.
+
+      번들(약 495KB)이 로드되기 전까지 문서는 비어 있고 캔버스는 브라우저 기본 흰색이다.
+      다크 사용자는 그동안 **흰 화면을 본 뒤 어두워진다**(FOUC). 테마 프로바이더는
+      React가 마운트된 뒤에야 색을 칠하므로 이 구간을 못 막는다. 그래서 파싱 시점에
+      직접 속성과 배경만 먼저 심는다.
+
+      ⚠️ 아래 세 가지는 앱 쪽과 **짝**이다. 한쪽만 바꾸면 조용히 FOUC가 되살아난다:
+        · `mui-mode`          ← MUI ThemeProvider의 modeStorageKey 기본값
+        · `data-color-scheme` ← theme-config.ts의 cssVariables.colorSchemeSelector
+        · #141A21 / #F9FAFB   ← theme-config.ts의 grey[900] / grey[100]
+                                (= palette.ts의 background.dark/light.default)
+    -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem('mui-mode') || 'system';
+          var dark =
+            mode === 'dark' ||
+            (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          root.setAttribute('data-color-scheme', dark ? 'dark' : 'light');
+          root.style.colorScheme = dark ? 'dark' : 'light';
+          root.style.backgroundColor = dark ? '#141A21' : '#F9FAFB';
+        } catch (e) {
+          /* localStorage 차단(시크릿·정책) 시엔 그냥 라이트로 시작한다 */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

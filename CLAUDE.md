@@ -304,9 +304,10 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
 조회는 `/progress [오늘|어제|금주|전주|N일|REQ번호]`, 기록은 `/checkpoint`.
 
 - 미래 작업(아직 REQ 번호 없음): `docs/예정된작업.md`
-- 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~3 + **2안 적용 범위 정렬 완료**(스펙 §4-2).
-  남은 것은 Phase 4 잔여 기능(D08 다크모드 · F09 알림 · REQ-27 로그인)
-  (상세: [D07 스펙](docs/specs/20260725-REQ-D07-minimal-template-adoption.md) §4-1)
+- 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~4 완료(스펙 §4-2).
+  **REQ-D08(라이트/다크 모드) 완료** — 남은 것은 F09 알림 · REQ-27 로그인
+  (상세: [D07 스펙](docs/specs/20260725-REQ-D07-minimal-template-adoption.md) §4-1,
+  [D08 스펙](docs/specs/20260729-REQ-D08-dark-mode.md))
 
 ## 계약 (깨면 회귀하는 것들)
 
@@ -348,6 +349,15 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     높이 체인 래퍼가 한 겹 늘어나는데, 화면마다 손으로 쓰면 계약 #1이 깨지는 지점이 4곳이 된다.
     카드 사이 여백은 `CardResizeHandle`이 만든다 — `CardRow`에 `gap`을 같이 걸면 간격이 두 배가 된다.
     (REQ-D07 Phase 4)
+20. **팔레트의 `*.lighter`·`*.darker`·`*.main`은 라이트/다크가 공유한다** — 모드별로 갈리는 것은
+    `text`·`background`·`action` 셋뿐이다(`palette.ts`의 `basePalette`는 공유). 그래서 선택·활성
+    강조 배경에 `primary.lighter`를 쓰면 **다크에서 어두운 화면에 파스텔 블록이 박힌다.**
+    하드코딩 hex가 아니라 **정상 토큰을 썼는데 깨지므로 grep으로 안 잡히고**, 콘솔·빌드도 조용하다.
+    → 색조 배경은 `theme/tint.js`의 **`tintBg`/`tintSx`/`tintFg`**를 쓴다(main 채널 알파 + 모드별 글자색).
+    **예외는 "흰 지면 위"에 그려지는 것뿐**(`work.jsx`의 드래그 오버레이) — 종이는 다크에서도 희다.
+    ⚠️ `tintSx`/`tintFg`는 **함수를 반환**한다. 객체 sx에 `...tintSx('primary')`로 스프레드하면
+    **아무것도 안 들어가고 에러도 안 난다** — `sx={(theme) => ({ ...tintSx('primary')(theme) })}`.
+    (REQ-D08. 계약 #18과 같은 "조용히 틀린 색" 계열)
 
 ### PDF 뷰어
 
@@ -376,6 +386,11 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     `frontend/src/utils/workbookLayout.js`.
 14. **`WorkbookPreview`의 `PAPER` 색은 토큰화하지 않는다** — UI 색이 아니라 생성될 PDF 지면을
     재현한 값이고 `pdf_service`의 라벨 배경과 짝을 이룬다.
+21. **`index.html`의 사전 페인트 스크립트는 테마 설정과 3중으로 묶여 있다** — 저장 키 `mui-mode`
+    (MUI `modeStorageKey` 기본값) · 속성명 `data-color-scheme`(`theme-config.ts`의
+    `colorSchemeSelector`) · 배경 hex `#141A21`/`#F9FAFB`(`grey[900]`/`grey[100]`).
+    한쪽만 바꾸면 **에러 없이 다크 사용자에게 흰 화면이 번쩍인다**(FOUC). 번들 로드 전 구간은
+    테마 프로바이더가 못 막으므로 이 스크립트가 유일한 방어선이다. (REQ-D08)
 
 ### 데이터
 

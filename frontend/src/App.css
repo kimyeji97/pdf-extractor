@@ -30,6 +30,12 @@ body {
 
 /* ━━━ WorkbookPreview (wbp-*) ━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
+/* ⚠️ REQ-D08 — 이 블록의 색은 **일부러 토큰화하지 않는다.**
+   여기 그려지는 것은 UI가 아니라 **생성될 PDF 지면**이다. 다크 모드에서도 종이는 흰색이어야
+   하고, 셀 배경·라벨색은 백엔드 `pdf_service`가 그리는 값과 짝이다(계약 #13·#14, D07 §8 #5).
+   배율 조절 오버레이(.wbp-scale-*)도 **흰 종이 위에 떠 있으므로** 지면 기준으로 밝게 둔다.
+   예외는 `.wbp-empty` 하나 — 지면이 아니라 지면을 담는 캔버스의 빈 상태라 테마를 따른다. */
+
 /* A4 페이지 카드 */
 .wbp-page {
   position: relative;
@@ -111,14 +117,19 @@ body {
   font-size: 10px;
   color: #cbd5e1;
 }
+/* 지면이 아니라 캔버스의 빈 상태 — 테마를 따른다 (REQ-D08) */
 .wbp-empty {
-  color: #94a3b8;
+  color: var(--palette-text-disabled);
   font-size: 13px;
   text-align: center;
   padding: 32px;
 }
 
 /* ━━━ PdfPreviewPanel (pdf-*) ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* REQ-D08 — 뷰어 **크롬**(툴바·여백·상태 텍스트)은 테마를 따르고,
+   실제 PDF 페이지가 그려지는 `.pdf-page-wrapper`의 흰 바탕만 유지한다.
+   판별 기준: "이것이 종이인가, 종이를 담는 도구인가?" */
 
 .pdf-viewer {
   display: flex;
@@ -133,8 +144,8 @@ body {
   justify-content: center;
   gap: 8px;
   padding: 6px 14px;
-  border-bottom: 1px solid #e4e8ef;
-  background: #f8fafc;
+  border-bottom: 1px solid var(--palette-divider);
+  background: var(--palette-background-neutral);
   flex-shrink: 0;
 }
 .pdf-toolbar-group {
@@ -145,7 +156,7 @@ body {
 .pdf-toolbar-divider {
   width: 1px;
   height: 20px;
-  background: #d0d6e0;
+  background: var(--palette-divider);
   margin: 0 6px;
 }
 .pdf-toolbar-btn {
@@ -154,18 +165,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d0d6e0;
+  border: 1px solid var(--palette-divider);
   border-radius: 5px;
-  background: #fff;
+  background: var(--palette-background-paper);
   cursor: pointer;
   font-size: 13px;
-  color: #334155;
+  color: var(--palette-text-primary);
   transition: all 0.1s;
 }
 .pdf-toolbar-btn:hover:not(:disabled) {
-  background: #f0f4fb;
-  border-color: #4a90e2;
-  color: #2563eb;
+  background: var(--palette-action-hover);
+  border-color: var(--palette-primary-main);
+  color: var(--palette-primary-main);
 }
 .pdf-toolbar-btn:disabled {
   opacity: 0.35;
@@ -174,7 +185,7 @@ body {
 .pdf-toolbar-scale {
   font-size: 12px;
   font-weight: 600;
-  color: #334155;
+  color: var(--palette-text-primary);
   min-width: 40px;
   text-align: center;
 }
@@ -183,17 +194,19 @@ body {
   padding: 3px 4px;
   font-size: 12px;
   text-align: center;
-  border: 1px solid #d0d6e0;
+  border: 1px solid var(--palette-divider);
   border-radius: 4px;
   outline: none;
-  color: #334155;
+  /* input은 UA 기본 배경이 흰색이라 다크에서 배경을 명시하지 않으면 흰 칸이 남는다 */
+  background: var(--palette-background-paper);
+  color: var(--palette-text-primary);
 }
 .pdf-page-input:focus {
-  border-color: #4a90e2;
+  border-color: var(--palette-primary-main);
 }
 .pdf-toolbar-page-total {
   font-size: 12px;
-  color: #64748b;
+  color: var(--palette-text-secondary);
 }
 
 .pdf-scroll-container {
@@ -203,19 +216,22 @@ body {
   flex-direction: column;
   align-items: center;
   padding: 12px 0;
-  background: #e5e7eb;
+  /* 지면을 담는 여백. 알파를 쓰면 라이트에선 회색, 다크에선 배경보다 살짝 밝은 홈이 되어
+     양쪽 모두에서 흰 페이지가 떠 보인다 (고정 회색은 다크에서 여백이 더 밝아진다) */
+  background: rgba(var(--palette-grey-500Channel) / 0.16);
 }
 .pdf-scroll-container::-webkit-scrollbar {
   width: 6px;
 }
 .pdf-scroll-container::-webkit-scrollbar-thumb {
-  background: #bcc3ce;
+  background: rgba(var(--palette-grey-500Channel) / 0.48);
   border-radius: 4px;
 }
 
 .pdf-page-wrapper {
   margin-bottom: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  /* 실제 PDF 페이지가 그려지는 바탕 — 지면이므로 다크에서도 흰색 (REQ-D08 §3) */
   background: #fff;
   line-height: 0;
   /* REQ-F07: 수동 추가 오버레이(absolute; inset:0)가 각 페이지에 앵커되도록.
@@ -229,10 +245,10 @@ body {
   text-align: center;
   padding: 40px 16px;
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--palette-text-disabled);
 }
 .pdf-error {
-  color: #dc2626;
+  color: var(--palette-error-main);
 }
 .pdf-empty {
   flex: 1;
@@ -240,7 +256,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #94a3b8;
+  color: var(--palette-text-disabled);
   gap: 8px;
 }
 .pdf-empty-icon {
@@ -253,6 +269,7 @@ body {
 
 /* ━━━ 전역 API 딤 오버레이 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
+/* 검은 스크림 + 흰 스피너는 두 모드 모두에서 성립하므로 토큰화하지 않는다 (REQ-D08) */
 .global-dim {
   position: fixed;
   inset: 0;
@@ -274,8 +291,14 @@ body {
 
 /* ━━━ 이미지 스켈레톤 (shimmer) ━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
+/* 고정 밝은 회색 그라디언트는 다크에서 **번쩍이는 흰 막대**가 된다 — 알파로 바꿔 양쪽 대응 */
 .img-skeleton {
-  background: linear-gradient(90deg, #e8edf5 25%, #f2f5fa 50%, #e8edf5 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--palette-grey-500Channel) / 0.16) 25%,
+    rgba(var(--palette-grey-500Channel) / 0.08) 50%,
+    rgba(var(--palette-grey-500Channel) / 0.16) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.2s infinite;
   border-radius: 4px;

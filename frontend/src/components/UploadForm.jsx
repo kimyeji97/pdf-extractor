@@ -4,6 +4,8 @@ import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import { Icon } from "@iconify/react";
 
+import { tintBg } from "theme/tint";
+
 const MAX_SIZE_MB = 10;
 
 export default function UploadForm({ onFileSelected, selectedFile, disabled }) {
@@ -50,12 +52,13 @@ export default function UploadForm({ onFileSelected, selectedFile, disabled }) {
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center", gap: 1,
           cursor: disabled ? "not-allowed" : "pointer",
-          bgcolor: active ? "primary.lighter" : selectedFile ? "success.lighter" : "background.paper",
+          // `*.lighter`는 두 모드가 공유해 다크에서 파스텔로 남는다 → tintBg (REQ-D08)
+          bgcolor: active ? tintBg("primary") : selectedFile ? tintBg("success") : "background.paper",
           transition: "all 0.2s",
           userSelect: "none",
           "&:hover": disabled ? {} : {
             borderColor: "primary.main",
-            bgcolor: "primary.lighter",
+            bgcolor: tintBg("primary"),
           },
         }}
       >

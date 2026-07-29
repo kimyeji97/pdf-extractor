@@ -33,6 +33,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import { Icon } from "@iconify/react";
 
 import { getAllQuestions } from "../api/client";
+import { tintBg, tintFg } from "theme/tint";
 
 // 체크박스 하나만 토글해도 전체 목록이 리렌더되는 것을 막기 위해 항목을
 // 별도 컴포넌트로 분리하고 memo 처리한다 (REQ-P02-04). 대량 문항(600+)에서
@@ -43,7 +44,7 @@ const QuestionItem = memo(
     return (
       <Box
         component="label"
-        sx={{
+        sx={(theme) => ({
           display: "flex",
           alignItems: "center",
           gap: 0.75,
@@ -53,10 +54,11 @@ const QuestionItem = memo(
           cursor: "pointer",
           flexShrink: 0,
           transition: "background-color 0.1s",
-          bgcolor: isSelected ? "primary.lighter" : "transparent",
-          color: isSelected ? "primary.dark" : "text.primary",
-          "&:hover": { bgcolor: isSelected ? "primary.lighter" : "action.hover" },
-        }}
+          // `*.lighter`/`*.dark`는 두 모드가 공유한다 → tint 헬퍼로 모드별 대응 (REQ-D08)
+          ...(isSelected ? tintFg("primary")(theme) : { color: "text.primary" }),
+          bgcolor: isSelected ? tintBg("primary")(theme) : "transparent",
+          "&:hover": { bgcolor: isSelected ? tintBg("primary")(theme) : "action.hover" },
+        })}
       >
         <Checkbox
           size="small"

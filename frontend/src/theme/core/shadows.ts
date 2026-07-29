@@ -2,7 +2,7 @@ import type { Shadows } from '@mui/material/styles';
 
 import { varAlpha } from 'minimal-shared/utils';
 
-import { grey } from './palette';
+import { grey, common } from './palette';
 
 import type { ThemeColorScheme } from '../types';
 
@@ -44,4 +44,6 @@ function createShadows(colorChannel: string): Shadows {
 
 export const shadows: Partial<Record<ThemeColorScheme, Shadows>> = {
   light: createShadows(grey['500Channel']),
+  // 다크에서는 회색 그림자가 밝은 배경 전제라 안 보인다 — 검정 채널을 쓴다 (템플릿 원본과 동일)
+  dark: createShadows(common.blackChannel),
 };

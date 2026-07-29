@@ -22,6 +22,7 @@ import { Icon } from "@iconify/react";
 import { listJobs } from "../api/client";
 import usePaginatedList from "../hooks/usePaginatedList";
 import useDebouncedValue from "../hooks/useDebouncedValue";
+import { tintBg } from "theme/tint";
 
 // 상태 → MUI 시맨틱 컬러 (하드코딩 hex 대신 팔레트를 쓴다)
 const STATUS_CHIP = {
@@ -77,7 +78,7 @@ function JobCard({ job, isSelected, selectedCount = 0, onSelect }) {
         flexShrink: 0,   // 계약 #5 — flex 컬럼 안에서 카드가 축소되지 않게
         border: 1,
         borderColor: isSelected ? "primary.main" : "divider",
-        bgcolor: isSelected ? "primary.lighter" : "background.paper",
+        bgcolor: isSelected ? tintBg("primary") : "background.paper",
         transition: "border-color .15s, background-color .15s",
         "&:hover": { borderColor: isSelected ? "primary.main" : "text.disabled" },
       }}

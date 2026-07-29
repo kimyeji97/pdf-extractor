@@ -10,6 +10,8 @@ import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import { useTheme } from '@mui/material/styles';
 
+import ColorSchemeMenu from 'components/ColorSchemeMenu';
+
 import { NavMobile, NavDesktop } from './nav';
 import { navData } from './nav-config';
 import { dashboardLayoutVars } from './css-vars';
@@ -103,8 +105,10 @@ export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery 
         </>
       ),
       rightArea: (
-        // 추가 예정 기능 자리 — 다크 토글(REQ-D08) · 알림(REQ-F09) · 계정(REQ-27)
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }} />
+        // 추가 예정 기능 자리 — 알림(REQ-F09) · 계정(REQ-27)
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
+          <ColorSchemeMenu />
+        </Box>
       ),
     };
 

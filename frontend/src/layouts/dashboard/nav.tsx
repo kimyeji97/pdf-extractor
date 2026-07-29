@@ -13,6 +13,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import Drawer, { drawerClasses } from '@mui/material/Drawer';
 
 import Logo from 'components/common/Logo';
+import { tintSx } from 'theme/tint';
 
 import { navData, type NavItem } from './nav-config';
 
@@ -109,7 +110,7 @@ function WorkspaceSelector() {
         })}
       >
         <Box
-          sx={{
+          sx={(theme) => ({
             width: 24,
             height: 24,
             flexShrink: 0,
@@ -117,11 +118,11 @@ function WorkspaceSelector() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            bgcolor: 'primary.lighter',
-            color: 'primary.dark',
+            // `*.lighter`/`*.dark`는 두 색상 스킴이 공유한다 → tint 헬퍼 (REQ-D08)
+            ...tintSx('primary')(theme),
             typography: 'caption',
             fontWeight: 'fontWeightBold',
-          }}
+          })}
         >
           내
         </Box>
