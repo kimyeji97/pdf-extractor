@@ -267,35 +267,36 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
 
 `REQ-{prefix}{seq}`의 prefix는 작업 성격을 나타낸다:
 
-| Prefix | 의미 | 현재 범위 |
+| Prefix | 의미 | 점유 범위 (2026-07-29) |
 |--------|------|-----------|
-| (숫자) | 핵심·v2·v3 기능 (기획 단위) | REQ-01~26 |
-| `B` | 버그 수정 (Bug) | REQ-B01~B04 |
-| `C` | 보완 기능 (Complement) | REQ-C01~C06 |
-| `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D05 |
+| (숫자) | 핵심·v2·v3 기능 (기획 단위) | REQ-01~28 |
+| `B` | 버그 수정 (Bug) | REQ-B01~B09 |
+| `C` | 보완 기능 (Complement) | REQ-C01~C08 |
+| `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D10 |
 | `E` | 실험·인프라성 기능 (Enhancement) | REQ-E01 |
-| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F06 |
-| `P` | 성능 (Performance) | REQ-P01~P02 |
+| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F10 |
+| `P` | 성능 (Performance) | REQ-P01~P03 |
 
-기능 대분류 참고: REQ-01~09(핵심), REQ-10~15(v2), REQ-16~26(v3).
+기능 대분류 참고: REQ-01~09(핵심), REQ-10~15(v2), REQ-16~26(v3), REQ-27~28(계정·공유).
+
+> "점유 범위"는 **미착수·기각 번호를 포함한다.** 번호는 한 번 부여하면 재사용하지 않는다.
 
 ### 계획 번호 추출 방식
 
-새 작업의 번호는 **해당 prefix의 마지막 seq + 1**로 부여한다. 현재 사용 중인 번호는 아래로 확인한다:
+새 작업의 번호는 **해당 prefix의 마지막 seq + 1**로 부여한다.
+
+> ⚠️ **`ls docs/specs/`만 보면 안 된다.** 스펙 파일 없이 번호만 점유된 REQ가 여럿이다 —
+> 구현됐지만 스펙이 없는 것(C08), 제안 단계에서 예약된 것(D08·F09·D09·F10·D10·REQ-27·REQ-28).
+> 파일 목록만 믿고 부여하면 **이미 남이 쓰기로 한 번호와 충돌한다.**
+> **[`docs/PROGRESS.md`](docs/PROGRESS.md)의 요구사항 인덱스(특히 "미착수 — 번호만 부여된 것" 표)가
+> 단일 출처다.** 아래 명령은 교차 확인용으로만 쓴다.
 
 ```bash
-# prefix별 사용 중인 번호 목록
-ls docs/specs/ | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
-
-# 특정 prefix(B)의 다음 번호 계산 예시
-ls docs/specs/ | grep -oE 'REQ-B[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
+# 스펙 파일 + 인덱스를 함께 본다 (둘 중 하나만 보면 놓친다)
+{ ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-07-27 기준 각 prefix 다음 번호: `B10`, `C09`, `D08`, `F09`, `P04`.
-
-> ⚠️ 스펙 **파일이 없는 REQ**가 있어 위 명령만으로는 부족하다.
-> C08(문제집·소스 삭제, 2026-07-25 구현)은 버그 묶음으로 처리돼 스펙 파일이 없다.
-> 번호를 새로 부여하기 전에 [`docs/PROGRESS.md`](docs/PROGRESS.md)의 요구사항 인덱스를 함께 확인할 것.
+2026-07-29 기준 각 prefix 다음 번호: `B10`, `C09`, `D11`, `F11`, `P04`, 숫자 `29`.
 
 ## 진행 현황
 
