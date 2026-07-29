@@ -23,6 +23,8 @@ import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 
 import PdfPreviewPanel from "components/PdfPreviewPanel";
+import PageHeader from "components/PageHeader";
+import { WorkCanvas, CardRow, PanelCard, PanelCardHeader } from "components/WorkCanvas";
 import BookCard from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
@@ -107,24 +109,27 @@ export default function HistoryPage() {
   };
 
   return (
-    <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
-
-      {/* ── 목록 패널 (책 카드 그리드, REQ-D07 Phase 3-3) ─── */}
-      <Paper
-        elevation={0}
-        sx={{
-          width: 420, flexShrink: 0, display: "flex", flexDirection: "column",
-          overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider",
-        }}
-      >
-        <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Typography variant="subtitle2" fontWeight={700}>생성된 문제집 이력</Typography>
+    /* REQ-D07 2안 — 맞붙은 2패널을 캔버스 위 카드 2장으로. */
+    <WorkCanvas>
+      <PageHeader
+        title="생성 이력"
+        crumbs={[{ label: "홈", to: "/" }, { label: "생성 이력" }]}
+        actions={
           <Tooltip title="새로고침">
             <IconButton size="small" onClick={fetchWorkbooks} disabled={loading}>
               {loading ? <CircularProgress size={16} /> : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 20 }} />}
             </IconButton>
           </Tooltip>
-        </Box>
+        }
+      />
+
+      <CardRow>
+      {/* ── 목록 패널 (책 카드 그리드, REQ-D07 Phase 3-3) ─── */}
+      <PanelCard sx={{ width: 420, flexShrink: 0 }}>
+        <PanelCardHeader>
+          <Icon icon="material-symbols:history-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
+          <Typography variant="subtitle2" fontWeight={700}>생성된 문제집</Typography>
+        </PanelCardHeader>
 
         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 2 }}>
           {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
@@ -209,19 +214,22 @@ export default function HistoryPage() {
             )}
           </Box>
         </Box>
-      </Paper>
+      </PanelCard>
+
+      <Box sx={{ width: 16, flexShrink: 0 }} />
 
       {/* ── 미리보기 패널 ──────────────────────────── */}
-      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <PanelCard sx={{ flex: 1, minWidth: 0 }}>
         {selectedWb ? (
           <>
-            <Box sx={{ px: 2.5, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0 }}>
-              <Typography variant="subtitle2" fontWeight={700}>
+            <PanelCardHeader>
+              <Icon icon="material-symbols:picture-as-pdf-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
+              <Typography variant="subtitle2" fontWeight={700} noWrap>
                 {selectedWb.name || selectedWb.filename || "문제집 미리보기"}
               </Typography>
               <Chip label={selectedWb.layout} size="small" variant="outlined" />
               <Chip label={`${selectedWb.question_count}문항`} size="small" variant="outlined" />
-            </Box>
+            </PanelCardHeader>
             <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {pdfLoading ? (
                 <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -238,7 +246,8 @@ export default function HistoryPage() {
             <Typography variant="body2" color="text.secondary">목록에서 문제집을 클릭하면 미리보기가 표시됩니다.</Typography>
           </Box>
         )}
-      </Box>
+      </PanelCard>
+      </CardRow>
 
       {/* ── 삭제 확인 다이얼로그 (REQ-C08) ──────────────── */}
       <Dialog
@@ -271,6 +280,6 @@ export default function HistoryPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </WorkCanvas>
   );
 }

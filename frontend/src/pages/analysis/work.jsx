@@ -25,22 +25,16 @@ import Tooltip from "@mui/material/Tooltip";
 import Stack from "@mui/material/Stack";
 import { Icon } from "@iconify/react";
 
+import PageHeader from "components/PageHeader";
 import QuestionAnalysisPanel from "components/QuestionAnalysisPanel";
 import PdfPreviewPanel from "components/PdfPreviewPanel";
+import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
 import { getPages, refreshJobQuestions, getJobInfo, addManualQuestion, getAllQuestions } from "api/client";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
 
-const ResizeHandle = ({ onMouseDown }) => (
-  <Box
-    onMouseDown={onMouseDown}
-    sx={{
-      width: 4, flexShrink: 0, cursor: "col-resize", bgcolor: "divider",
-      transition: "background-color 0.15s",
-      "&:hover": { bgcolor: "primary.main" },
-    }}
-  />
-);
+/** 리사이즈 가능한 패널의 [최소, 최대] 폭. */
+const PANEL_BOUNDS = { section1: [150, 400], section3: [200, 800] };
 
 export default function AnalysisWorkPage() {
   const { jobId } = useParams();
@@ -73,10 +67,13 @@ export default function AnalysisWorkPage() {
   const [panelRefreshTrigger, setPanelRefreshTrigger] = useState(0);
 
   // ── 패널 너비 ─────────────────────────────────────────
-  // section1(페이지 목록)은 고정, section3(문항 목록)만 리사이즈 (200~800px, 기본 420px)
-  // section2(미리보기)는 남는 공간을 채움
-  const SECTION1_WIDTH = 200;
-  const [panelWidths, setPanelWidths] = useState({ section3: 420 });
+  // section1(페이지 목록)·section3(문항 목록)이 리사이즈 대상, section2(미리보기)는 남는 공간을 채움.
+  // 2안 카드 재구성(2026-07-29) 전에는 section1이 200px 고정이었다. 카드 사이 여백에 핸들을
+  // 두게 되면서 양쪽 경계가 모두 잡을 수 있는 자리가 됐고, 한쪽만 안 되면 오히려 어색하다.
+  // 최소값은 패널별로 다르다 — 페이지 목록은 "12페이지 · 6문항" 한 줄이 들어가면 충분하다.
+  // (PANEL_BOUNDS는 모듈 스코프 상수 — 리사이즈 이펙트가 []로 한 번만 붙기 때문에
+  //  컴포넌트 안에 두면 첫 렌더의 객체를 계속 붙들게 된다.)
+  const [panelWidths, setPanelWidths] = useState({ section1: 200, section3: 420 });
   const resizingRef = useRef(null);
 
   // ── 수동 추가 (드래그 → PDF pt 영역) ──────────────────
@@ -210,7 +207,8 @@ export default function AnalysisWorkPage() {
       if (!resizingRef.current) return;
       const { panel, startX, startWidth, dir } = resizingRef.current;
       // 드래그 시작 시점의 너비(startWidth)를 기준으로 마우스 이동량만큼 상대 증감
-      const newWidth = Math.max(200, Math.min(800, startWidth + (e.clientX - startX) * dir));
+      const [min, max] = PANEL_BOUNDS[panel];
+      const newWidth = Math.max(min, Math.min(max, startWidth + (e.clientX - startX) * dir));
       setPanelWidths((prev) => ({ ...prev, [panel]: newWidth }));
     };
     const onUp = () => {
@@ -333,38 +331,42 @@ export default function AnalysisWorkPage() {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+    /* REQ-D07 2안 — 맞붙은 3패널을 회색 캔버스 위 카드 3장으로 재구성.
+       리사이즈 핸들은 카드 사이 여백으로 옮겨 유지한다(2026-07-29 결정). */
+    <WorkCanvas>
 
-      {/* ── 컨텍스트 바 ─────────────────────────────── */}
-      <Box sx={{ px: 2.5, py: 0.75, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0, bgcolor: "background.paper" }}>
-        <Button
-          size="small" variant="text" color="inherit"
-          onClick={() => navigate(-1)}
-          startIcon={<Icon icon="material-symbols:arrow-back-rounded" style={{ fontSize: 16 }} />}
-          sx={{ fontSize: 12, minWidth: 0, px: 1, flexShrink: 0, whiteSpace: "nowrap" }}
-        >
-          파일 선택
-        </Button>
-        <Box sx={{ width: 1, height: 16, bgcolor: "divider" }} />
-        <Icon icon="material-symbols:description-outline-rounded" style={{ fontSize: 15, flexShrink: 0 }} />
-        <Typography variant="caption" fontWeight={600} noWrap sx={{ maxWidth: 240 }} title={filename}>
-          {workbookName || filename}
-        </Typography>
-        {selectedPage !== null && (
-          <Chip label={`${selectedPage + 1}페이지`} size="small" variant="outlined" color="primary" />
-        )}
-      </Box>
+      {/* ── 페이지 헤더 + 브레드크럼 ─────────────────── */}
+      <PageHeader
+        title={workbookName || filename}
+        crumbs={[
+          { label: "홈", to: "/" },
+          { label: "문항 분석", to: "/" },
+          { label: workbookName || filename },
+        ]}
+        actions={
+          <>
+            {selectedPage !== null && (
+              <Chip label={`${selectedPage + 1}페이지`} size="small" variant="outlined" color="primary" />
+            )}
+            <Button
+              size="small" variant="outlined" color="inherit"
+              onClick={() => navigate(-1)}
+              startIcon={<Icon icon="material-symbols:arrow-back-rounded" style={{ fontSize: 16 }} />}
+              sx={{ flexShrink: 0, whiteSpace: "nowrap" }}
+            >
+              파일 선택
+            </Button>
+          </>
+        }
+      />
 
-      {/* ── 3패널 ───────────────────────────────────── */}
-      <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+      {/* ── 카드 3장 ─────────────────────────────────── */}
+      <CardRow>
 
         {/* 페이지 목록 */}
-        <Paper
-          elevation={0}
+        <PanelCard
           sx={{
-            width: SECTION1_WIDTH, flexShrink: 0,
-            display: "flex", flexDirection: "column", overflow: "hidden",
-            borderRadius: 0, borderRight: 1, borderColor: "divider",
+            width: panelWidths.section1, flexShrink: 0,
             position: "relative",
             ...(drawMode && { pointerEvents: "none" }),
           }}
@@ -374,7 +376,7 @@ export default function AnalysisWorkPage() {
                다크 모드(REQ-D08) 대비로 배경색은 토큰에서 가져온다. */
             <Box sx={{ position: "absolute", inset: 0, bgcolor: "background.paper", opacity: 0.6, zIndex: 10, pointerEvents: "all" }} />
           )}
-          <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+          <PanelCardHeader>
             <Icon icon="material-symbols:auto-stories-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
             <Typography variant="subtitle2" fontWeight={700} noWrap>페이지</Typography>
             {pages.length > 0 && (
@@ -386,7 +388,7 @@ export default function AnalysisWorkPage() {
                 {refreshing ? <CircularProgress size={14} /> : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 16 }} />}
               </IconButton>
             </Tooltip>
-          </Box>
+          </PanelCardHeader>
 
           {refreshError && <Alert severity="error" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>{refreshError}</Alert>}
           {pagesError   && <Alert severity="error" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>{pagesError}</Alert>}
@@ -450,14 +452,14 @@ export default function AnalysisWorkPage() {
               );
             })}
           </Box>
-        </Paper>
+        </PanelCard>
 
-        {/* 페이지 미리보기 — PDF 뷰어 (REQ-F07, 남는 공간 채움) */}
-        <Paper
-          elevation={0}
-          sx={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 0, borderRight: 1, borderColor: "divider", position: "relative" }}
-        >
-          <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+        {/* 페이지 미리보기 — PDF 뷰어 (REQ-F07, 남는 공간 채움).
+            카드 사이 여백은 CardResizeHandle이 만든다 — CardRow에 gap을 걸면 간격이 두 배가 된다. */}
+        <CardResizeHandle onMouseDown={(e) => startResize("section1", 1, e)} />
+
+        <PanelCard sx={{ flex: 1, minWidth: 200, position: "relative" }}>
+          <PanelCardHeader>
             <Icon icon="material-symbols:image-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
             <Typography variant="subtitle2" fontWeight={700} noWrap>페이지 미리보기</Typography>
             <Box sx={{ flex: 1 }} />
@@ -472,7 +474,7 @@ export default function AnalysisWorkPage() {
                 {drawMode ? "종료" : "수동 추가"}
               </Button>
             )}
-          </Box>
+          </PanelCardHeader>
 
           {drawMode && (
             <Alert severity="info" sx={{ py: 0, fontSize: 12, borderRadius: 0, flexShrink: 0 }}>
@@ -526,17 +528,14 @@ export default function AnalysisWorkPage() {
               </Stack>
             </Paper>
           )}
-        </Paper>
+        </PanelCard>
 
-        <ResizeHandle onMouseDown={(e) => startResize("section3", -1, e)} />
+        <CardResizeHandle onMouseDown={(e) => startResize("section3", -1, e)} />
 
         {/* 문항 목록 (리사이즈 대상, 200~800px) */}
-        <Paper
-          elevation={0}
+        <PanelCard
           sx={{
             width: panelWidths.section3, flexShrink: 0,
-            display: "flex", flexDirection: "column", overflow: "hidden",
-            borderRadius: 0, borderLeft: 1, borderColor: "divider",
             position: "relative",
             ...(drawMode && { pointerEvents: "none" }),
           }}
@@ -556,10 +555,10 @@ export default function AnalysisWorkPage() {
             />
           ) : (
             <>
-              <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider", flexShrink: 0, display: "flex", alignItems: "center", gap: 1 }}>
+              <PanelCardHeader>
                 <Icon icon="material-symbols:list-alt-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
                 <Typography variant="subtitle2" fontWeight={700} noWrap>문항 목록</Typography>
-              </Box>
+              </PanelCardHeader>
               <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "text.disabled", gap: 1.5 }}>
                 <Icon icon="material-symbols:list-alt-outline-rounded" style={{ fontSize: 48 }} />
                 <Typography variant="body2" textAlign="center" color="text.secondary">
@@ -568,8 +567,8 @@ export default function AnalysisWorkPage() {
               </Box>
             </>
           )}
-        </Paper>
-      </Box>
-    </Box>
+        </PanelCard>
+      </CardRow>
+    </WorkCanvas>
   );
 }

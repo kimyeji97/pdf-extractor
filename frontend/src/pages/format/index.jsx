@@ -20,6 +20,7 @@ import Alert from "@mui/material/Alert";
 import Tooltip from "@mui/material/Tooltip";
 import { Icon } from "@iconify/react";
 
+import PageHeader from "components/PageHeader";
 import BookCard, { BOOK_CARD_W } from "components/BookCard";
 import { listCovers, uploadCover, deleteCover } from "api/client";
 
@@ -144,39 +145,44 @@ export default function FormatPage() {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <Box sx={{
+      display: "flex", flexDirection: "column", height: "100%", overflow: "hidden",
+      gap: 2, p: 2, bgcolor: "background.default",
+    }}>
 
-      {/* ── 상단 헤더 바 ───────────────────────────────── */}
-      <Box sx={{
-        px: 2.5, py: 1.25, borderBottom: 1, borderColor: "divider",
-        display: "flex", gap: 1.5, alignItems: "center", justifyContent: "space-between",
-        flexShrink: 0, bgcolor: "background.paper",
-      }}>
-        {/* 화면 이름은 앱 헤더가 표시하므로 여기서는 중복하지 않는다 (REQ-D07 Phase 1) */}
-        <Typography variant="caption" color="text.secondary">
-          문제집 생성 시 첫 페이지로 넣을 표지를 관리합니다.
-        </Typography>
-        <Tooltip title="새로고침">
-          <IconButton size="small" onClick={fetchCovers} disabled={loading}>
-            {loading
-              ? <CircularProgress size={16} />
-              : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 18 }} />}
-          </IconButton>
-        </Tooltip>
-      </Box>
+      {/* ── 페이지 헤더 + 브레드크럼 (REQ-D07 2안) ────────
+          앱 헤더가 검색에 자리를 내주면서 화면 이름은 다시 여기가 책임진다. */}
+      <PageHeader
+        title="표지 관리"
+        crumbs={[{ label: "홈", to: "/" }, { label: "표지 관리" }]}
+        actions={
+          <Tooltip title="새로고침">
+            <IconButton size="small" onClick={fetchCovers} disabled={loading}>
+              {loading
+                ? <CircularProgress size={16} />
+                : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 18 }} />}
+            </IconButton>
+          </Tooltip>
+        }
+      />
 
       {error && (
-        <Alert severity="error" sx={{ mx: 2.5, mt: 1.5 }} onClose={() => setError("")}>
+        <Alert severity="error" sx={{ flexShrink: 0 }} onClose={() => setError("")}>
           {error}
         </Alert>
       )}
 
       {/* ── 메인: 카드 래핑 그리드 (세로 스크롤) ─────────── */}
       <Box sx={{
-        flex: 1, overflowY: "auto", overflowX: "hidden",
+        flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
         display: "flex", flexWrap: "wrap", gap: 2,
-        p: 2.5, alignContent: "flex-start",
+        p: 2, borderRadius: 2, alignContent: "flex-start",
+        bgcolor: "background.paper",
+        boxShadow: (theme) => theme.customShadows?.card,
       }}>
+        <Typography variant="caption" color="text.secondary" sx={{ width: 1, mb: -0.5 }}>
+          문제집 생성 시 첫 페이지로 넣을 표지를 관리합니다.
+        </Typography>
         {/* 업로드 카드: 항상 맨 앞 고정 */}
         <UploadCard onClick={openUpload} />
 

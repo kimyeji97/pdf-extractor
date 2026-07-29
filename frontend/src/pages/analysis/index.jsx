@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { useNavigate } from "react-router";
+import { useState, useCallback, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
@@ -17,6 +17,8 @@ import InputAdornment from "@mui/material/InputAdornment";
 import { Icon } from "@iconify/react";
 
 import UploadForm from "components/UploadForm";
+import PageHeader from "components/PageHeader";
+import StatCards from "components/StatCards";
 import BookCard, { BOOK_CARD_W } from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
@@ -131,9 +133,19 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
 
 export default function AnalysisFilePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [searchName, setSearchName] = useState("");
+  // 앱 헤더 검색은 `/?q=…`로 이 화면에 넘어온다(REQ-D07 2안).
+  // 여기서 초기값으로 흡수하고 주소는 즉시 비워, 새로고침 때 검색어가 되살아나지 않게 한다.
+  const [searchName, setSearchName] = useState(() => searchParams.get("q") || "");
   const [searchType, setSearchType] = useState("");
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q === null) return;
+    setSearchName(q);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // 업로드 다이얼로그
   const [uploadOpen, setUploadOpen]                   = useState(false);
@@ -158,6 +170,10 @@ export default function AnalysisFilePage() {
   } = usePaginatedList(fetchPage);
 
   const hasSearch = Boolean(debouncedName.trim() || debouncedType.trim());
+
+  // 업로드·삭제로 개수가 바뀌면 통계 카드도 다시 받는다.
+  const [statsTrigger, setStatsTrigger] = useState(0);
+  const bumpStats = useCallback(() => setStatsTrigger((t) => t + 1), []);
 
   // ── 이름/유형 편집 (문제집 편집 ①에서 이동) ──────────
   const [editJob, setEditJob]         = useState(null);
@@ -186,6 +202,7 @@ export default function AnalysisFilePage() {
       await deleteJob(deleteJobTarget.job_id);
       setDeleteJob(null);
       await fetchJobs();
+      bumpStats();
     } catch (e) {
       setDeleteError(e.message || "삭제에 실패했습니다.");
     } finally {
@@ -205,6 +222,7 @@ export default function AnalysisFilePage() {
       });
       setEditJob(null);
       await fetchJobs();
+      bumpStats();
     } catch (e) {
       setEditError(e.message || "저장에 실패했습니다.");
     } finally {
@@ -240,6 +258,7 @@ export default function AnalysisFilePage() {
       await uploadPdf(upload_url, selectedFile, job_id);
       setUploadOpen(false);
       await fetchJobs();
+      bumpStats();
     } catch (e) {
       setUploadError(e.message);
     } finally {
@@ -248,13 +267,31 @@ export default function AnalysisFilePage() {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <Box sx={{
+      display: "flex", flexDirection: "column", height: "100%", overflow: "hidden",
+      gap: 2, p: 2, bgcolor: "background.default",
+    }}>
 
-      {/* ── 상단 검색 바 ───────────────────────────────── */}
+      {/* ── 페이지 헤더 + 브레드크럼 (REQ-D07 2안) ────────
+          앱 헤더가 검색에 자리를 내줘서 위치 정보는 여기가 책임진다. */}
+      {/* 업로드 버튼은 두지 않는다 — 그리드 맨 앞의 업로드 카드와 중복된다.
+          아티팩트 2안의 헤더 업로드 버튼은 업로드 카드가 없는 테이블 변형용이었고,
+          이 화면은 조건 ①로 카드 그리드를 유지하므로 카드 쪽을 남긴다. */}
+      <PageHeader
+        title="문항 분석"
+        crumbs={[{ label: "홈", to: "/" }, { label: "문항 분석" }]}
+      />
+
+      {/* ── 요약 통계 (REQ-D07 2안) ──────────────────────
+          별도 홈 라우트가 없어 진입 화면인 이곳에 얹는다. */}
+      <StatCards refreshTrigger={statsTrigger} />
+
+      {/* ── 검색 바 ────────────────────────────────────── */}
       <Box sx={{
-        px: 2.5, py: 1.25, borderBottom: 1, borderColor: "divider",
+        px: 2, py: 1.25, borderRadius: 2,
         display: "flex", gap: 1.5, alignItems: "center", flexShrink: 0,
         bgcolor: "background.paper",
+        boxShadow: (theme) => theme.customShadows?.card,
       }}>
         <TextField
           size="small"
@@ -265,7 +302,10 @@ export default function AnalysisFilePage() {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Icon icon="material-symbols:search-rounded" style={{ fontSize: 16, color: "var(--mui-palette-text-disabled)" }} />
+                {/* 색은 sx로 — `var(--mui-palette-*)`는 이 테마에서 해석되지 않는다(접두사가 `--palette-*`) */}
+                <Box component="span" sx={{ color: "text.disabled", display: "flex" }}>
+                  <Icon icon="material-symbols:search-rounded" style={{ fontSize: 16 }} />
+                </Box>
               </InputAdornment>
             ),
           }}
@@ -279,7 +319,9 @@ export default function AnalysisFilePage() {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Icon icon="material-symbols:label-outline-rounded" style={{ fontSize: 16, color: "var(--mui-palette-text-disabled)" }} />
+                <Box component="span" sx={{ color: "text.disabled", display: "flex" }}>
+                  <Icon icon="material-symbols:label-outline-rounded" style={{ fontSize: 16 }} />
+                </Box>
               </InputAdornment>
             ),
           }}
@@ -294,17 +336,17 @@ export default function AnalysisFilePage() {
         </Tooltip>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mx: 2.5, mt: 1.5 }}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert severity="error" sx={{ flexShrink: 0 }}>{error}</Alert>}
 
-      {/* ── 메인: 카드 래핑 그리드 (세로 스크롤) ─────────── */}
+      {/* ── 메인: 카드 래핑 그리드 (세로 스크롤) ───────────
+          조건 ①로 **테이블 전환은 하지 않는다** — 아티팩트 2안의 테이블+툴바는
+          의도적으로 채택하지 않았고, 책 카드(B안)가 이 화면의 확정안이다. */}
       <Box sx={{
-        flex: 1, overflowY: "auto", overflowX: "hidden",
+        flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
         display: "flex", flexWrap: "wrap", gap: 2,
-        p: 2.5, alignContent: "flex-start",
+        p: 2, borderRadius: 2, alignContent: "flex-start",
+        bgcolor: "background.paper",
+        boxShadow: (theme) => theme.customShadows?.card,
       }}>
         {/* 업로드 카드: 항상 맨 좌측 고정 */}
         <UploadCard onClick={openUpload} />

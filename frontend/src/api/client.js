@@ -67,6 +67,18 @@ export async function requestUploadUrl(filename, meta = {}) {
  * @param {{ jobType?: "SOURCE"|"EXPORT", skip?: number, limit?: number,
  *           name?: string, types?: string }} [opts]
  */
+/**
+ * 요약 통계 (REQ-D07 2안 통계 카드).
+ *
+ * 목록 API가 페이지네이션되므로 프론트에서 합계를 낼 수 없어 서버가 전체를 세서 준다.
+ * @returns {Promise<{source_count:number, question_count:number, workbook_count:number}>}
+ */
+export async function getStats() {
+  const res = await apiFetch(`${BASE_URL}/stats`);
+  if (!res.ok) throw new Error("통계 조회 실패");
+  return res.json();
+}
+
 export async function listJobs(opts = {}) {
   const { jobType = "SOURCE", skip = 0, limit = 20, name = "", types = "" } = opts;
   const qs = new URLSearchParams({ job_type: jobType, skip: String(skip), limit: String(limit) });

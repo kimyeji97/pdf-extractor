@@ -1,4 +1,5 @@
 """
+GET    /api/stats                                                        - 대시보드 요약 통계 (REQ-D07 Phase 4)
 GET    /api/jobs                                                         - 업로드된 파일 목록 조회
 GET    /api/jobs/{job_id}                                                - 단일 job 정보 조회
 DELETE /api/jobs/{job_id}                                                - job + 연관 저장물 전체 삭제
@@ -62,6 +63,33 @@ class JobListResponse(BaseModel):
     total: int          # 필터 적용 후 전체 건수 (페이지 크기와 무관)
     skip: int
     limit: int
+
+
+class StatsResponse(BaseModel):
+    """대시보드 요약 통계 (REQ-D07 2안 — 템플릿의 대표 요소)."""
+    source_count: int      # 업로드한 문제집(SOURCE job) 수
+    question_count: int    # 감지 완료된 문항 총합
+    workbook_count: int    # 생성한 문제집 수
+
+
+@router.get("/stats", response_model=StatsResponse)
+def get_stats():
+    """
+    요약 통계.
+
+    목록 API(`/api/jobs`)는 페이지네이션되므로(REQ-P03-03) 프론트가 합계를 낼 수 없다.
+    한 페이지분만 더해면 실제보다 작은 수가 나오므로 **서버가 전체를 세서 준다.**
+
+    `list_jobs()`는 이미 전체를 메모리에 올리는 구현이라 별도 비용이 없다.
+    항목 수가 커지면 여기가 먼저 느려지므로, 그때는 상태 파일에 집계를 캐싱할 것.
+    """
+    jobs = storage.list_jobs()
+    sources = [j for j in jobs if j.job_type == JobType.SOURCE]
+    return StatsResponse(
+        source_count=len(sources),
+        question_count=sum(j.total_question_count or 0 for j in sources),
+        workbook_count=len(storage.list_workbooks()),
+    )
 
 
 @router.get("/jobs", response_model=JobListResponse)

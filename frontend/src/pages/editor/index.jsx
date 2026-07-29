@@ -27,6 +27,8 @@ import CircularProgress from "@mui/material/CircularProgress";
 import { Icon } from "@iconify/react";
 
 import { clampCellScale } from "utils/workbookLayout";
+import PageHeader from "components/PageHeader";
+import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
 import FileListPanel from "components/FileListPanel";
 import QuestionListPanel from "components/QuestionListPanel";
 import SelectionOrderPanel from "components/SelectionOrderPanel";
@@ -43,20 +45,6 @@ const API_ROOT = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"
 ).replace(/\/api$/, "");
 const LAYOUTS = ["세로 2단", "가로 2단", "4단", "6단"];
-
-const ResizeHandle = ({ onMouseDown }) => (
-  <Box
-    onMouseDown={onMouseDown}
-    sx={{
-      width: 4,
-      flexShrink: 0,
-      cursor: "col-resize",
-      bgcolor: "divider",
-      transition: "background-color 0.15s",
-      "&:hover": { bgcolor: "primary.main" },
-    }}
-  />
-);
 
 export default function EditorPage() {
   const { state } = useLocation();
@@ -317,90 +305,58 @@ export default function EditorPage() {
   );
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        flex: 1,
-        minHeight: 0,
-        overflow: "hidden",
-      }}
-    >
-      {/* 컨텍스트 바 — 현재 작업 중인 파일 + 선택 요약.
-          선택이 있으면 파일을 아직 안 골랐어도 요약은 띄운다(생성 이력에서 복원한 경우). */}
-      {(selectedJobFilename || basket.length > 0) && (
-        <Box
-          sx={{
-            px: 2.5,
-            py: 0.75,
-            bgcolor: "primary.lighter",
-            borderBottom: 1,
-            borderColor: "divider",
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-            flexShrink: 0,
-          }}
-        >
-          {selectedJobFilename && (
-            <>
-              <Icon
-                icon="material-symbols:description-outline-rounded"
-                style={{ fontSize: 16 }}
+    /* REQ-D07 2안 — 맞붙은 4열을 회색 캔버스 위 카드 4장으로 재구성.
+       단계형(한 번에 한 단계)으로는 가지 않는다: 선택 → 정렬 → 결과가 동시에 보이는 것이
+       이 화면의 핵심이고, 조건이 "유저 플로우를 깨지 않는 선"이었다(2026-07-29 결정). */
+    <WorkCanvas>
+      {/* 페이지 헤더 — 종전 컨텍스트 바를 흡수했다.
+          현재 파일은 브레드크럼 꼬리로, 선택 요약과 생성 버튼은 우측 액션으로 옮겼다. */}
+      <PageHeader
+        title="문제집 편집"
+        crumbs={[
+          { label: "홈", to: "/" },
+          { label: "문제집 편집", to: "/editor" },
+          ...(selectedJobFilename
+            ? [{ label: selectedWorkbookName || selectedJobFilename }]
+            : []),
+        ]}
+        actions={
+          <>
+            {basket.length > 0 && (
+              <Chip
+                label={
+                  sourceFileCount > 1
+                    ? `${basket.length}개 선택 · ${sourceFileCount}개 파일`
+                    : `${basket.length}개 선택`
+                }
+                size="small"
+                color="primary"
               />
-              <Typography
-                variant="caption"
-                color="primary.main"
-                fontWeight={600}
-                noWrap
-                title={selectedJobFilename}
-                sx={{ maxWidth: 320 }}
-              >
-                {selectedWorkbookName || selectedJobFilename}
-              </Typography>
-            </>
-          )}
-          {basket.length > 0 && (
-            <Chip
-              label={
-                sourceFileCount > 1
-                  ? `${basket.length}개 선택 · ${sourceFileCount}개 파일`
-                  : `${basket.length}개 선택`
-              }
-              size="small"
+            )}
+            <Button
+              variant="contained"
               color="primary"
-            />
-          )}
-        </Box>
-      )}
+              size="small"
+              onClick={handleGenerate}
+              disabled={basket.length === 0 || generating}
+              startIcon={
+                generating ? (
+                  <CircularProgress size={14} color="inherit" />
+                ) : (
+                  <Icon icon="material-symbols:picture-as-pdf-outline-rounded" />
+                )
+              }
+            >
+              {generating ? "생성 중..." : "PDF 생성"}
+            </Button>
+          </>
+        }
+      />
 
-      <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <CardRow>
         {/* 파일 선택 */}
-        <Paper
-          elevation={0}
-          sx={{
-            width: panelWidths.files,
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            borderRadius: 0,
-            borderRight: 1,
-            borderColor: "divider",
-          }}
-        >
-          <Box
-            sx={{
-              px: 2,
-              py: 1.25,
-              borderBottom: 1,
-              borderColor: "divider",
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              flexShrink: 0,
-            }}
-          >
+        <PanelCard sx={{ width: panelWidths.files, flexShrink: 0 }}>
+          <PanelCardHeader>
             <Icon
               icon="material-symbols:folder-open-outline-rounded"
               style={{ fontSize: 18, flexShrink: 0 }}
@@ -417,7 +373,7 @@ export default function EditorPage() {
                 sx={{ fontSize: 10, height: 18 }}
               />
             )}
-          </Box>
+          </PanelCardHeader>
           <Box
             sx={{
               flex: 1,
@@ -436,36 +392,13 @@ export default function EditorPage() {
               selectedCounts={selectedCounts}
             />
           </Box>
-        </Paper>
+        </PanelCard>
 
-        <ResizeHandle onMouseDown={(e) => startResize("files", e)} />
+        <CardResizeHandle onMouseDown={(e) => startResize("files", e)} />
 
         {/* 문항 선택 */}
-        <Paper
-          elevation={0}
-          sx={{
-            width: panelWidths.qlist,
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            borderRadius: 0,
-            borderRight: 1,
-            borderColor: "divider",
-          }}
-        >
-          <Box
-            sx={{
-              px: 2,
-              py: 1.25,
-              borderBottom: 1,
-              borderColor: "divider",
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              flexShrink: 0,
-            }}
-          >
+        <PanelCard sx={{ width: panelWidths.qlist, flexShrink: 0 }}>
+          <PanelCardHeader>
             <Icon
               icon="material-symbols:checklist-rounded"
               style={{ fontSize: 18, flexShrink: 0 }}
@@ -481,7 +414,7 @@ export default function EditorPage() {
                 sx={{ fontSize: 10, height: 18 }}
               />
             )}
-          </Box>
+          </PanelCardHeader>
           <Box
             sx={{
               flex: 1,
@@ -497,62 +430,29 @@ export default function EditorPage() {
               onToggle={toggleSelection}
             />
           </Box>
-        </Paper>
+        </PanelCard>
 
-        <ResizeHandle onMouseDown={(e) => startResize("qlist", e)} />
+        <CardResizeHandle onMouseDown={(e) => startResize("qlist", e)} />
 
         {/* 순서 편집 (DnD) — 멀티 파일 출처 표시 포함 */}
-        <Paper
-          elevation={0}
-          sx={{
-            width: panelWidths.basket,
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            borderRadius: 0,
-            borderRight: 1,
-            borderColor: "divider",
-          }}
-        >
+        <PanelCard sx={{ width: panelWidths.basket, flexShrink: 0 }}>
           <SelectionOrderPanel
             items={basket}
             onReorder={setBasket}
             onRemove={removeFromBasket}
             onClear={clearBasket}
           />
-        </Paper>
+        </PanelCard>
 
-        <ResizeHandle onMouseDown={(e) => startResize("basket", e)} />
+        <CardResizeHandle onMouseDown={(e) => startResize("basket", e)} />
 
         {/* 미리보기 + 컨트롤 */}
-        <Paper
-          elevation={0}
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            borderRadius: 0,
-          }}
-        >
+        <PanelCard sx={{ flex: 1, minWidth: 0 }}>
           {/* 패널 헤더 겸 파일명 바.
               아이콘 색은 상속(currentColor)에 맡긴다 — 여기 있던
               `var(--aurora-palette-text-secondary)`는 Phase 1에서 Aurora 테마를
               걷어내며 사라진 변수라 이미 아무 색도 먹지 않고 있었다. */}
-          <Box
-            sx={{
-              px: 2,
-              py: 1,
-              borderBottom: 1,
-              borderColor: "divider",
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-              flexShrink: 0,
-            }}
-          >
+          <PanelCardHeader sx={{ py: 1, gap: 1.5 }}>
             <Icon
               icon="material-symbols:edit-document-outline-rounded"
               style={{ fontSize: 18, flexShrink: 0 }}
@@ -576,9 +476,9 @@ export default function EditorPage() {
                 ),
               }}
             />
-          </Box>
+          </PanelCardHeader>
 
-          {/* 레이아웃 + 생성 버튼 바 */}
+          {/* 레이아웃 바 — PDF 생성 버튼은 2안 페이지 헤더로 옮겼다 */}
           <Box
             sx={{
               px: 2,
@@ -615,23 +515,6 @@ export default function EditorPage() {
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
-            <Button
-              variant="contained"
-              color="primary"
-              size="small"
-              onClick={handleGenerate}
-              disabled={basket.length === 0 || generating}
-              startIcon={
-                generating ? (
-                  <CircularProgress size={14} color="inherit" />
-                ) : (
-                  <Icon icon="material-symbols:picture-as-pdf-outline-rounded" />
-                )
-              }
-              sx={{ ml: "auto" }}
-            >
-              {generating ? "생성 중..." : "PDF 생성"}
-            </Button>
           </Box>
 
           {/* 상태 메시지 */}
@@ -739,12 +622,14 @@ export default function EditorPage() {
           <Box
             sx={{
               flex: 1,
+              minHeight: 0,
               overflowY: "auto",
               p: 2,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               gap: 2,
+              bgcolor: "background.neutral",
             }}
           >
             <WorkbookPreview
@@ -754,8 +639,8 @@ export default function EditorPage() {
               onScaleChange={handleScaleChange}
             />
           </Box>
-        </Paper>
-      </Box>
-    </Box>
+        </PanelCard>
+      </CardRow>
+    </WorkCanvas>
   );
 }
