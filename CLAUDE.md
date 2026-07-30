@@ -49,36 +49,38 @@ pdf-extractor/
 │   ├── src/
 │   │   ├── main.tsx                        # 앱 진입점
 │   │   ├── App.tsx                         # 루트 컴포넌트 (Outlet)
-│   │   ├── api/client.js                   # API 클라이언트 (375줄, 40+ 함수)
-│   │   ├── pages/                          # 라우트 페이지
-│   │   │   ├── analysis/                   # 문항 분석 (메인 워크스페이스)
-│   │   │   ├── editor/                     # 문제집 편집
-│   │   │   ├── format/                     # 표지/레이아웃 설정
-│   │   │   └── history/                    # 생성 이력
-│   │   ├── views/                          # 뷰 컴포넌트
-│   │   │   ├── QuestionAnalysisView.jsx    # 문항 분석 뷰
-│   │   │   ├── WorkbookEditorView.jsx      # 문제집 편집 뷰
-│   │   │   ├── WorkbookHistoryView.jsx     # 생성 이력 뷰
-│   │   │   └── CoverFormatView.jsx         # 표지 관리 뷰
+│   │   ├── App.css                         # 잔존 순수 CSS — `wbp-*`·`pdf-*`만 살아있다 (계약 #4)
+│   │   ├── api/client.js                   # API 클라이언트 (470줄, 40+ 함수)
+│   │   ├── pages/                          # 라우트 페이지 = 화면 본체 (views/ 없음)
+│   │   │   ├── analysis/index.jsx          # 문항 분석 목록 (책 카드 + 업로드)
+│   │   │   ├── analysis/work.jsx           # 문항 분석 작업 화면 (뷰어 + 수동 문항)
+│   │   │   ├── editor/index.jsx            # 문제집 편집 (선택 → 정렬 → 미리보기)
+│   │   │   ├── format/index.jsx            # 표지 관리
+│   │   │   └── history/index.jsx           # 생성 이력
 │   │   ├── components/                     # UI 컴포넌트
-│   │   │   ├── PageBrowser.jsx             # PDF 페이지 브라우저
-│   │   │   ├── QuestionPicker.jsx          # 문항 선택 UI
-│   │   │   ├── SelectionBasket.jsx         # 선택 문항 바스켓 (드래그 정렬)
-│   │   │   ├── UploadForm.jsx              # 파일 업로드 폼
+│   │   │   ├── WorkCanvas.jsx              # 작업 화면 셸 — WorkCanvas/CardRow/PanelCard/CardResizeHandle (계약 #19)
+│   │   │   ├── PageHeader.jsx              # 페이지 헤더 + 브레드크럼
+│   │   │   ├── BookCard.jsx                # 책 은유 카드 (3개 목록 화면 공유)
+│   │   │   ├── StatCards.jsx               # 통계 카드 (GET /api/stats)
+│   │   │   ├── PdfPreviewPanel.jsx         # PDF 뷰어 (가상화·좌표 변환 — 계약 #2·#6·#7)
+│   │   │   ├── QuestionAnalysisPanel.jsx   # 문항 분석 상세
+│   │   │   ├── QuestionListPanel.jsx       # 페이지별 문항 목록
+│   │   │   ├── SelectionOrderPanel.jsx     # 선택 문항 정렬 바스켓 (DnD)
 │   │   │   ├── WorkbookPreview.jsx         # 레이아웃 미리보기 캔버스
 │   │   │   ├── FileListPanel.jsx           # 업로드 파일 목록
-│   │   │   ├── FilePagePanel.jsx           # 페이지 썸네일 그리드
-│   │   │   ├── QuestionListPanel.jsx       # 페이지별 문항 목록
-│   │   │   ├── QuestionAnalysisPanel.jsx   # 문항 분석 상세
-│   │   │   ├── StatusPoller.jsx            # 비동기 상태 폴링
-│   │   │   ├── settings-panel/             # 설정 패널
-│   │   │   ├── loading/                    # 로딩 UI (GlobalDim, 스켈레톤)
-│   │   │   └── ...                         # base, icons, common, styled, sections, pagination
-│   │   ├── layouts/main-layout/            # 앱 레이아웃 (AppBar, Sidenav, Footer)
-│   │   ├── providers/                      # Context (Settings, Theme, Accounts, Breakpoints)
-│   │   ├── theme/                          # MUI 테마 (palette, typography, 컴포넌트 오버라이드 50+)
-│   │   ├── types/                          # TypeScript 타입 정의
-│   │   ├── lib/                            # 유틸 (constants, iconify)
+│   │   │   ├── UploadForm.jsx              # 파일 업로드 폼
+│   │   │   ├── ColorSchemeMenu.jsx         # 라이트/다크/시스템 3단 전환 (REQ-D08)
+│   │   │   ├── GlobalDim.jsx               # 전역 로딩 딤
+│   │   │   ├── common/Logo.tsx
+│   │   │   └── loading/PageLoader.tsx
+│   │   ├── layouts/                        # 앱 셸
+│   │   │   ├── core/                       # 템플릿 조립 primitives (HeaderSection 등)
+│   │   │   └── dashboard/                  # layout.tsx · nav.tsx · nav-config.tsx
+│   │   ├── theme/                          # MUI 테마 (palette·typography·컴포넌트 오버라이드)
+│   │   │   └── tint.js                     # tintBg/tintSx/tintFg — 모드 안전 색조 배경 (계약 #20)
+│   │   ├── routes/                         # paths.ts · router.tsx
+│   │   ├── hooks/                          # useDebouncedValue · usePaginatedList
+│   │   ├── lib/utils.ts
 │   │   └── utils/workbookLayout.js         # 레이아웃 계산 유틸
 │   ├── package.json                        # 32개 의존성
 │   └── vite.config.ts
@@ -137,18 +139,22 @@ FastAPI `BackgroundTasks`를 사용. 업로드 완료 → 문항 감지, 추출 
 | POST | `/api/extract-v2` | v2 멀티소스 추출 + 레이아웃 + 표지 |
 | GET | `/api/status/{job_id}` | 추출 상태 폴링 |
 
-### Browse (`routers/browse.py`) — 665줄, 가장 큰 라우터
+### Browse (`routers/browse.py`) — 982줄, 가장 큰 라우터
 | Method | Path | 설명 |
 |--------|------|------|
-| GET | `/api/jobs` | 전체 작업 목록 (source/export 분리) |
+| GET | `/api/stats` | 전체 통계 (통계 카드용). 목록이 페이지네이션돼 프론트가 합계를 못 낸다 |
+| GET | `/api/jobs` | 전체 작업 목록 (source/export 분리, 페이지네이션·검색) |
 | GET | `/api/jobs/{id}` | 작업 상세 |
 | PATCH | `/api/jobs/{id}` | 작업 메타 수정 (이름, 유형) |
+| DELETE | `/api/jobs/{id}` | 작업 + 연관 저장물 전체 삭제 |
 | POST | `/api/jobs/{id}/refresh` | 문항 재감지 트리거 |
 | GET | `/api/jobs/{id}/pages` | 페이지 목록 + 썸네일 |
 | GET | `/api/jobs/{id}/pages/{n}/thumbnail` | 페이지 PNG (DPI 설정 가능) |
+| GET | `/api/jobs/{id}/questions` | 전체 문항 일괄 조회 (페이지별 N회 호출 제거) |
 | GET | `/api/jobs/{id}/pages/{n}/questions` | 페이지 문항 목록 (자동+수동) |
 | PATCH | `/api/jobs/{id}/pages/{n}/questions/{q}` | 자동 문항 제목 수정 |
 | DELETE | `/api/jobs/{id}/pages/{n}/questions/{q}` | 자동 문항 삭제 |
+| POST | `/api/jobs/{id}/pages/{n}/questions/bulk-delete` | 문항 벌크 삭제 |
 | POST | `/api/jobs/{id}/pages/{n}/questions/manual` | 수동 문항 추가 (드래그 영역) |
 | PATCH | `/api/jobs/{id}/pages/{n}/questions/manual/{mid}` | 수동 문항 제목 수정 |
 | DELETE | `/api/jobs/{id}/pages/{n}/questions/manual/{mid}` | 수동 문항 삭제 |
@@ -158,9 +164,10 @@ FastAPI `BackgroundTasks`를 사용. 업로드 완료 → 문항 감지, 추출 
 ### Workbook (`routers/workbook.py`)
 | Method | Path | 설명 |
 |--------|------|------|
-| GET | `/api/workbooks` | 문제집 이력 |
-| GET | `/api/workbooks/{id}` | 문제집 상세 |
+| GET | `/api/workbooks` | 문제집 이력 (페이지네이션·이름 검색) |
+| GET | `/api/workbooks/{id}` | 문제집 상세 (편집 복원용 selections 포함) |
 | POST | `/api/workbooks` | 문제집 저장 |
+| DELETE | `/api/workbooks/{id}` | 문제집 + 결과 PDF 삭제 (REQ-C08) |
 
 ### Cover (`routers/cover.py`)
 | Method | Path | 설명 |
@@ -403,6 +410,12 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     이름은 표시용으로만 쓴다. 이름으로 해시하면 두 출처가 같은 색·같은 글자가 되어
     구분 기능이 조용히 죽는다 — 목록 화면(1권 1카드)에선 안 드러나고 출처가 나란히 놓이는
     편집 화면에서만 드러난다. (REQ-D07 Phase 3-5 브라우저 검증에서 발견)
+22. **프론트 폴링의 `DONE` 분기에 영속 부수효과를 두지 않는다** — 그 분기는 **화면 수명에 묶여**
+    있다(언마운트에서 `clearInterval`). 넣어도 되는 것은 화면이 살아 있는 동안만 의미가 있는 것
+    (UI 상태 전환·진행 표시)뿐이고, **저장·기록처럼 남아야 하는 일은 서버가 완료 시점에 한다.**
+    문제집 메타 저장이 이 분기에 있어서, 생성 중 화면을 떠나면 **PDF는 만들어지는데 생성 이력에는
+    영원히 안 나타났다** — 사용자에겐 "생성 실패"로 보이고 결과물은 고아가 된다. 서버·프론트 어느
+    쪽도 에러를 내지 않아 로그로도 안 잡힌다. (REQ-B10)
 
 ## 상시 이슈
 
