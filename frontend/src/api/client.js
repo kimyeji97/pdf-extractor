@@ -226,10 +226,15 @@ export async function refreshJobQuestions(jobId) {
  * }>} selections
  * @param {string} layout - 레이아웃: "2단" | "4단" | "6단" (기본 "2단")
  */
-export async function startExtractV2(selections, layout = "2단", coverId = null) {
+export async function startExtractV2(
+  selections, layout = "2단", coverId = null, workbookName = null,
+) {
   const body = {
     layout,
     ...(coverId ? { cover_id: coverId } : {}),
+    // REQ-B10: 생성될 문제집 이름. **이 필드가 실려 있으면 백엔드가 완료 시 메타를 저장한다**
+    // (없으면 저장하지 않는다). 즉 이걸 보내면서 createWorkbookMeta 도 호출하면 이력에 2건이 뜬다.
+    ...(workbookName ? { workbook_name: workbookName } : {}),
     selections: selections.map((s) => {
       const item = { job_id: s.jobId, page_num: s.pageNum };
       if (s.questionId != null)   item.question_id   = s.questionId;
@@ -237,6 +242,14 @@ export async function startExtractV2(selections, layout = "2단", coverId = null
       if (s.manualId != null)     item.manual_id     = s.manualId;
       if (s.customRegion != null) item.custom_region = s.customRegion;
       if (s.label != null)        item.label         = s.label;
+      // scale 이 빠져 있어 사용자가 조절한 배율이 생성 PDF에 반영되지 않았다 (REQ-B10 Phase 1에서 발견).
+      // 저장(POST /api/workbooks)에는 들어가 미리보기·편집 복원은 맞았기 때문에
+      // "결과 PDF만 다르다"로만 나타났다. 백엔드는 pdf_service._sel_scale() 로 실제 사용 중.
+      if (s.scale != null)        item.scale         = s.scale;
+      // 표시 전용 — 추출에는 안 쓰이고 백엔드가 문제집 메타를 채울 때 쓴다 (REQ-B10).
+      // 출처 이름은 고유하지 않으므로 파일명이 구분자다 (계약 #17).
+      if (s.workbookName != null)   item.workbook_name   = s.workbookName;
+      if (s.sourceFilename != null) item.source_filename = s.sourceFilename;
       return item;
     }),
   };
@@ -418,6 +431,12 @@ export async function updateJobMeta(jobId, meta) {
  * POST /api/workbooks
  * 문제집 메타데이터 저장 (extract-v2 완료 후 호출)
  * @param {object} meta - WorkbookMeta 형식
+ */
+/**
+ * ⚠️ REQ-B10 이후 **이 앱에서는 호출하지 않는다.** 문제집 메타는 백엔드가 생성 성공 시
+ * 직접 저장한다(`startExtractV2`에 workbookName 을 실으면 그쪽이 저장 주체가 된다).
+ * 여기서 다시 호출하면 같은 문제집이 이력에 2건 뜬다. 엔드포인트 자체는 구 프론트
+ * 호환을 위해 서버에 남아 있어 함수도 함께 둔다.
  */
 export async function createWorkbookMeta(meta) {
   const res = await apiFetch(`${BASE_URL}/workbooks`, {

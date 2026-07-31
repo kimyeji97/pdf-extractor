@@ -6,6 +6,7 @@ POST /api/extract-v2      - 복수 선택 문항 추출 작업 시작 (백그라
 import tempfile
 import uuid
 from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -13,6 +14,7 @@ from app.models.schemas import (
     ExtractRequest, ExtractResponse,
     StatusResponse, JobStatus, JobStatusFile, JobType,
     SelectionItem, ExtractV2Request, ExtractV2Response,
+    WorkbookMeta, WorkbookSelectionItem,
 )
 from app.services import storage, pdf_service
 
@@ -121,8 +123,53 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
     # layout 파라미터를 백그라운드 태스크로 전달 (기본값 "2단")
     layout = req.layout or "2단"
     cover_id = req.cover_id
-    background_tasks.add_task(_process_extraction_v2, req.selections, export_job_id, layout, cover_id)
+    background_tasks.add_task(
+        _process_extraction_v2, req.selections, export_job_id, layout, cover_id, req.workbook_name
+    )
     return ExtractV2Response(job_id=export_job_id)
+
+
+def _save_workbook_meta(
+    selections: list[SelectionItem],
+    export_job_id: str,
+    layout: str,
+    workbook_name: str,
+) -> None:
+    """
+    생성 **성공** 직후 문제집 메타를 저장한다 (REQ-B10).
+
+    종전에는 프론트가 폴링으로 DONE을 확인한 뒤 POST /api/workbooks 를 호출해 저장했는데,
+    그 폴링이 화면 수명에 묶여 있어 **생성 중 화면을 떠나면 PDF만 남고 메타가 사라졌다**
+    (이력에 안 뜨고 결과물은 고아가 된다). 저장 주체를 서버로 옮겨 프론트 수명과 분리한다.
+    → CLAUDE.md 계약 #22.
+
+    실패 시에는 호출되지 않는다 — 이력에 미완성 항목이 노출되지 않게 하려는 의도적 선택이다.
+    """
+    meta = WorkbookMeta(
+        workbook_id=str(uuid.uuid4()),
+        created_at=datetime.now(timezone.utc),
+        layout=layout,
+        selections=[
+            WorkbookSelectionItem(
+                question_id=s.question_id,
+                job_id=s.job_id,
+                page_num=s.page_num,
+                question_num=s.question_num,
+                manual_id=s.manual_id,
+                title=s.label,              # 추출 라벨과 저장 타이틀은 같은 값이다
+                workbook_name=s.workbook_name,
+                source_filename=s.source_filename,
+                scale=s.scale,
+            )
+            for s in selections
+        ],
+        result_job_id=export_job_id,
+        question_count=len(selections),
+        # 프론트가 종전부터 두 필드에 같은 값을 보내 왔다. 서버도 그대로 따른다.
+        filename=workbook_name,
+        name=workbook_name,
+    )
+    storage.save_workbook(meta.workbook_id, meta.model_dump(mode="json"))
 
 
 def _process_extraction_v2(
@@ -130,6 +177,7 @@ def _process_extraction_v2(
     export_job_id: str,
     layout: str = "2단",
     cover_id: str | None = None,
+    workbook_name: str | None = None,
 ) -> None:
     export_status = storage.get_status(export_job_id)
     export_status.status = JobStatus.PROCESSING
@@ -149,6 +197,19 @@ def _process_extraction_v2(
             export_status.status = JobStatus.DONE
             export_status.result_key = storage.result_key(export_job_id)
             export_status.extracted_count = count
+
+            # workbook_name 의 **유무**가 저장 주체를 가른다 (REQ-B10 Phase 1 결정):
+            #   있음 → 새 프론트. 여기서 저장한다(프론트는 저장하지 않는다).
+            #   없음 → 구 프론트. 저장하지 않는다(프론트가 POST /api/workbooks 로 직접 저장).
+            # 이 분기가 없으면 백엔드 배포 후 프론트 배포 전까지 양쪽이 모두 저장해
+            # 같은 문제집이 이력에 2건 뜨고, 그중 하나는 이름이 없다.
+            if workbook_name:
+                try:
+                    _save_workbook_meta(selections, export_job_id, layout, workbook_name)
+                except Exception as e:
+                    # 메타 저장 실패가 "PDF 생성 실패"로 둔갑하면 안 된다 — PDF는 이미 만들어졌다.
+                    # 상태는 DONE으로 두고 사유만 남긴다.
+                    export_status.error = f"문제집 메타 저장 실패: {e}"
 
         except Exception as e:
             export_status.status = JobStatus.FAILED

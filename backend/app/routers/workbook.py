@@ -1,14 +1,20 @@
 """
 GET    /api/workbooks        - 문제집 이력 목록 (REQ-21)
 GET    /api/workbooks/{id}   - 문제집 메타데이터 단건 (REQ-20 편집 복원)
-POST   /api/workbooks        - 문제집 메타데이터 저장 (extract-v2 완료 후 프론트에서 호출)
+POST   /api/workbooks        - 문제집 메타데이터 저장 (구 프론트 호환 경로)
 DELETE /api/workbooks/{id}   - 문제집 + 결과 PDF(export job) 삭제 (REQ-C08)
 
-저장 트리거:
-  extract-v2 DONE 확인 후 프론트엔드가 POST /api/workbooks를 호출하여 저장한다.
-  백그라운드 자동 저장이 아닌 프론트 주도 저장 방식을 채택한 이유:
-    extract-v2는 PDF만 생성하고 selections/layout 정보를 모르기 때문.
-    이 정보는 프론트엔드 상태에만 있어 직접 POST로 전달해야 한다.
+저장 트리거 (REQ-B10 이후):
+  **정상 경로는 extract-v2의 백그라운드 작업이 생성 성공 직후 직접 저장하는 것이다**
+  (`routers/extract.py:_save_workbook_meta`). 요청에 workbook_name이 실려 있으면 서버가
+  저장하고, 없으면(구 프론트) 저장하지 않아 아래 POST 경로가 그대로 쓰인다.
+
+  종전에는 프론트가 폴링으로 DONE을 확인한 뒤 이 엔드포인트를 호출했는데, 그 폴링이
+  화면 수명에 묶여 있어 **생성 중 화면을 떠나면 PDF만 남고 메타가 사라졌다**(REQ-B10).
+
+  ⚠️ 이 자리에 있던 "프론트 주도 저장을 택한 이유: extract-v2는 selections/layout을
+     모르기 때문"이라는 설명은 **사실이 아니었다** — ExtractV2Request는 둘 다 받는다.
+     낡은 근거가 남아 서버 저장이 비싼 선택으로 오해될 뻔했다. (2026-07-31 정정)
 """
 import uuid
 from datetime import datetime, timezone

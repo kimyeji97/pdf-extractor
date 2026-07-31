@@ -37,7 +37,6 @@ import {
   startExtractV2,
   getStatus,
   getWorkbook,
-  createWorkbookMeta,
   listCovers,
 } from "api/client";
 
@@ -230,6 +229,10 @@ export default function EditorPage() {
     setGenerateError("");
     setDownloadUrl(null);
     try {
+      // 문제집 메타 저장에 필요한 정보를 **생성 요청에 함께 실어 보낸다** (REQ-B10).
+      // 종전에는 아래 폴링의 DONE 분기에서 createWorkbookMeta 로 저장했는데, 그 폴링이
+      // 화면 수명에 묶여 있어 생성 중 화면을 떠나면 PDF만 남고 이력에서 사라졌다.
+      // 이제 저장 주체는 백엔드다 — 여기서 다시 저장하면 이력에 2건이 뜬다. (계약 #22)
       const selections = basket.map((b) => ({
         jobId: b.jobId,
         pageNum: b.pageNum,
@@ -238,11 +241,14 @@ export default function EditorPage() {
         manualId: b.isManual ? b.manualId : undefined,
         label: b.displayTitle,
         scale: b.scale ?? 1,
+        workbookName: b.workbookName || undefined,
+        sourceFilename: b.sourceFilename || undefined,
       }));
       const { job_id: exportJobId } = await startExtractV2(
         selections,
         layout,
         selectedCoverId,
+        trimmed,
       );
       exportPollRef.current = setInterval(async () => {
         try {
@@ -252,6 +258,9 @@ export default function EditorPage() {
             exportPollRef.current = null;
             setGenerating(false);
             setGenerateStatus("done");
+            // 자동 다운로드는 **이 화면에 머문 경우에만** 일어난다 (REQ-B10 결정).
+            // 떠난 사용자에게 브라우저 다운로드를 강제할 수단이 없으므로, 이탈했으면
+            // 생성 이력에서 받아 간다. 이 분기에는 영속 부수효과를 두지 않는다 (계약 #22).
             if (data.download_url) {
               setDownloadUrl(data.download_url);
               const a = document.createElement("a");
@@ -261,26 +270,6 @@ export default function EditorPage() {
               a.click();
               document.body.removeChild(a);
             }
-            try {
-              await createWorkbookMeta({
-                layout,
-                filename: trimmed,
-                name: trimmed,
-                question_count: basket.length,
-                result_job_id: exportJobId,
-                selections: basket.map((b) => ({
-                  question_id: b.questionId,
-                  job_id: b.jobId,
-                  page_num: b.pageNum,
-                  question_num: b.isManual ? undefined : b.questionNum,
-                  manual_id: b.isManual ? b.manualId : undefined,
-                  title: b.displayTitle,
-                  workbook_name: b.workbookName || undefined,
-                  source_filename: b.sourceFilename || undefined,
-                  scale: b.scale ?? 1,
-                })),
-              });
-            } catch {}
           } else if (data.status === "FAILED") {
             clearInterval(exportPollRef.current);
             exportPollRef.current = null;

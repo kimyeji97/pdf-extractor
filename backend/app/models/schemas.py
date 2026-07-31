@@ -97,8 +97,15 @@ class SelectionItem(BaseModel):
     question_num: Optional[int] = None
     manual_id: Optional[str] = None     # 수동 추가 문항 UUID (v3 REQ-13)
     custom_region: Optional[RegionCoord] = None
-    label: Optional[str] = None
+    label: Optional[str] = None          # 문항 라벨. WorkbookSelectionItem.title 과 같은 값이다
     scale: float = 1.0                  # 셀 내 확대/축소 배율 (좌상단 고정, 2026-07-25)
+    # ── 아래 2개는 표시 전용 (REQ-B10) ──────────────────
+    # 추출 자체에는 쓰이지 않는다. 백엔드가 완료 시 WorkbookSelectionItem 을 채우려면
+    # 필요한데 이 요청에만 실려 오기 때문에 받아 둔다.
+    # ⚠️ 이 workbook_name 은 **출처** 문제집 이름이다.
+    #    ExtractV2Request.workbook_name(= 만들 문제집 이름)과 이름은 같고 뜻이 반대다.
+    workbook_name: Optional[str] = None
+    source_filename: Optional[str] = None   # 출처 원본 파일명 (이름이 겹칠 때의 구분용 — 계약 #17)
 
 
 class ExtractV2Request(BaseModel):
@@ -107,6 +114,17 @@ class ExtractV2Request(BaseModel):
     layout: Optional[str] = Field(default="2단", description="문제집 레이아웃: '2단', '4단', '6단'")
     # 표지: 저장된 cover_id 지정 시 생성된 PDF 첫 페이지에 표지 삽입
     cover_id: Optional[str] = Field(default=None, description="표지 cover_id (선택)")
+    # REQ-B10: **생성될** 문제집 이름. WorkbookMeta 의 filename·name 을 둘 다 이 값으로 채운다
+    # (프론트가 종전부터 두 필드에 같은 값을 보내 왔다).
+    #
+    # ⚠️ **이 필드의 유무가 "메타를 누가 저장하는가"의 신호다.**
+    #   있음 → 새 프론트. 백엔드가 생성 성공 시 문제집 메타를 쓴다.
+    #   없음 → 구 프론트. 백엔드는 쓰지 않는다(프론트가 POST /api/workbooks 로 직접 쓴다).
+    # 이 분기가 없으면 백엔드 배포 후 프론트 배포 전까지 **둘 다 저장해 이력에 2건**이 뜨고,
+    # 그중 하나는 이름이 없다. 값이 아니라 **존재 여부**가 의미를 가지므로 기본값을 채우지 말 것.
+    workbook_name: Optional[str] = Field(
+        default=None, description="생성될 문제집 이름 (있으면 백엔드가 완료 시 메타를 저장)"
+    )
 
 
 class ExtractV2Response(BaseModel):
