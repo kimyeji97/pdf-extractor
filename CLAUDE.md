@@ -416,6 +416,13 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     문제집 메타 저장이 이 분기에 있어서, 생성 중 화면을 떠나면 **PDF는 만들어지는데 생성 이력에는
     영원히 안 나타났다** — 사용자에겐 "생성 실패"로 보이고 결과물은 고아가 된다. 서버·프론트 어느
     쪽도 에러를 내지 않아 로그로도 안 잡힌다. (REQ-B10)
+23. **문제집 메타의 저장 주체는 백엔드 하나다** — `extract-v2`의 백그라운드 작업이 생성 성공 시
+    `_save_workbook_meta()`로 쓴다. **프론트에서 `POST /api/workbooks`를 다시 부르면 이력에
+    같은 문제집이 2건 뜬다**(`workbook_id`가 매번 새로 발급되므로 중복으로도 안 잡힌다).
+    저장 주체는 요청의 **`workbook_name` 유무**로 갈린다 — 있으면 백엔드가 쓰고, 없으면(구 프론트)
+    쓰지 않는다. 그러니 이 필드에 **기본값을 채우면 안 된다.** 값이 아니라 존재 여부가 의미다.
+    `client.js`의 `createWorkbookMeta`는 구 프론트 호환용으로 남아 있을 뿐 **호출하지 않는다.**
+    (REQ-B10 Phase 1~3)
 
 ## 상시 이슈
 
