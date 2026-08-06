@@ -16,7 +16,7 @@ from app.models.schemas import (
     SelectionItem, ExtractV2Request, ExtractV2Response,
     WorkbookMeta, WorkbookSelectionItem,
 )
-from app.services import storage, pdf_service
+from app.services import storage, pdf_service, notification_service
 
 router = APIRouter()
 
@@ -217,3 +217,8 @@ def _process_extraction_v2(
 
         finally:
             storage.put_status(export_status)
+
+            # 완료 알림 (REQ-F09). ⚠️ `if workbook_name:` **바깥**이다 —
+            # 그 분기는 메타 저장 주체를 가르는 것(계약 #23)이지 알림과는 목적이 다르다.
+            # 안쪽에 넣으면 구 프론트로 만든 문제집은 영원히 알림이 안 온다.
+            notification_service.emit_export(export_status, workbook_name)

@@ -20,6 +20,7 @@ from app.models.schemas import BoundariesStatus, UploadResponse, JobStatusFile, 
 from app.services import storage
 from app.services import thumbnail_service
 from app.services import prewarm_service
+from app.services import notification_service
 from app.utils.question_parser import detect_question_boundaries
 
 logger = logging.getLogger(__name__)
@@ -176,6 +177,11 @@ def _trigger_boundary_detection(job_id: str) -> None:
     finally:
         storage.put_status(status_file)
         logger.info("[boundary] status 저장 완료 | job_id=%s boundaries_status=%s", job_id, status_file.boundaries_status)
+
+        # 완료 알림 (REQ-F09). 백그라운드 감지 경로이므로 알림 대상이다 —
+        # 조회 경로(list_all_questions·list_questions)의 지연 감지에는 붙이지 않는다.
+        # 성공·실패 모두 알린다 (severity 로 구분).
+        notification_service.emit_detection(status_file)
 
 
 # ── 파일 서빙 (로컬 모드 전용) ────────────────────────────

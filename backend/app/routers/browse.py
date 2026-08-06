@@ -36,6 +36,7 @@ from app.models.schemas import (
 from app.services import storage
 from app.services import thumbnail_service
 from app.services import prewarm_service
+from app.services import notification_service
 from app.utils.question_parser import detect_question_boundaries, QuestionBoundary
 
 router = APIRouter()
@@ -330,6 +331,11 @@ def _run_refresh_detection(job_id: str) -> None:
 
     finally:
         storage.put_status(job)
+
+        # 완료 알림 (REQ-F09). 재감지는 백그라운드 경로이므로 알림 대상이다.
+        # 아래 list_all_questions·list_questions 의 지연 감지에는 붙이지 않는다 —
+        # 사용자가 지금 보고 있는 화면에 대해 "완료됐습니다"가 뜬다.
+        notification_service.emit_detection(job)
 
 
 # ── 페이지 목록 ───────────────────────────────────────────

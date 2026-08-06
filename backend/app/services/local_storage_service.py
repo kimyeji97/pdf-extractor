@@ -14,15 +14,19 @@ STORAGE_BACKEND=local 일 때 storage.py 팩토리가 이 모듈을 선택한다
   ├── thumbnails/{job_id}/q_{page}_{num}.png
   ├── thumbnails/{job_id}/manual_{page}_{manual_id}.png   ← v3 신규
   ├── manual_questions/{job_id}.json                       ← v3 신규
-  └── workbooks/{workbook_id}.json                         ← v3 신규
+  ├── workbooks/{workbook_id}.json                         ← v3 신규
+  ├── notifications/{YYYY-MM}/{ISO}-{job_id}.json          ← REQ-F09
+  └── notifications/read_cursor.json                       ← REQ-F09
 """
 import json
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List
 
 from app.core.config import settings
 from app.models.schemas import JobStatusFile, JobStatus
+from app.utils import notification_key as nkey
 
 _BASE = Path(settings.LOCAL_STORAGE_DIR)
 
@@ -346,6 +350,83 @@ def delete_job(job_id: str) -> None:
 
 def delete_workbook(workbook_id: str) -> None:
     (_BASE / "workbooks" / f"{workbook_id}.json").unlink(missing_ok=True)
+
+
+# ── 알림 (REQ-F09) ───────────────────────────────────────
+#
+# 레이아웃: notifications/{YYYY-MM}/{ISO}-{job_id}.json · notifications/read_cursor.json
+# 키 형식은 app/utils/notification_key.py 가 단일 출처다 (s3_service 와 공유).
+
+def save_notification(data: dict) -> str:
+    """
+    알림 1건을 **파일 1개**로 저장하고 상대 키를 반환한다.
+
+    단일 feed.json 에 append 하지 않는 이유 — read-modify-write 가 겹치면
+    두 알림 중 하나가 조용히 사라진다. 유실은 F09 의 존재 이유를 깎는 실패다.
+    """
+    created_at = data.get("created_at")
+    if isinstance(created_at, str):
+        dt = nkey.to_utc(datetime.fromisoformat(created_at))
+    elif isinstance(created_at, datetime):
+        dt = nkey.to_utc(created_at)
+    else:
+        dt = datetime.now(timezone.utc)
+
+    body = {**data, "created_at": dt.isoformat()}
+    rel = nkey.build_relpath(dt, str(body.get("job_id", "unknown")))
+    path = _ensure(_BASE / nkey.NOTIFICATIONS_PREFIX / rel)
+    path.write_text(json.dumps(body, ensure_ascii=False, default=str), encoding="utf-8")
+    return rel
+
+
+def list_notification_keys() -> List[str]:
+    """
+    알림 상대 키 목록. **파일을 열지 않는다** — 신규 판정은 키 이름만으로 한다.
+    """
+    root = _BASE / nkey.NOTIFICATIONS_PREFIX
+    if not root.exists():
+        return []
+    keys = []
+    for month_dir in root.iterdir():
+        if not month_dir.is_dir():
+            continue
+        for path in month_dir.glob("*.json"):
+            if path.name == nkey.READ_CURSOR_NAME:
+                continue
+            keys.append(f"{month_dir.name}/{path.name}")
+    return keys
+
+
+def read_notification(relpath: str) -> Optional[dict]:
+    path = _BASE / nkey.NOTIFICATIONS_PREFIX / relpath
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def delete_notification_month(month: str) -> None:
+    """보관 기간이 지난 월 프리픽스를 통째로 삭제한다 (조회 시 lazy 정리)."""
+    month_dir = _BASE / nkey.NOTIFICATIONS_PREFIX / month
+    if month_dir.is_dir():
+        shutil.rmtree(month_dir, ignore_errors=True)
+
+
+def get_read_cursor() -> Optional[str]:
+    path = _BASE / nkey.NOTIFICATIONS_PREFIX / nkey.READ_CURSOR_NAME
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("cursor")
+    except Exception:
+        return None
+
+
+def save_read_cursor(cursor: str) -> None:
+    path = _ensure(_BASE / nkey.NOTIFICATIONS_PREFIX / nkey.READ_CURSOR_NAME)
+    path.write_text(json.dumps({"cursor": cursor}), encoding="utf-8")
 
 
 def cover_image_key(cover_id: str, ext: str = "jpg") -> str:

@@ -1,0 +1,12 @@
+# 테스트 전용 의존성 (REQ-F09 Phase 1에서 도입, 2026-08-06 승인)
+#
+# ⚠️ requirements.txt 에 섞지 말 것.
+#    Dockerfile 이 requirements.txt 를 설치하므로 섞으면 운영 이미지에 pytest 가 실린다.
+#
+# 설치:  pip install -r requirements-dev.txt
+# 실행:  cd backend && pytest
+
+-r requirements.txt
+
+pytest==8.3.3
+httpx==0.27.2      # fastapi.testclient.TestClient 가 요구한다

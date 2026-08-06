@@ -207,3 +207,41 @@ class WorkbookListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+# ── 알림 (REQ-F09) ────────────────────────────────────────────
+
+class NotificationKind(str, Enum):
+    DETECTION = "detection"   # 문항 감지 (최초·재감지)
+    EXPORT = "export"         # 문제집 생성
+
+
+class NotificationSeverity(str, Enum):
+    SUCCESS = "success"
+    ERROR = "error"           # 실패도 알린다 — "생성 실패했습니다"야말로 알려야 할 일이다
+
+
+class NotificationItem(BaseModel):
+    """
+    알림 1건. 저장 파일 1개와 1:1 대응한다.
+
+    kind·title 이 Optional 인 것은 하위 호환 때문이 아니라, 알림 파일이
+    **여러 시점의 스키마로 30일간 공존**하기 때문이다. 필드가 늘어도 옛 파일이
+    역직렬화에서 터지면 피드 전체가 죽는다.
+    """
+    job_id: str
+    created_at: str
+    severity: NotificationSeverity = NotificationSeverity.SUCCESS
+    kind: Optional[NotificationKind] = None
+    title: Optional[str] = None
+    message: Optional[str] = None
+
+
+class NotificationListResponse(BaseModel):
+    notifications: list[NotificationItem]
+    unread_count: int
+
+
+class NotificationReadResponse(BaseModel):
+    cursor: Optional[str] = None
+    unread_count: int = 0

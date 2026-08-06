@@ -14,16 +14,20 @@ R2 버킷 + R2_ROOT_PREFIX 조합으로 환경(dev/prod)을 구분한다.
   {root}/thumbnails/{job_id}/manual_{page}_{manual_id}.png
   {root}/manual_questions/{job_id}.json
   {root}/workbooks/{workbook_id}.json
+  {root}/notifications/{YYYY-MM}/{ISO}-{job_id}.json
+  {root}/notifications/read_cursor.json
 """
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from typing import Optional, List
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from app.core.config import settings
 from app.models.schemas import JobStatusFile, JobStatus
+from app.utils import notification_key as nkey
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,7 @@ BOUNDARIES_PREFIX = "boundaries"
 PAGE_INFO_PREFIX = "page_info"
 MANUAL_QUESTIONS_PREFIX = "manual_questions"
 WORKBOOKS_PREFIX = "workbooks"
+NOTIFICATIONS_PREFIX = nkey.NOTIFICATIONS_PREFIX
 
 # Cache-Control 정책
 # Cloudflare CDN이 커스텀 도메인으로 서빙할 때 이 헤더를 따른다.
@@ -432,6 +437,58 @@ def delete_cover(cover_id: str) -> None:
 
 
 # ── job / 문제집 삭제 ─────────────────────────────────────
+
+# ── 알림 (REQ-F09) ───────────────────────────────────────
+#
+# 키 형식은 app/utils/notification_key.py 가 단일 출처다 (local_storage_service 와 공유).
+# 폴링이 LIST 만으로 신규를 판정하도록 키 이름에 타임스탬프를 박는다 —
+# list_workbooks() 처럼 전량을 읽으면 폴링마다 LIST + N GET 이 돈다.
+
+def save_notification(data: dict) -> str:
+    """알림 1건을 오브젝트 1개로 저장하고 상대 키를 반환한다."""
+    created_at = data.get("created_at")
+    if isinstance(created_at, str):
+        dt = nkey.to_utc(datetime.fromisoformat(created_at))
+    elif isinstance(created_at, datetime):
+        dt = nkey.to_utc(created_at)
+    else:
+        dt = datetime.now(timezone.utc)
+
+    body = {**data, "created_at": dt.isoformat()}
+    rel = nkey.build_relpath(dt, str(body.get("job_id", "unknown")))
+    _put_json(_key(NOTIFICATIONS_PREFIX, rel), body)
+    return rel
+
+
+def list_notification_keys() -> List[str]:
+    """알림 상대 키 목록. 오브젝트 본문은 읽지 않는다 (LIST 만)."""
+    prefix = _key(NOTIFICATIONS_PREFIX) + "/"
+    paginator = r2.get_paginator("list_objects_v2")
+    keys: List[str] = []
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            rel = obj["Key"][len(prefix):]
+            if rel.endswith(".json") and "/" in rel:
+                keys.append(rel)
+    return keys
+
+
+def read_notification(relpath: str) -> Optional[dict]:
+    return _get_json_or_none(_key(NOTIFICATIONS_PREFIX, relpath))
+
+
+def delete_notification_month(month: str) -> None:
+    _delete_prefix(_key(NOTIFICATIONS_PREFIX, month) + "/")
+
+
+def get_read_cursor() -> Optional[str]:
+    data = _get_json_or_none(_key(NOTIFICATIONS_PREFIX, nkey.READ_CURSOR_NAME))
+    return data.get("cursor") if data else None
+
+
+def save_read_cursor(cursor: str) -> None:
+    _put_json(_key(NOTIFICATIONS_PREFIX, nkey.READ_CURSOR_NAME), {"cursor": cursor})
+
 
 def delete_job(job_id: str) -> None:
     """
