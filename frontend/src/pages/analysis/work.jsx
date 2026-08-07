@@ -30,6 +30,7 @@ import QuestionAnalysisPanel from "components/QuestionAnalysisPanel";
 import PdfPreviewPanel from "components/PdfPreviewPanel";
 import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
 import { getPages, refreshJobQuestions, getJobInfo, addManualQuestion, getAllQuestions } from "api/client";
+import { useJobCompletion } from "hooks/useJobCompletion";
 import { tintBg } from "theme/tint";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
@@ -53,10 +54,6 @@ export default function AnalysisWorkPage() {
   const [refreshError, setRefreshError] = useState("");
   const pagesRef = useRef(pages);
   useEffect(() => { pagesRef.current = pages; }, [pages]);
-  const refreshPollRef = useRef(null);
-  useEffect(() => () => {
-    if (refreshPollRef.current) clearInterval(refreshPollRef.current);
-  }, []);
 
   // ── 원본 PDF URL (REQ-F07) ────────────────────────────
   const [pdfUrl, setPdfUrl]               = useState(null);
@@ -145,30 +142,31 @@ export default function AnalysisWorkPage() {
   }, [jobId]);
 
   // ── 재감지 ────────────────────────────────────────────
+  //
+  // 완료 감시는 전역 알림 피드가 한다 (REQ-F09 Phase 3). 종전에는 이 화면이 2초마다
+  // getJobInfo 로 boundaries_status 를 캐물었고, 화면을 떠나면 그 감시가 죽었다.
+  useJobCompletion(refreshing ? jobId : null, {
+    onDone: () => {
+      setRefreshing(false);
+      fetchPages(jobId);
+    },
+    onError: () => {
+      setRefreshing(false);
+      setRefreshError("재감지에 실패했습니다.");
+    },
+  });
+
   const handleRefresh = useCallback(async () => {
     if (!jobId || refreshing) return;
     setRefreshing(true);
     setRefreshError("");
     try {
       await refreshJobQuestions(jobId);
-      refreshPollRef.current = setInterval(async () => {
-        try {
-          const info = await getJobInfo(jobId);
-          const st   = info.boundaries_status;
-          if (st === "DONE" || st === "FAILED") {
-            clearInterval(refreshPollRef.current);
-            refreshPollRef.current = null;
-            setRefreshing(false);
-            if (st === "FAILED") setRefreshError("재감지에 실패했습니다.");
-            else fetchPages(jobId);
-          }
-        } catch { /* 폴링 오류 무시 */ }
-      }, 2000);
     } catch (e) {
       setRefreshError(e.message || "재감지 요청 실패");
       setRefreshing(false);
     }
-  }, [jobId, refreshing, fetchPages]);
+  }, [jobId, refreshing]);
 
   // ── 수동 추가 취소/초기화 ─────────────────────────────
   const handleCancelManual = useCallback(() => {

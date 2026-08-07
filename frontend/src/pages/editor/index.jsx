@@ -39,6 +39,7 @@ import {
   getWorkbook,
   listCovers,
 } from "api/client";
+import { useJobCompletion } from "hooks/useJobCompletion";
 
 const API_ROOT = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"
@@ -63,7 +64,44 @@ export default function EditorPage() {
   const [generateStatus, setGenerateStatus] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
   const [generateError, setGenerateError] = useState("");
-  const exportPollRef = useRef(null);
+  const [exportJobId, setExportJobId] = useState(null);
+
+  // 생성 완료 감시는 전역 알림 피드가 한다 (REQ-F09 Phase 3). 종전에는 이 화면이 2초마다
+  // getStatus 를 캐물었고, 화면을 떠나면 감시가 죽었다.
+  //
+  // ⚠️ 조회가 0이 되지는 않는다 — 알림 항목에는 download_url 이 없어서(job_id·created_at·
+  //    severity·kind·title·message 뿐) 완료를 안 뒤 **한 번** getStatus 로 받아 온다.
+  //    폴링 N회가 완료 시점 1회로 줄어드는 것이지 사라지는 게 아니다 (2026-08-07 결정).
+  //
+  // ⚠️ 자동 다운로드가 이 훅 안에 있는 것이 곧 B10 불변식이다 — 훅은 화면이 살아 있을 때만
+  //    콜백을 부르므로, 떠난 사용자에게 다운로드가 튀어나오지 않는다. 전역으로 올리지 말 것.
+  useJobCompletion(exportJobId, {
+    onDone: async () => {
+      setExportJobId(null);
+      setGenerating(false);
+      setGenerateStatus("done");
+      try {
+        const data = await getStatus(exportJobId);
+        if (data.download_url) {
+          setDownloadUrl(data.download_url);
+          const a = document.createElement("a");
+          a.href = data.download_url;
+          a.download = "workbook.pdf";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+      } catch {
+        // 다운로드 URL 취득 실패는 생성 실패가 아니다 — 결과물은 생성 이력에 있다.
+      }
+    },
+    onError: () => {
+      setExportJobId(null);
+      setGenerating(false);
+      setGenerateStatus("error");
+      setGenerateError("PDF 생성에 실패했습니다.");
+    },
+  });
 
   const [panelWidths, setPanelWidths] = useState({
     files: 220,
@@ -244,54 +282,19 @@ export default function EditorPage() {
         workbookName: b.workbookName || undefined,
         sourceFilename: b.sourceFilename || undefined,
       }));
-      const { job_id: exportJobId } = await startExtractV2(
+      const { job_id: newExportJobId } = await startExtractV2(
         selections,
         layout,
         selectedCoverId,
         trimmed,
       );
-      exportPollRef.current = setInterval(async () => {
-        try {
-          const data = await getStatus(exportJobId);
-          if (data.status === "DONE") {
-            clearInterval(exportPollRef.current);
-            exportPollRef.current = null;
-            setGenerating(false);
-            setGenerateStatus("done");
-            // 자동 다운로드는 **이 화면에 머문 경우에만** 일어난다 (REQ-B10 결정).
-            // 떠난 사용자에게 브라우저 다운로드를 강제할 수단이 없으므로, 이탈했으면
-            // 생성 이력에서 받아 간다. 이 분기에는 영속 부수효과를 두지 않는다 (계약 #22).
-            if (data.download_url) {
-              setDownloadUrl(data.download_url);
-              const a = document.createElement("a");
-              a.href = data.download_url;
-              a.download = "workbook.pdf";
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-            }
-          } else if (data.status === "FAILED") {
-            clearInterval(exportPollRef.current);
-            exportPollRef.current = null;
-            setGenerating(false);
-            setGenerateStatus("error");
-            setGenerateError("PDF 생성에 실패했습니다.");
-          }
-        } catch {}
-      }, 2000);
+      setExportJobId(newExportJobId);
     } catch (e) {
       setGenerating(false);
       setGenerateStatus("error");
       setGenerateError(e.message || "요청 실패");
     }
   };
-
-  useEffect(
-    () => () => {
-      if (exportPollRef.current) clearInterval(exportPollRef.current);
-    },
-    [],
-  );
 
   return (
     /* REQ-D07 2안 — 맞붙은 4열을 회색 캔버스 위 카드 4장으로 재구성.
