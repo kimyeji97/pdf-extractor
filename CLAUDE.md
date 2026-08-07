@@ -81,11 +81,13 @@ pdf-extractor/
 │   │   ├── theme/                          # MUI 테마 (palette·typography·컴포넌트 오버라이드)
 │   │   │   └── tint.js                     # tintBg/tintSx/tintFg — 모드 안전 색조 배경 (계약 #20)
 │   │   ├── routes/                         # paths.ts · router.tsx
+│   │   ├── contexts/                       # 전역 상태 — NotificationContext (REQ-F09 Phase 2)
 │   │   ├── hooks/                          # useDebouncedValue · usePaginatedList
 │   │   ├── lib/utils.ts
+│   │   ├── setupTests.js                   # vitest 공용 셋업
 │   │   └── utils/workbookLayout.js         # 레이아웃 계산 유틸
-│   ├── package.json                        # 32개 의존성
-│   └── vite.config.ts
+│   ├── package.json                        # 32개 의존성 + 테스트 4개(devDependencies)
+│   └── vite.config.ts                      # ⚠️ vite.config.js(추적되는 tsc -b 산출물)와 짝
 │
 ├── docs/
 │   ├── specs/                              # 요구사항 명세 70+ (REQ-## 넘버링)
@@ -442,11 +444,28 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     `conftest.py`의 세션 픽스처가 이 격리를 단언으로 지킨다. **그 단언을 약화시키지 말 것** —
     실패는 조용한 오염 대신 나는 굉음이다. (REQ-F09 Phase 1, 2026-08-07 실측)
 
+25. **케이스 ID를 테스트명에 박는다** — 백엔드 `test_F09_01_…`, 프론트 `it('[F09-18] …')`.
+    계획서 `## 검증 계약` 표의 `ID` 열과 **글자 그대로** 맞아야 한다. 어기면 `/testrun`의
+    필터(`pytest -k 'F09'` · `vitest -t 'F09-'`)가 **에러 없이 0건**을 반환하고, 0건은
+    초록색으로 보인다 — 표와 코드를 잇는 끈이 이 ID 하나뿐이라 끊기면 추적이 통째로 죽는다.
+    같은 이유로 **근거 인용은 원문의 줄바꿈을 넘지 않는 범위에서 딴다.** `grep -F`는 줄
+    단위라 여러 줄에 걸친 인용은 원문이 멀쩡해도 0건이 되고, 그러면 "스펙이 바뀌었다"는
+    신호와 구별되지 않는다(F09-22에서 실제로 발생). (REQ-F09 Phase 1~2)
+
+### 프론트엔드
+
+26. **폴링 경로는 `apiFetch`가 아니라 raw `fetch`를 쓴다** — `client.js`의 `apiFetch`는
+    **GET에도** `_setLoading(+1)`을 걸어 `GlobalDim`(전역 딤)을 켠다. 폴링에 쓰면 주기마다
+    화면 전체가 번쩍인다. `getStatus`·`getJobInfo`·`listNotifications`가 raw `fetch`인 것은
+    누락이 아니라 이 때문이다 — **관례를 따를수록 틀리는 자리**라 명시해 둔다.
+    (REQ-F09 Phase 2)
+
 ## 상시 이슈
 
 - 인증/인가 미구현 (CORS 전체 허용 상태)
-- 테스트는 백엔드 알림(REQ-F09 Phase 1) 17건뿐 — 그 외 영역과 프론트는 여전히 0건.
-  실행: `cd backend && pip install -r requirements-dev.txt && pytest` (계약 #24)
+- 테스트는 REQ-F09 알림 경로 28건뿐(백엔드 17 · 프론트 11) — 그 외 영역은 여전히 0건.
+  실행: `cd backend && pip install -r requirements-dev.txt && pytest` (계약 #24) ·
+  `cd frontend && npm test` (vitest)
 - 페이지별 문항 API 개별 호출 성능 문제 → REQ-P01/REQ-P02에서 다룸
 
 ## ADR (Architecture Decision Records)
