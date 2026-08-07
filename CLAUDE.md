@@ -82,7 +82,7 @@ pdf-extractor/
 │   │   │   └── tint.js                     # tintBg/tintSx/tintFg — 모드 안전 색조 배경 (계약 #20)
 │   │   ├── routes/                         # paths.ts · router.tsx
 │   │   ├── contexts/                       # 전역 상태 — NotificationContext (REQ-F09 Phase 2)
-│   │   ├── hooks/                          # useDebouncedValue · usePaginatedList
+│   │   ├── hooks/                          # useDebouncedValue · usePaginatedList · useJobCompletion(계약 #27)
 │   │   ├── lib/utils.ts
 │   │   ├── setupTests.js                   # vitest 공용 셋업
 │   │   └── utils/workbookLayout.js         # 레이아웃 계산 유틸
@@ -459,6 +459,15 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     화면 전체가 번쩍인다. `getStatus`·`getJobInfo`·`listNotifications`가 raw `fetch`인 것은
     누락이 아니라 이 때문이다 — **관례를 따를수록 틀리는 자리**라 명시해 둔다.
     (REQ-F09 Phase 2)
+
+27. **알림 피드를 구독할 때는 기준선을 잡는다** — 피드는 **최근 30일치**를 담고 있어서
+    (첫 진입 시 최신 50건) "내 `job_id`의 알림이 피드에 있나"로 판정하면 **작업을 시작하자마자
+    지난주 알림을 보고 즉시 완료로 튄다.** `useJobCompletion`은 감시를 시작하는 순간 이미 있던
+    알림을 '처리됨'으로 찍어 이걸 막는다 — **새 화면이 피드를 직접 구독하지 말고 이 훅을 쓸 것.**
+    기준선은 `useEffect`가 아니라 **렌더 중에** 잡아야 한다(effect로 미루면 그 사이 커밋에서
+    옛 알림이 이미 처리된다). 증상이 "가끔 즉시 완료로 뜬다"라 재현이 어렵다.
+    자동 다운로드처럼 **화면에 묶여야 하는 부수효과는 이 훅의 콜백 안에 둔다** — 훅이 화면
+    수명에 묶여 있다는 사실이 B10 불변식을 지키는 방식이다(계약 #22). (REQ-F09 Phase 3)
 
 ## 상시 이슈
 
