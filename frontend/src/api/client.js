@@ -178,6 +178,29 @@ export async function getStatus(jobId) {
 }
 
 /**
+ * GET /api/notifications
+ * 완료 알림 피드 (REQ-F09 Phase 2 전역 폴링의 유일한 대상)
+ *
+ * ⚠️ apiFetch 가 아니라 raw fetch 다. apiFetch 는 GET 에도 _setLoading 을 걸어
+ *    **전역 딤(GlobalDim)을 켠다** — 상시 폴링에 쓰면 주기마다 화면이 번쩍인다.
+ *    getStatus·getJobInfo 가 raw fetch 인 것도 같은 이유(폴링 경로)다.
+ *
+ * @param {{ since?: string, limit?: number }} [opts]
+ *        since 미지정 = 최근 30일 전체(최신 50건). 서버 기본값을 그대로 쓴다.
+ */
+export async function listNotifications(opts = {}) {
+  const { since, limit } = opts;
+  const qs = new URLSearchParams();
+  if (since) qs.set("since", since);
+  if (limit) qs.set("limit", String(limit));
+
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const res = await fetch(`${BASE_URL}/notifications${suffix}`);
+  if (!res.ok) throw new Error("알림 조회 실패");
+  return res.json(); // { notifications: [...], unread_count }
+}
+
+/**
  * GET /api/jobs/{jobId}/pages/{pageNum}/questions
  * 해당 페이지의 감지된 문항 목록 반환
  */

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router';
 import GlobalDim from 'components/GlobalDim';
+import { NotificationProvider } from 'contexts/NotificationContext';
 import { setLoadingCallback } from 'api/client';
 
 /**
@@ -19,11 +20,13 @@ const App = () => {
     return () => setLoadingCallback(null);
   }, []);
 
+  // NotificationProvider 는 Outlet 바깥이다 — 라우트가 바뀌어도 폴링이 끊기면 안 된다
+  // (REQ-F09 Phase 2). 화면 안쪽에 두면 종전 폴링과 같은 실패로 되돌아간다.
   return (
-    <>
+    <NotificationProvider>
       <GlobalDim visible={apiLoading} />
       <Outlet />
-    </>
+    </NotificationProvider>
   );
 };
 
