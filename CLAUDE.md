@@ -31,13 +31,15 @@ pdf-extractor/
 │   │   │   ├── extract.py                  # 추출 (v1, v2 멀티소스 + 레이아웃)
 │   │   │   ├── browse.py                   # 파일/페이지/문항 조회·편집·삭제 (665줄, 최대 라우터)
 │   │   │   ├── workbook.py                 # 문제집 CRUD
-│   │   │   └── cover.py                    # 표지 이미지 관리
+│   │   │   ├── cover.py                    # 표지 이미지 관리
+│   │   │   └── notification.py             # 완료 알림 조회·읽음 커서 (REQ-F09 Phase 1)
 │   │   ├── services/
 │   │   │   ├── storage.py                  # 스토리지 팩토리 (local ↔ s3 토글)
 │   │   │   ├── local_storage_service.py    # 로컬 파일 기반 스토리지 (개발용)
 │   │   │   ├── s3_service.py               # Cloudflare R2 스토리지 (운영용)
 │   │   │   ├── pdf_service.py              # PDF 추출 파이프라인 (크롭 + 레이아웃 조립)
 │   │   │   ├── thumbnail_service.py        # PyMuPDF 기반 썸네일 생성
+│   │   │   ├── notification_service.py     # 알림 저장·조회·30일 lazy 정리 (REQ-F09 Phase 1)
 │   │   │   └── textract_service.py         # Tesseract OCR 통합
 │   │   └── utils/
 │   │       ├── question_parser.py          # 문항 경계 감지 알고리즘 (400줄+, 핵심 로직)
@@ -313,6 +315,8 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
 - 미래 작업(아직 REQ 번호 없음): `docs/예정된작업.md`
 - 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~4 완료(스펙 §4-2).
   **REQ-D08(라이트/다크 모드) 완료** — 남은 것은 F09 알림 · REQ-27 로그인
+  (**REQ-F09는 Phase 1(백엔드) 완료·미배포**, 다음은 Phase 2 프론트 전역 폴링 —
+  [F09 계획서](docs/plans/PLAN-F09-completion-notification.md))
   (상세: [D07 스펙](docs/specs/20260725-REQ-D07-minimal-template-adoption.md) §4-1,
   [D08 스펙](docs/specs/20260729-REQ-D08-dark-mode.md))
 
@@ -424,10 +428,25 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     `client.js`의 `createWorkbookMeta`는 구 프론트 호환용으로 남아 있을 뿐 **호출하지 않는다.**
     (REQ-B10 Phase 1~3)
 
+### 테스트
+
+24. **테스트의 스토리지 격리는 `os.environ` "덮어쓰기"로 한다 — `pop`은 `.env`를 못 막는다.**
+    `backend/.env`는 gitignore지만 **실제로 존재하고 `STORAGE_BACKEND=s3` + dev R2 자격증명을
+    담고 있다**(`.env.dev`와 바이트 동일). 격리 없이 테스트를 띄우면 **dev 실데이터에 붙어
+    쓰고 지운다.** pydantic Settings의 우선순위는 `os.environ` > `.env`이므로 —
+    - `os.environ["STORAGE_BACKEND"] = "local"`처럼 **값을 덮으면** `.env`를 이긴다.
+    - `os.environ.pop("R2_BUCKET_NAME")`처럼 **지우면 아무 효과가 없다.** pydantic이 `.env`에서
+      다시 읽는다. 빈 값으로 덮어야(`os.environ[k] = ""`) 실제로 비워진다.
+    설정을 강제하는 코드는 **어떤 `app.*` 임포트보다 위**에 있어야 한다 — `storage`는 임포트
+    시점에 백엔드를 고르고 `local_storage_service._BASE`도 그때 고정되므로 나중에 바꿔도 늦다.
+    `conftest.py`의 세션 픽스처가 이 격리를 단언으로 지킨다. **그 단언을 약화시키지 말 것** —
+    실패는 조용한 오염 대신 나는 굉음이다. (REQ-F09 Phase 1, 2026-08-07 실측)
+
 ## 상시 이슈
 
 - 인증/인가 미구현 (CORS 전체 허용 상태)
-- 테스트 코드 없음
+- 테스트는 백엔드 알림(REQ-F09 Phase 1) 17건뿐 — 그 외 영역과 프론트는 여전히 0건.
+  실행: `cd backend && pip install -r requirements-dev.txt && pytest` (계약 #24)
 - 페이지별 문항 API 개별 호출 성능 문제 → REQ-P01/REQ-P02에서 다룸
 
 ## ADR (Architecture Decision Records)
