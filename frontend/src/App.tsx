@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router';
 import GlobalDim from 'components/GlobalDim';
 import { NotificationProvider } from 'contexts/NotificationContext';
+import NotificationSnackbar from 'components/NotificationSnackbar';
 import { setLoadingCallback } from 'api/client';
 
 /**
@@ -26,6 +27,8 @@ const App = () => {
     <NotificationProvider>
       <GlobalDim visible={apiLoading} />
       <Outlet />
+      {/* 스낵바는 라우트 밖이다 — 완료가 어느 화면에서든 잡히므로 (REQ-F09 Phase 5) */}
+      <NotificationSnackbar />
     </NotificationProvider>
   );
 };

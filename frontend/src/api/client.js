@@ -201,6 +201,20 @@ export async function listNotifications(opts = {}) {
 }
 
 /**
+ * POST /api/notifications/read
+ * 읽음 커서 갱신 (REQ-F09 Phase 5 — 팝오버를 열면 전체 읽음)
+ *
+ * 항목별이 아니라 전체 읽음이라 커서 하나로 끝난다(2026-08-03 결정).
+ * 커서가 서버에 있으므로 **다른 창의 뱃지도 함께 사라진다** — "모두의 알림"의 귀결이고
+ * 의도된 동작이다.
+ */
+export async function markNotificationsRead() {
+  const res = await fetch(`${BASE_URL}/notifications/read`, { method: "POST" });
+  if (!res.ok) throw new Error("읽음 처리 실패");
+  return res.json(); // { cursor, unread_count }
+}
+
+/**
  * GET /api/jobs/{jobId}/pages/{pageNum}/questions
  * 해당 페이지의 감지된 문항 목록 반환
  */
