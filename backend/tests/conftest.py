@@ -11,9 +11,9 @@
     pytest 는 테스트 모듈보다 conftest 를 먼저 임포트하므로 이 위치가 유일하게 안전하다.
 
     2026-07-31 실측: `backend/.env` 가 `STORAGE_BACKEND=s3` 였고, 그대로 띄우면
-    **dev 실데이터(R2)에 붙는다.** 현재는 `.env` 가 없어 기본값 local 로 뜨지만
-    `cp .env.dev .env` 한 번이면 되살아난다. 환경변수는 .env 파일보다 우선하므로
-    여기서 강제하면 그 경우에도 막힌다.
+    **dev 실데이터(R2)에 붙는다.** 2026-08-07 실측에서 `.env` 가 다시 존재하며
+    `STORAGE_BACKEND=s3` 인 것을 확인했다 — 가정이 아니라 현재 상태다.
+    환경변수는 .env 파일보다 우선하므로 여기서 강제해야만 막힌다.
 """
 import os
 import tempfile
@@ -23,8 +23,15 @@ _IMPORT_TIME_ROOT = tempfile.mkdtemp(prefix="pdf-extractor-tests-")
 os.environ["STORAGE_BACKEND"] = "local"
 os.environ["LOCAL_STORAGE_DIR"] = _IMPORT_TIME_ROOT
 
-# R2 자격증명이 환경에 남아 있으면 지운다 — 격리가 뚫렸을 때 조용히 실데이터에
+# R2 자격증명을 빈 값으로 덮는다 — 격리가 뚫렸을 때 조용히 실데이터에
 # 붙는 대신 자격증명 부재로 시끄럽게 실패하도록 하는 2차 방어선이다.
+#
+# ⚠️ `os.environ.pop` 이 아니라 **빈 문자열 대입**이어야 한다.
+#    pop 은 os.environ 에서만 지우는데, 값의 출처가 `.env` 파일이면 pydantic 이
+#    거기서 다시 읽어 와 방어선이 통째로 무력해진다(2026-08-07 실측: pop 을 쓰던
+#    시절 `.env` 의 `R2_BUCKET_NAME=dailystudy-dev` 가 그대로 살아 아래 격리
+#    검증이 18건 전부 ERROR 로 떨어졌다). 환경변수는 `.env` 보다 우선하므로
+#    빈 값으로 **덮어야** `.env` 가 있든 없든 같은 결과가 된다.
 for _k in (
     "R2_ACCOUNT_ID",
     "R2_ACCESS_KEY_ID",
@@ -33,7 +40,7 @@ for _k in (
     "R2_PUBLIC_DOMAIN",
     "R2_ROOT_PREFIX",
 ):
-    os.environ.pop(_k, None)
+    os.environ[_k] = ""
 
 import json  # noqa: E402
 from concurrent.futures import Future  # noqa: E402
