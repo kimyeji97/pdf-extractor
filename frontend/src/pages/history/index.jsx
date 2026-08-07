@@ -27,6 +27,7 @@ import PageHeader from "components/PageHeader";
 import { WorkCanvas, CardRow, PanelCard, PanelCardHeader } from "components/WorkCanvas";
 import BookCard from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
+import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 
 function fmtDate(iso) {
@@ -54,6 +55,9 @@ export default function HistoryPage() {
   const {
     items: workbooks, total, loading, loadingMore, error, sentinelRef, reload: fetchWorkbooks,
   } = usePaginatedList(fetchPage);
+
+  // 생성이 끝나면 새로고침 없이 이력에 나타난다 (REQ-F09 Phase 4).
+  useNotificationRefresh(fetchWorkbooks);
 
   // ── 삭제 (문제집 + 결과 PDF, REQ-C08) ─────────────────
   const [deleteTarget, setDeleteTarget] = useState(null);

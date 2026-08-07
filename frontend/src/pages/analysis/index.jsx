@@ -22,6 +22,7 @@ import StatCards from "components/StatCards";
 import BookCard, { BOOK_CARD_W } from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
+import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
@@ -168,6 +169,11 @@ export default function AnalysisFilePage() {
   const {
     items: jobs, total, loading, loadingMore, error, sentinelRef, reload: fetchJobs,
   } = usePaginatedList(fetchPage);
+
+  // 감지가 끝나면 새로고침 없이 목록이 갱신된다 (REQ-F09 Phase 4).
+  // 종전에는 업로드 후 fetchJobs()를 한 번 부르고 끝이라 "분석 중" 배지가 붙은 카드는
+  // 새로고침 전까지 영원히 그 상태였고, isAnalyzing()이 클릭까지 막았다.
+  useNotificationRefresh(fetchJobs);
 
   const hasSearch = Boolean(debouncedName.trim() || debouncedType.trim());
 
