@@ -82,7 +82,7 @@ pdf-extractor/
 │   │   │   └── tint.js                     # tintBg/tintSx/tintFg — 모드 안전 색조 배경 (계약 #20)
 │   │   ├── routes/                         # paths.ts · router.tsx
 │   │   ├── contexts/                       # 전역 상태 — NotificationContext (REQ-F09 Phase 2)
-│   │   ├── hooks/                          # useDebouncedValue · usePaginatedList · useJobCompletion(계약 #27)
+│   │   ├── hooks/                          # useDebouncedValue · usePaginatedList · useJobCompletion · useNotificationRefresh (계약 #27)
 │   │   ├── lib/utils.ts
 │   │   ├── setupTests.js                   # vitest 공용 셋업
 │   │   └── utils/workbookLayout.js         # 레이아웃 계산 유틸
@@ -463,7 +463,10 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
 27. **알림 피드를 구독할 때는 기준선을 잡는다** — 피드는 **최근 30일치**를 담고 있어서
     (첫 진입 시 최신 50건) "내 `job_id`의 알림이 피드에 있나"로 판정하면 **작업을 시작하자마자
     지난주 알림을 보고 즉시 완료로 튄다.** `useJobCompletion`은 감시를 시작하는 순간 이미 있던
-    알림을 '처리됨'으로 찍어 이걸 막는다 — **새 화면이 피드를 직접 구독하지 말고 이 훅을 쓸 것.**
+    알림을 '처리됨'으로 찍어 이걸 막는다 — **새 화면이 피드를 직접 구독하지 말고 훅을 쓸 것**
+    (특정 job은 `useJobCompletion`, 목록 재조회는 `useNotificationRefresh`). 목록 쪽은 이유가
+    하나 더 있다 — 재조회를 폴링 틱에 걸면 **5초마다 목록 API(페이지네이션 + 썸네일)가 돈다**
+    (REQ-P03에서 걷어낸 병목과 같은 계열). 신규가 있을 때만, 여러 건이 와도 1회만 읽는다.
     기준선은 `useEffect`가 아니라 **렌더 중에** 잡아야 한다(effect로 미루면 그 사이 커밋에서
     옛 알림이 이미 처리된다). 증상이 "가끔 즉시 완료로 뜬다"라 재현이 어렵다.
     자동 다운로드처럼 **화면에 묶여야 하는 부수효과는 이 훅의 콜백 안에 둔다** — 훅이 화면
