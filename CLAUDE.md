@@ -72,6 +72,8 @@ pdf-extractor/
 │   │   │   ├── FileListPanel.jsx           # 업로드 파일 목록
 │   │   │   ├── UploadForm.jsx              # 파일 업로드 폼
 │   │   │   ├── ColorSchemeMenu.jsx         # 라이트/다크/시스템 3단 전환 (REQ-D08)
+│   │   │   ├── NotificationBell.jsx        # 헤더 벨 + 미읽음 뱃지 + 이력 팝오버 (REQ-F09 Phase 5)
+│   │   │   ├── NotificationSnackbar.jsx    # 완료 순간 인앱 스낵바 (App.tsx의 Outlet 밖)
 │   │   │   ├── GlobalDim.jsx               # 전역 로딩 딤
 │   │   │   ├── common/Logo.tsx
 │   │   │   └── loading/PageLoader.tsx
@@ -451,6 +453,12 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     같은 이유로 **근거 인용은 원문의 줄바꿈을 넘지 않는 범위에서 딴다.** `grep -F`는 줄
     단위라 여러 줄에 걸친 인용은 원문이 멀쩡해도 0건이 되고, 그러면 "스펙이 바뀌었다"는
     신호와 구별되지 않는다(F09-22에서 실제로 발생). (REQ-F09 Phase 1~2)
+    ⚠️ **프론트 컴포넌트는 앱과 같은 `ThemeProvider`(`theme/theme-provider`) 아래에서 렌더한다.**
+    `theme/tint.js`가 `theme.vars.palette`를 읽으므로 provider 없이 렌더하면
+    `Cannot read properties of undefined (reading 'palette')`로 죽는다 — **구현 결함이 아니라
+    테스트가 앱과 다른 무대를 그린 것**이다. 같은 계열로 `renderHook().unmount()` 뒤
+    `rerender()`도 React가 거부한다(루트는 살리고 화면 컴포넌트만 언마운트할 것).
+    둘 다 단언에 닿기 전에 터져 원인 판독을 방해한다. (REQ-F09 Phase 3·5 실측)
 
 ### 프론트엔드
 
