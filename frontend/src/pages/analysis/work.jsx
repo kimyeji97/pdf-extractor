@@ -37,6 +37,7 @@ import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } fro
 import { getPages, refreshJobQuestions, addManualQuestion, getAllQuestions } from "api/client";
 import { useJobCompletion } from "hooks/useJobCompletion";
 import { useAnalysisEntryGuard } from "hooks/useAnalysisEntryGuard";
+import { isRefreshBlocked } from "utils/jobStatus";
 import { tintBg } from "theme/tint";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
@@ -143,6 +144,10 @@ export default function AnalysisWorkPage() {
   // ⚠️ 원본 PDF URL도 이 훅이 받아 온 응답에서 꺼낸다. 화면이 따로 getJobInfo 를 부르면
   //    같은 응답을 두 번 받는다(raw fetch 라 dedup 되지 않는다). 계획서 § 제약 참조.
   const { blocked, reason, jobInfo, loading: guardLoading, confirm } = useAnalysisEntryGuard(jobId);
+
+  // 대기 중(PENDING)이면 재감지가 이미 걸려 있다 — 버튼만 막는다 (REQ-F11 Phase 2).
+  // 목록과 같은 판정 함수를 쓴다.
+  const refreshQueued = isRefreshBlocked(jobInfo);
 
   useEffect(() => {
     setPdfUrlLoading(guardLoading);
@@ -413,10 +418,23 @@ export default function AnalysisWorkPage() {
               <Chip label={pages.length} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
             )}
             <Box sx={{ flex: 1 }} />
-            <Tooltip title="전체 재감지">
-              <IconButton size="small" onClick={handleRefresh} disabled={refreshing}>
-                {refreshing ? <CircularProgress size={14} /> : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 16 }} />}
-              </IconButton>
+            {/* 대기 중이면 재감지가 이미 걸려 있다 — 다시 걸지 못하게 막고 그 사실을 보여준다
+                (REQ-F11 Phase 2). 진입은 허용한다: 아직 시작되지 않아 기존 문항이 유효하다. */}
+            {refreshQueued && (
+              <Typography variant="caption" sx={{ color: "text.disabled", mr: 0.5 }}>
+                재감지 대기 중
+              </Typography>
+            )}
+            <Tooltip title={refreshQueued ? "재감지가 대기 중입니다" : "전체 재감지"}>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={handleRefresh}
+                  disabled={refreshing || refreshQueued}
+                >
+                  {refreshing ? <CircularProgress size={14} /> : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 16 }} />}
+                </IconButton>
+              </span>
             </Tooltip>
           </PanelCardHeader>
 

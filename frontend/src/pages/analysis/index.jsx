@@ -23,6 +23,7 @@ import BookCard, { BOOK_CARD_W } from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
+import { isEntryBlocked } from "utils/jobStatus";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
@@ -64,11 +65,12 @@ function UploadCard({ onClick }) {
   );
 }
 
-function isAnalyzing(job) {
-  // 문항 분석이 완료/실패되면 job.status와 무관하게 클릭 가능
-  if (job.boundaries_status === "DONE" || job.boundaries_status === "FAILED") return false;
-  return true;
-}
+// 클릭 차단 판정은 `utils/jobStatus`가 단일 출처다 (REQ-F11 Phase 2).
+// 종전에는 이 파일이 자체 조건을 들고 있었고 상세 화면은 아무 판정도 하지 않아,
+// **목록에서만 막히고 URL 직접 진입·뒤로가기는 열려 있었다** — 두 화면이 같은 함수를
+// 쓰게 해서 규칙이 갈라지는 것을 구조로 막는다.
+//
+// `PENDING`(대기)은 이제 눌린다 — 아직 시작되지 않아 기존 문항이 그대로 유효하다.
 
 // 감지 상태 → 표지 위 배지
 const BOUNDARY_BADGE = {
@@ -81,7 +83,7 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
   // 썸네일 URL은 결정적(deterministic)이라 /pages 호출 없이 직접 조립한다 (REQ-P02-02).
   // 카드 N개 = 전체 PDF N번 재다운로드+파싱이던 목록 로딩 병목 제거.
   const coverUrl = `${API_ROOT}/api/jobs/${job.job_id}/pages/0/thumbnail`;
-  const analyzing = isAnalyzing(job);
+  const analyzing = isEntryBlocked(job);
   const done = job.boundaries_status === "DONE";
 
   const badge = done && job.total_question_count != null
