@@ -459,7 +459,11 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     `Cannot read properties of undefined (reading 'palette')`로 죽는다 — **구현 결함이 아니라
     테스트가 앱과 다른 무대를 그린 것**이다. 같은 계열로 `renderHook().unmount()` 뒤
     `rerender()`도 React가 거부한다(루트는 살리고 화면 컴포넌트만 언마운트할 것).
-    둘 다 단언에 닿기 전에 터져 원인 판독을 방해한다. (REQ-F09 Phase 3·5 실측)
+    ⚠️ **타이머를 스파이하는 케이스에서 `waitFor`를 쓰지 않는다** — `@testing-library/dom`의
+    `waitFor`가 **내부적으로 `setInterval`로 폴링한다.** "인터벌을 만들지 않는다"류 단언과
+    함께 쓰면 **어떤 구현도 통과할 수 없다**(측정 도구가 측정 대상에 섞인다). `act` 플러시로
+    기다린다. 셋 다 **단언이 아니라 무대가 틀린 경우**이고, 단언에 닿기 전에 터져 원인 판독을
+    방해한다. (REQ-F09 Phase 3·5 · REQ-F11 Phase 1 실측)
 
 ### 프론트엔드
 
