@@ -309,7 +309,8 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-07-29 기준 각 prefix 다음 번호: `B10`, `C09`, `D11`, `F11`, `P04`, 숫자 `29`.
+2026-08-10 기준 각 prefix 다음 번호: `B11`, `C09`, `D11`, **`F12`**, `P05`, 숫자 `29`.
+(그 사이 점유: `B10`·`F09`·`F11`·`P04`)
 
 ## 진행 현황
 
@@ -479,6 +480,11 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
     옛 알림이 이미 처리된다). 증상이 "가끔 즉시 완료로 뜬다"라 재현이 어렵다.
     자동 다운로드처럼 **화면에 묶여야 하는 부수효과는 이 훅의 콜백 안에 둔다** — 훅이 화면
     수명에 묶여 있다는 사실이 B10 불변식을 지키는 방식이다(계약 #22). (REQ-F09 Phase 3)
+    ⚠️ **서버의 `unread_count`는 단조 증가하지 않는다** — 읽음 커서 **이후** 개수라
+    `mark_all_read()` 뒤 0으로 리셋되고 새 알림마다 1부터 다시 센다. 그래서 뱃지를
+    **개수 비교로 가리면 안 된다**(`unread > 마지막에 읽은 개수`). 미읽음 3건일 때 읽으면
+    그 뒤 도착한 알림이 1이라 **뱃지가 영영 안 뜬다** — 2026-08-10 육안 검증에서 실제로
+    이 상태였다. 가릴 거면 개수가 아니라 **최신 알림의 키**로 가린다(F09-47). (REQ-F09 Phase 5)
 
 ## 상시 이슈
 
