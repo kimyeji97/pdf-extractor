@@ -16,6 +16,11 @@ import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogContentText from "@mui/material/DialogContentText";
+import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
@@ -29,8 +34,9 @@ import PageHeader from "components/PageHeader";
 import QuestionAnalysisPanel from "components/QuestionAnalysisPanel";
 import PdfPreviewPanel from "components/PdfPreviewPanel";
 import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
-import { getPages, refreshJobQuestions, getJobInfo, addManualQuestion, getAllQuestions } from "api/client";
+import { getPages, refreshJobQuestions, addManualQuestion, getAllQuestions } from "api/client";
 import { useJobCompletion } from "hooks/useJobCompletion";
+import { useAnalysisEntryGuard } from "hooks/useAnalysisEntryGuard";
 import { tintBg } from "theme/tint";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
@@ -129,17 +135,20 @@ export default function AnalysisWorkPage() {
     return () => { alive = false; };
   }, [jobId, panelRefreshTrigger]);
 
-  // ── 원본 PDF URL 조회 ─────────────────────────────────
+  // ── 진입 가드 + 원본 PDF URL (REQ-F11 Phase 1) ────────
+  //
+  // 감지 중이면 이 화면을 열지 않는다 — 목록의 클릭 차단만으로는 URL 직접 입력과
+  // 뒤로가기가 그대로 열려 있었다.
+  //
+  // ⚠️ 원본 PDF URL도 이 훅이 받아 온 응답에서 꺼낸다. 화면이 따로 getJobInfo 를 부르면
+  //    같은 응답을 두 번 받는다(raw fetch 라 dedup 되지 않는다). 계획서 § 제약 참조.
+  const { blocked, reason, jobInfo, loading: guardLoading, confirm } = useAnalysisEntryGuard(jobId);
+
   useEffect(() => {
-    let alive = true;
-    setPdfUrlLoading(true);
-    setPdfUrl(null);
-    getJobInfo(jobId)
-      .then((info) => { if (alive) setPdfUrl(info.original_pdf_url || null); })
-      .catch(() => { if (alive) setPdfUrl(null); })
-      .finally(() => { if (alive) setPdfUrlLoading(false); });
-    return () => { alive = false; };
-  }, [jobId]);
+    setPdfUrlLoading(guardLoading);
+    if (guardLoading) return;
+    setPdfUrl(jobInfo?.original_pdf_url || null);
+  }, [guardLoading, jobInfo]);
 
   // ── 재감지 ────────────────────────────────────────────
   //
@@ -335,6 +344,26 @@ export default function AnalysisWorkPage() {
     /* REQ-D07 2안 — 맞붙은 3패널을 회색 캔버스 위 카드 3장으로 재구성.
        리사이즈 핸들은 카드 사이 여백으로 옮겨 유지한다(2026-07-29 결정). */
     <WorkCanvas>
+
+      {/* 진입 차단 모달 (REQ-F11). 감지 중과 조회 실패는 같은 경로로 막히지만
+          원인이 달라 문구를 구분한다 — 실패에 "재감지 중"이라고 쓰면 사용자는
+          기다리면 끝난다고 믿는다. */}
+      <Dialog open={blocked} onClose={confirm}>
+        <DialogTitle>
+          {reason === "processing" ? "문항을 감지하는 중입니다" : "파일 상태를 확인할 수 없습니다"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {reason === "processing"
+              ? "감지가 끝나면 목록에서 다시 열 수 있습니다."
+              : "잠시 후 목록에서 다시 시도해 주세요."}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={confirm} variant="contained" autoFocus>확인</Button>
+        </DialogActions>
+      </Dialog>
+
 
       {/* ── 페이지 헤더 + 브레드크럼 ─────────────────── */}
       <PageHeader
