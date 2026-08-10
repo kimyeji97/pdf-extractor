@@ -29,6 +29,9 @@ import { useNotifications } from "contexts/NotificationContext";
 import { markNotificationsRead } from "api/client";
 import { tintBg } from "theme/tint";
 
+/** 알림 1건의 안정적인 키 (계약 #16 계열 — job_id 하나로는 재감지·재생성이 같은 키가 된다). */
+const keyOf = (n) => `${n.job_id}:${n.created_at}`;
+
 /** 알림 → 화면 매핑 (2026-08-07 확정). 감지는 볼 대상이 있고, 생성은 받아 갈 곳이 이력이다. */
 function destinationOf(n) {
   return n.kind === "export" ? "/history" : `/analysis/${n.job_id}`;
@@ -44,15 +47,23 @@ export default function NotificationBell() {
   const navigate = useNavigate();
 
   const [anchorEl, setAnchorEl] = useState(null);
-  // 읽음 처리는 서버 커서라 다음 폴링(최대 5초)까지 unreadCount가 그대로다.
-  // 그 사이 뱃지가 남아 있으면 "안 읽혔다"로 보이므로 로컬에서 즉시 가린다.
-  const [readUpTo, setReadUpTo] = useState(0);
 
-  const badgeCount = unreadCount > readUpTo ? unreadCount : 0;
+  // 읽음 처리는 서버 커서라 다음 폴링(최대 5초)까지 unreadCount가 그대로다.
+  // 그 사이 뱃지가 남아 있으면 "눌렀는데 안 읽혔다"로 보이므로 로컬에서 즉시 가린다.
+  //
+  // ⚠️ **개수가 아니라 "무엇까지 읽었는지"로 가린다.** 서버의 unread_count는 읽음 커서
+  //    **이후** 개수라 mark_all_read 뒤 0으로 리셋되고 새 알림마다 1부터 다시 센다
+  //    (`notification_service.list_feed`). 개수 비교(`unread > readUpTo`)로 가리면
+  //    **미읽음 3건일 때 읽은 뒤 도착한 새 알림이 1이라 영영 안 보인다** — 2026-08-10
+  //    육안 검증에서 실제로 이렇게 죽어 있었다(F09-47).
+  const [readAtKey, setReadAtKey] = useState(null);
+
+  const newestKey = notifications.length ? keyOf(notifications[0]) : null;
+  const badgeCount = unreadCount > 0 && newestKey !== readAtKey ? unreadCount : 0;
 
   const handleOpen = (e) => {
     setAnchorEl(e.currentTarget);
-    setReadUpTo(unreadCount);
+    setReadAtKey(newestKey);
     // 실패해도 팝오버는 열린다 — 읽음 커서는 다음 열기에서 다시 시도된다.
     markNotificationsRead().catch(() => {});
   };
