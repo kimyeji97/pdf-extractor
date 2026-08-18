@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-08-10
+> 최종 갱신: 2026-08-18
 
 ## 요구사항 인덱스
 
@@ -106,7 +106,7 @@
 | REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ 코드만 — **미배포(보류)** |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · **미배포** · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · **미배포** |
-| REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | — | 🟡 계획서 작성(2026-08-10) — **미착수**, Phase 0(인프라 실측)이 먼저 |
+| REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | — | 🟡 **Phase 0(인프라 실측) 완료 2026-08-18** — 경로 통과, idle 컷 125s. Phase 1~는 `/workplan`으로 정의 예정 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -171,6 +171,52 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-08-18
+
+### REQ-P04 Phase 0 — 인프라 실측 완료 (경로 통과 · idle 컷 125s) + 이 머신 배포 환경 구성
+
+**계획서의 "코드 변경 없음"에서 한 발 벗어났다 — 스트리밍 엔드포인트 없이는 잴 수 없다.**
+그래서 `main`은 그대로 두고 **throwaway 브랜치 `feat/P04-phase0-probe`(`8b50a57`·`e8ac995`)** 에
+프로브 라우터(`/api/_probe/sse`·`/api/_probe/ws`) + 측정 클라이언트 + 원본 JSONL을 넣어 dev에
+`p04-probe` 태그·태스크 정의 rev 3로 배포했다. `latest`는 건드리지 않았고, 브랜치는 결과를 계획서로
+옮긴 뒤 삭제했다(커밋은 reflog에 한동안 남는다). **결과 표·수치·결론은 [PLAN-P04 § Phase 0 결과]
+(plans/PLAN-P04-websocket-push.md)에 있다** — 여기엔 판단과 함정만 적는다.
+
+**핵심 수치 셋**: (1) SSE·WS 모두 **15분 통과, 버퍼링 없음**(drift ~0.3s 상수 = 서울→HKG edge 왕복).
+(2) **오리진 무전송 125초에 edge가 끊는다** — Cloudflare 문서 Proxy Read Timeout 125s와 일치, 60s
+heartbeat 생존·130s 사망으로 양쪽에서 조였다. (3) **WS는 uvicorn 기본 프로토콜 ping(20s)만으로
+살고**, SSE는 앱 heartbeat가 필수. → 인프라는 프로토콜 선택에 **중립**이고, 미결 5건 중 "인프라
+통과"는 닫혔고 "완료 기준 수치"는 절반(heartbeat 30s·전달 지연 0.3s)이 채워졌다.
+
+> **로컬에서는 절대 안 잡히는 종류다.** 터널이 없으면 heartbeat 없이도 멀쩡하다. 그래서 계획서
+> 함정에 "heartbeat는 나중에 붙이는 게 아니라 구현의 일부"로 박아 뒀고, P04 구현이 들어가면
+> 계약 승격 후보다(아직 코드가 없어 지금은 승격하지 않는다).
+
+**측정 도구 결함이 결과를 하나 삼켰다.** 3번(SSE idle) 런이 summary 없이 죽었다 — 프록시가 청크
+스트림 중간을 끊으면 EOF가 아니라 `http.client.IncompleteRead`가 나는데 `OSError`로만 잡고 있었다.
+서버 로그(CloudWatch)의 `close after 125.1s`로 먼저 값을 읽고, 분류를 고쳐 2회 재확인했다.
+**"끊김"에는 EOF 말고도 모양이 있다** — 다음 하니스를 쓸 때 첫 번째로 볼 것.
+
+**미측정 1건이 남았다 — 브라우저 숨김 탭.** P04의 존재 이유(타이머 스로틀링 회피)를 직접 확인하는
+항목인데 노드 클라이언트로는 재현이 안 된다. Phase 1 착수 전 dev 프론트 콘솔에서 EventSource로
+5분 확인해야 한다(계획서 Phase 0 항목에 적어 둠).
+
+**이 머신에 배포 환경을 새로 마련했다.** 착수 시점엔 `aws`·`docker`·`~/.aws`가 없어 실측이
+"하니스 준비"에서 멈췄고, 사용자 결정으로 brew 설치: awscli 2.36 · docker CLI + buildx ·
+**colima**(Docker Desktop 대신, `--vm-type vz --vz-rosetta`, 로그인 시 자동 기동). Rosetta binfmt로
+`--platform linux/amd64` 빌드가 되는 것까지 확인했다. AWS 키는 사용자가 IAM에서 새로 발급해
+직접 등록했다(`user/yjkim`, 이전 배포 머신의 키는 그대로 유효).
+
+**dev 상태 두 가지 — 둘 다 예상과 달랐다.**
+- 서비스는 **`desired 0`으로 의도적으로 내려져 있었다**(530의 정체). 실측을 위해 `desired 1`로
+  올렸고 **그대로 켜 두었다**(rev 3 = 프로브 이미지). 내릴지, 이 김에 `main`을 정식 배포할지 미결.
+- ECR `latest`가 **2026-05-16**이다. 즉 미배포는 B10·F09·F11 세 건이 아니라 **6~8월 작업 전체**
+  (P02·P03·D07·D08 포함)다. "미배포 3건"은 7-31 이후만 센 것이었다 — 인덱스의 배포 상태 표기가
+  실제 dev와 어긋나 있었던 셈이다.
+
+**곁가지 발견**: `backend/`에 `.dockerignore`가 없어 `COPY . .`가 `venv/`(163MB)·`tests/`를 이미지에
+넣는다. 배포 머신에 `.env`가 있으면 그것도 들어가는 구조. 이번엔 손대지 않았다.
 
 <!-- 최신이 위. 날짜 헤딩은 `## YYYY-MM-DD` 형식을 반드시 지킬 것 (/progress 가 파싱) -->
 

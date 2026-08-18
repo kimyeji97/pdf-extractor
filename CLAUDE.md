@@ -321,8 +321,12 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
 - 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~4 완료(스펙 §4-2).
   **REQ-D08(라이트/다크) 완료** · **REQ-F09(완료 알림) v1 완료**(Phase 6 브라우저 알림은 이연) ·
   **REQ-F11(재감지 중 진입 차단) 완료** — 남은 것은 REQ-27 로그인.
-  ⚠️ **B10·F09·F11 세 건이 미배포로 쌓여 있다** — 코드는 전부 `main`에 병합됐다(2026-08-10).
-  다음 후보: **REQ-P04**(상시 폴링 → 서버 푸시) — 계획서 작성됨, **Phase 0(인프라 실측)이 먼저**.
+  ⚠️ **dev는 2026-05-16 이미지에 멈춰 있다** — B10·F09·F11만이 아니라 6~8월 작업 전체가 미배포
+  (2026-08-18 ECR 실측). 코드는 전부 `main`에 있다. 지금 dev에는 P04 실측용 임시 이미지(`p04-probe`,
+  태스크 정의 rev 3)가 떠 있다 — 정식 배포 시 `latest`를 다시 밀고 리비전을 되돌릴 것.
+  진행 중: **REQ-P04**(상시 폴링 → 서버 푸시) — **Phase 0(인프라 실측) 완료 2026-08-18**: 경로 통과,
+  오리진 무전송 125s에 edge가 끊음 → heartbeat 30s. Phase 1~는 `/workplan`으로 정의 예정.
+  이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.
   (상세: [F09 계획서](docs/plans/PLAN-F09-completion-notification.md) ·
   [F11 계획서](docs/plans/PLAN-F11-analysis-detail-entry-guard.md) ·
   [D07 스펙](docs/specs/20260725-REQ-D07-minimal-template-adoption.md) §4-1,
