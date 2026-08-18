@@ -103,9 +103,9 @@
 | REQ-C08 | 문제집·소스 삭제 (연관 저장물 포함) | — | 2026-07-25 | ✅ |
 | REQ-D07 | 프론트 전면 리디자인 (Minimal 템플릿) | [spec](specs/20260725-REQ-D07-minimal-template-adoption.md) | — | 🟡 2안 정렬 완료, 잔여 기능 대기 |
 | REQ-D08 | 라이트/다크 모드 | [spec](specs/20260729-REQ-D08-dark-mode.md) | 2026-07-29 | ✅ |
-| REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ 코드만 — **미배포(보류)** |
-| REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · **미배포** · Phase 6 이연 |
-| REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · **미배포** |
+| REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ 백엔드 dev 배포 2026-08-18 (프론트는 Pages 미배포) |
+| REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · **백엔드만 dev 배포(2026-08-18), 프론트 미배포** · Phase 6 이연 |
+| REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · **프론트 미배포**(Pages 자동 배포 불통, 2026-08-18) |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | — | 🟡 **Phase 0(인프라 실측) 완료 2026-08-18** — 경로 통과, idle 컷 125s. Phase 1~는 `/workplan`으로 정의 예정 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
@@ -217,6 +217,29 @@ heartbeat 생존·130s 사망으로 양쪽에서 조였다. (3) **WS는 uvicorn 
 
 **곁가지 발견**: `backend/`에 `.dockerignore`가 없어 `COPY . .`가 `venv/`(163MB)·`tests/`를 이미지에
 넣는다. 배포 머신에 `.env`가 있으면 그것도 들어가는 구조. 이번엔 손대지 않았다.
+
+### dev 배포 — 백엔드 ✅ / 프론트 ⚠️ 막힘 (Cloudflare Pages 자동 배포가 안 돈다)
+
+**백엔드**: `main`을 `latest`로 빌드·푸시하고 서비스를 **`latest` 기반 rev 2로 되돌려** 강제 재배포했다
+(프로브용 rev 3은 남겨 두되 미사용). 실행 태스크의 이미지 digest = 새 `latest` digest 확인, `/api/_probe/*`
+404(프로브 제거), `/api/notifications` 200 — **F09 알림 API가 dev에 처음 올라갔다.** 5-16 이후 백엔드
+작업 전체가 이 한 번으로 올라간 셈이다. 검증 후 **`desired 0`으로 다시 내렸다**(원래 상태·비용).
+다시 켤 땐 `aws ecs update-service … --desired-count 1`이면 된다(이미지·리비전은 그대로).
+
+**프론트는 못 올렸다.** 배포된 프론트가 **5월경 빌드**다 — 단일 1MB 번들에 D07 이후 코드 스플리팅도,
+D08 사전 페인트 스크립트도 없다. 문서(`docs/infra/plan-infra-frontend.md`)상 Pages는 `main` push
+자동 빌드인데, **08-10 push(프론트 코드 포함)도, 오늘 push도 배포를 만들지 않았다**(4분 30초 관찰).
+GitHub 연결이 끊겼거나 빌드가 실패 중인데 **Cloudflare 대시보드/API 토큰이 없어 어느 쪽인지 알 수 없다.**
+→ 대시보드 Deployments 확인 또는 API 토큰(Pages 편집)이 선행. 그동안 **직접 업로드용 빌드는
+`frontend/dist/`에 준비**해 뒀다(`VITE_API_BASE_URL`을 dev API로 박아 빌드).
+
+> **함정 — `frontend/.env.local`이 `localhost:8000`을 가리킨다.** 그냥 `npm run build`하면 dev용
+> 번들에 localhost가 박힌다. Vite는 셸 환경변수가 `.env*`보다 우선하므로
+> `VITE_API_BASE_URL=https://dailystudy-workbook-api-dev.yejicraft-cf.com/api npm run build`로 덮어야
+> 한다. Pages 자동 빌드는 대시보드 환경변수를 쓰니 이 함정은 **직접 업로드 경로에서만** 난다.
+
+**오늘은 여기까지.** 미결로 넘긴 것: 프론트 dev 배포(Pages 원인 규명) · P04 Phase 1~ 정의(`/workplan`) ·
+브라우저 숨김 탭 측정.
 
 <!-- 최신이 위. 날짜 헤딩은 `## YYYY-MM-DD` 형식을 반드시 지킬 것 (/progress 가 파싱) -->
 
