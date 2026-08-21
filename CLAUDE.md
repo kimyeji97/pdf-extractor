@@ -451,7 +451,9 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 24. **테스트의 스토리지 격리는 `os.environ` "덮어쓰기"로 한다 — `pop`은 `.env`를 못 막는다.**
     `backend/.env`는 gitignore지만 **실제로 존재하고 `STORAGE_BACKEND=s3` + dev R2 자격증명을
-    담고 있다**(`.env.dev`와 바이트 동일). 격리 없이 테스트를 띄우면 **dev 실데이터에 붙어
+    담고 있다**(`.env.dev`도 같은 내용 — **둘 다 추적 금지.** `.env.dev`는 2026-07-04~08-21 추적돼
+    공개 레포에 키가 노출됐고, 추적 해제 + `.env.*` 무시 규칙으로 막았다. 실제 값 파일에 접미사를
+    붙이면 `.gitignore`를 비껴간다). 격리 없이 테스트를 띄우면 **dev 실데이터에 붙어
     쓰고 지운다.** pydantic Settings의 우선순위는 `os.environ` > `.env`이므로 —
     - `os.environ["STORAGE_BACKEND"] = "local"`처럼 **값을 덮으면** `.env`를 이긴다.
     - `os.environ.pop("R2_BUCKET_NAME")`처럼 **지우면 아무 효과가 없다.** pydantic이 `.env`에서

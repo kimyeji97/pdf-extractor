@@ -208,6 +208,18 @@ workers.dev는 새 번들이었다. 쿼리스트링을 붙여도 HIT였다(존 �
 `spec-infra.md`의 Pages 표기를 Workers로. 자동 배포를 원하면 Worker Settings → Builds에서 GitHub 연결을
 **새로 만드는** 별도 작업이다(루트 `frontend`, `npm run build`, env `VITE_API_BASE_URL`) — 이번엔 하지 않았다.
 
+### 🔴 시크릿 점검 — `backend/.env.dev`의 dev R2 키가 공개 레포에 7주간 노출 (추적 해제, 키 회전은 미완)
+
+사용자 요청으로 전체 히스토리를 훑었다. **`backend/.env.dev`가 `206bea0`(2026-07-04 "실행 환경 정리")에
+실제 `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`를 담은 채 추적됐고**, 레포는 public이다. 원인은
+`.gitignore`가 `/*/.env`만 막아 **접미사 붙은 실제 값 파일이 패턴을 비껴간 것** — 계약 #24가 "`.env`와
+바이트 동일"이라고 적어 두고도 추적 여부는 아무도 안 봤다. 그 외(AWS 키·터널 토큰·개인키·JWT)는 0건.
+
+조치: `git rm --cached` + `.env.*` 무시(템플릿 `.env.example`·`.env.local`만 예외) + 계약 #24 정정. **키 회전은
+사용자 몫으로 남았다** — 공개 7주면 수집됐다고 봐야 하므로 **회전이 본체고 이 커밋은 재발 방지일 뿐이다.**
+회전 후 Secrets Manager `pdf-extractor/dev`·로컬 `.env` 갱신 + ECS 재배포가 따른다. 히스토리 세탁(filter-repo
++ force push)은 사용자 결정 대기.
+
 ## 2026-08-18
 
 ### REQ-P04 Phase 0 — 인프라 실측 완료 (경로 통과 · idle 컷 125s) + 이 머신 배포 환경 구성

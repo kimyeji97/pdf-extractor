@@ -14,3 +14,6 @@ Thumbs.db
 
 # ── project ───────────────────────────────────────────
 /*/.env
+/*/.env.*
+!/*/.env.example
+!/*/.env.local
