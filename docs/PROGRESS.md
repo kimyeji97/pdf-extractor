@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-08-18
+> 최종 갱신: 2026-08-21
 
 ## 요구사항 인덱스
 
@@ -103,9 +103,9 @@
 | REQ-C08 | 문제집·소스 삭제 (연관 저장물 포함) | — | 2026-07-25 | ✅ |
 | REQ-D07 | 프론트 전면 리디자인 (Minimal 템플릿) | [spec](specs/20260725-REQ-D07-minimal-template-adoption.md) | — | 🟡 2안 정렬 완료, 잔여 기능 대기 |
 | REQ-D08 | 라이트/다크 모드 | [spec](specs/20260729-REQ-D08-dark-mode.md) | 2026-07-29 | ✅ |
-| REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ 백엔드 dev 배포 2026-08-18 (프론트는 Pages 미배포) |
-| REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · **백엔드만 dev 배포(2026-08-18), 프론트 미배포** · Phase 6 이연 |
-| REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · **프론트 미배포**(Pages 자동 배포 불통, 2026-08-18) |
+| REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ dev 배포 완료 — 백엔드 2026-08-18 · 프론트 2026-08-21 |
+| REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
+| REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | — | 🟡 **Phase 0(인프라 실측) 완료 2026-08-18** — 경로 통과, idle 컷 125s. Phase 1~는 `/workplan`으로 정의 예정 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
@@ -152,7 +152,8 @@
 
 dev 환경은 구축 완료. ECR / ECS 클러스터·서비스 / 태스크 정의(backend + cloudflared) / 보안그룹(인바운드 없음) /
 Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel / R2 버킷 전부 ✅.
-프론트(Cloudflare Pages)만 `dist` 수동 업로드 🟡.
+프론트는 **Workers 정적 자산 `twilight-base-302d`**에 `wrangler deploy`로 수동 배포 🟡
+(자동화 없음 — 2026-08-21 확인. **Pages가 아니다**, 5월 문서가 틀렸다).
 
 > 상시 운영 ~$23/월, 미사용 시 `desired-count 0`으로 ~$2/월.
 > 절차는 `QUICKSTART.md` / [plan-infra-backend.md](infra/plan-infra-backend.md).
@@ -161,7 +162,7 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 |------|------|:----:|
 | 인프라 구성 명세 | [spec-infra.md](infra/spec-infra.md) | ✅ dev 반영 |
 | 백엔드 배포 절차 | [plan-infra-backend.md](infra/plan-infra-backend.md) | ✅ dev 구축 |
-| 프론트엔드 배포 | [plan-infra-frontend.md](infra/plan-infra-frontend.md) | 🟡 수동 |
+| 프론트엔드 배포 | [plan-infra-frontend.md](infra/plan-infra-frontend.md) | 🟡 수동 `wrangler deploy` (문서 본문은 Pages 기준 — 상단 정정 메모 참조) |
 | 관리 서버 API 분리 (Lambda 검토) | [plan-infra-backend-api.md](infra/plan-infra-backend-api.md) | ❌ ADR-0001로 ECS 채택 |
 | 추출 서버 분리 (Lambda 검토) | [plan-infra-backend-extractor.md](infra/plan-infra-backend-extractor.md) | ❌ ADR-0001로 ECS 채택 |
 | Java 전환 + DynamoDB 마이그레이션 | [plan-infra-backend-migration.md](infra/plan-infra-backend-migration.md) | ❌ 향후 |
@@ -171,6 +172,41 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-08-21
+
+### dev 프론트 배포 — "Pages 자동 배포 불통"이 아니라 **자동 배포가 없었다** (Worker에 수동 배포로 반영)
+
+**8-18 진단이 틀렸다.** 프론트의 실체는 Cloudflare Pages가 아니라 **Workers 정적 자산 `twilight-base-302d`**
+(계정 `kimyeji2035`)다. 근거 셋 — `twilight-base-302d.pages.dev`는 DNS 자체가 없고,
+`twilight-base-302d.kimyeji2035.workers.dev`가 커스텀 도메인과 같은 번들(`index-BP07yiY1.js`)을 주며,
+Worker에 Builds(GitHub 연결) 설정이 없다. `wrangler deployments list`로 본 이력은 **2026-05-16
+"Source: Upload" 2건**이 전부 → 5월에 한 번 수동으로 올린 뒤 아무도 다시 안 올린 것이다. 8-10·8-18 push에
+배포가 안 생긴 건 고장이 아니라 **고장날 자동화가 없었기 때문**이다. `plan-infra-frontend.md`의
+"main push → 자동 빌드"는 계획으로만 쓰이고 실제로 구성된 적이 없다.
+
+> 분기점은 사용자가 대시보드에서 이름(`twilight-base-302d`)을 찾아 준 것이었다 — 레포 어디에도 프로젝트명이
+> 없어 그 전엔 Pages를 전제로 대시보드/토큰만 기다리고 있었다. "형용사-명사-hex" 랜덤 이름은 Workers가
+> 붙이는 형식이고, Cloudflare가 2025년부터 신규 Git 프로젝트를 Pages 대신 Workers로 유도한다.
+> **문서가 "Pages"라고 해도 실체는 확인하고 믿을 것.**
+
+**배포**: 이 머신에서 `wrangler login`(OAuth) → `frontend/wrangler.jsonc` 신설(name · assets=`./dist` · SPA 폴백)
+→ `npx wrangler deploy`. 8-18에 만들어 둔 `dist`(8-10 `12b38be` 빌드, API URL dev로 박힘, 이후 `frontend/src`
+변경 없음)를 재빌드 없이 그대로 올렸다. 버전 `77f71a1f`. **B10·F09·F11·D07·D08 프론트가 dev에 처음 반영됐다.**
+검증은 dev 백엔드를 `desired 1`로 켜서 했다(`/health` 35초 만에 200 · `/api/notifications`가 8-10 실데이터 응답).
+**백엔드는 켜 둔 채 마감** — 사용자 육안 확인 후 `desired 0`으로 내릴 것.
+
+**덤으로 잡힌 결함 하나** — 옛 배포본은 `/analysis`·`/history` **직접 진입이 404**였다(SPA 폴백 미설정).
+새로고침·URL 공유가 전부 깨져 있었는데 아무도 dev를 쓰지 않아 드러나지 않았다.
+`not_found_handling: single-page-application`으로 함께 해소(배포 후 200 확인).
+
+**엣지 캐시 함정** — 배포 직후 커스텀 도메인 **`/`만** `cf-cache-status: HIT`로 옛 HTML을 줬고 `/analysis`와
+workers.dev는 새 번들이었다. 쿼리스트링을 붙여도 HIT였다(존 캐시 규칙이 무시하는 듯). 퍼지 없이 몇 분 내
+스스로 갱신됐다 — **배포 직후 "안 바뀌었다"는 판단은 루트가 아니라 다른 경로나 workers.dev로 한다.**
+
+**문서 정정**: CLAUDE.md · 인덱스 B10/F09/F11의 "프론트 미배포" · 인프라 표 · `plan-infra-frontend.md` ·
+`spec-infra.md`의 Pages 표기를 Workers로. 자동 배포를 원하면 Worker Settings → Builds에서 GitHub 연결을
+**새로 만드는** 별도 작업이다(루트 `frontend`, `npm run build`, env `VITE_API_BASE_URL`) — 이번엔 하지 않았다.
 
 ## 2026-08-18
 

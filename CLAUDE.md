@@ -15,7 +15,7 @@
 | PDF 처리 | pdfplumber(텍스트 추출) + PyMuPDF(렌더링/크롭) | pdfplumber 0.11, pymupdf 1.25 |
 | OCR | Tesseract (한국어+영어 fallback) | pytesseract 0.3 |
 | Storage | Cloudflare R2 (S3 호환) / 로컬 파일시스템 | boto3 1.35 |
-| Infra | AWS ECS Fargate + Cloudflare Tunnel + Cloudflare Pages | ap-northeast-2 |
+| Infra | AWS ECS Fargate + Cloudflare Tunnel + Cloudflare Workers(프론트 정적 자산) | ap-northeast-2 |
 
 ## 디렉토리 구조
 
@@ -218,7 +218,7 @@ local_storage/
 
 ```
 브라우저 → Cloudflare DNS/CDN
-  ├─ Frontend: Cloudflare Pages (dist/ 업로드)
+  ├─ Frontend: Cloudflare Workers 정적 자산 `twilight-base-302d` (`wrangler deploy` 수동 — Pages 아님)
   └─ Backend API: Cloudflare Tunnel → ECS Fargate Task
        ├─ backend 컨테이너 (FastAPI :8000)
        └─ cloudflared 컨테이너 (터널 데몬)
@@ -245,7 +245,7 @@ local_storage/
 |------|-----------|------------|
 | STORAGE_BACKEND | local | s3 |
 | CORS | * (전체 허용) | * (TODO: 제한 필요) |
-| Frontend | localhost:5173 | Cloudflare Pages |
+| Frontend | localhost:5173 | Cloudflare Workers (정적 자산) |
 | Backend | localhost:8000 | ECS Fargate via Tunnel |
 
 **백엔드 주요 환경변수**: `STORAGE_BACKEND`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_ROOT_PREFIX`, `R2_PUBLIC_DOMAIN`, `TESSERACT_LANG`, `MAX_FILE_SIZE`, `LOCAL_STORAGE_DIR`, `LOCAL_BASE_URL`
@@ -270,6 +270,12 @@ npm run dev                            # http://localhost:5173
 aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin 504233295989.dkr.ecr.ap-northeast-2.amazonaws.com
 docker buildx build --platform linux/amd64 --push -t 504233295989.dkr.ecr.ap-northeast-2.amazonaws.com/pdf-extractor-backend:latest ./backend
 aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-backend-dev-svc --force-new-deployment --region ap-northeast-2
+
+# 배포 (프론트엔드) — Workers `twilight-base-302d`, 자동 배포 없음. `wrangler login`은 이 머신에 돼 있다
+# ⚠️ `.env.local`이 localhost라 셸 env로 덮어야 한다 (Vite는 셸 env > .env*). 안 덮으면 dev에 localhost가 박힌다
+cd frontend
+VITE_API_BASE_URL=https://dailystudy-workbook-api-dev.yejicraft-cf.com/api npm run build
+npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist, SPA 폴백)
 ```
 
 ## 요구사항 명세 체계 & 계획 번호 부여 (docs/specs/)
@@ -321,10 +327,10 @@ aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-b
 - 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~4 완료(스펙 §4-2).
   **REQ-D08(라이트/다크) 완료** · **REQ-F09(완료 알림) v1 완료**(Phase 6 브라우저 알림은 이연) ·
   **REQ-F11(재감지 중 진입 차단) 완료** — 남은 것은 REQ-27 로그인.
-  ⚠️ **dev 백엔드는 2026-08-18 `main`으로 배포됐고(rev 2·`latest`) 검증 후 `desired 0`으로 내려 둔 상태**
-  (`--desired-count 1`이면 켜진다). **dev 프론트는 5월 빌드에 멈춰 있다** — Cloudflare Pages `main` push
-  자동 배포가 안 돌고, 원인(연결 끊김/빌드 실패)은 대시보드나 API 토큰이 있어야 본다. 직접 업로드용
-  빌드는 `VITE_API_BASE_URL=<dev API> npm run build`로 만든다(`.env.local`은 localhost다).
+  ⚠️ **dev 백엔드는 2026-08-18 `main`으로 배포됐고(rev 2·`latest`), 2026-08-21 프론트 검증을 위해
+  `desired 1`로 켜 둔 상태** — 확인 끝나면 `--desired-count 0`으로 내린다(~$23/월 → ~$2/월). **dev 프론트는 2026-08-21 `main`(8-10 빌드)으로 배포됐다** —
+  실체는 Pages가 아니라 **Workers `twilight-base-302d`**이고 **자동 배포는 없다**(push로 안 올라간다).
+  프론트를 바꾸면 위 "배포 (프론트엔드)" 두 줄을 손으로 돌려야 한다.
   진행 중: **REQ-P04**(상시 폴링 → 서버 푸시) — **Phase 0(인프라 실측) 완료 2026-08-18**: 경로 통과,
   오리진 무전송 125s에 edge가 끊음 → heartbeat 30s. Phase 1~는 `/workplan`으로 정의 예정.
   이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.

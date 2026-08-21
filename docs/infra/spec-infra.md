@@ -25,7 +25,7 @@
     ▼
 Cloudflare (DNS + CDN + WAF)
     │
-    ├── dailystudy-dev.yejicraft-cf.com          → Cloudflare Pages (프론트엔드)
+    ├── dailystudy-dev.yejicraft-cf.com          → Cloudflare Workers 정적 자산 `twilight-base-302d` (프론트엔드 — 2026-08-21 확인, Pages 아님)
     │
     └── dailystudy-workbook-api-dev.yejicraft-cf.com
             │

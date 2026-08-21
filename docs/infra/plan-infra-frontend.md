@@ -1,5 +1,13 @@
 # 프론트엔드 배포 Plan — Cloudflare Pages
 
+> ⚠️ **2026-08-21 정정 — 아래 본문은 실제와 다르다.** dev 프론트(`dailystudy-workbook-dev.yejicraft-cf.com`)의
+> 실체는 Pages가 아니라 **Workers 정적 자산 `twilight-base-302d`**(계정 `kimyeji2035`,
+> `twilight-base-302d.kimyeji2035.workers.dev`)이고, **GitHub 연결(자동 빌드)은 구성된 적이 없다.**
+> 배포 이력은 2026-05-16 수동 업로드 2건 → 2026-08-21 `wrangler deploy`.
+> 현행 절차는 `frontend/wrangler.jsonc` + `CLAUDE.md` "배포 (프론트엔드)". 자동 배포를 원하면
+> Worker Settings → Builds에서 GitHub 연결을 새로 만든다(루트 `frontend`, `npm run build`, env `VITE_API_BASE_URL`).
+> 본문은 당시 계획으로 보존한다. (출처: `docs/PROGRESS.md` 2026-08-21)
+
 ## 주요 내용
 
 - **선행 조건**: API Gateway 커스텀 도메인 구성 완료 (`api.dailystudy-workbook-dev.yejicraft-cf.com` 응답 확인)
