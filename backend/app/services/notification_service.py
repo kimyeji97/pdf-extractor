@@ -20,6 +20,7 @@ from app.models.schemas import (
     NotificationKind,
     NotificationSeverity,
 )
+from app.services import notification_broker as broker
 from app.services import storage
 from app.utils import notification_key as nkey
 
@@ -47,18 +48,33 @@ def emit(
     알림 저장 실패가 "감지 실패"·"생성 실패"로 둔갑하면 안 된다
     (`_save_workbook_meta` 실패를 PDF 생성 실패로 만들지 않는 것과 같은 판단).
     """
+    # created_at 을 여기서 찍는다 — 저장 키와 SSE 이벤트 id 가 같은 값이어야 재연결 시
+    # `Last-Event-ID` 로 이어 붙일 수 있다(REQ-P04).
+    body = {
+        "job_id": job_id,
+        "kind": kind.value,
+        "severity": severity.value,
+        "title": title,
+        "message": message,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
     try:
-        storage.save_notification(
+        storage.save_notification(body)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[notification] 저장 실패(무시) | job_id=%s error=%s", job_id, e)
+        return  # 저장 안 된 알림은 푸시하지 않는다 — 재연결 재동기로 되찾을 수 없다
+
+    # 저장이 끝난 뒤에만 푸시한다. 푸시 실패도 호출부를 깨뜨리지 않는다.
+    try:
+        broker.publish(
             {
-                "job_id": job_id,
-                "kind": kind.value,
-                "severity": severity.value,
-                "title": title,
-                "message": message,
+                "event": "notification",
+                "id": body["created_at"],
+                "data": {**body, "unread_count": _unread_count()},
             }
         )
     except Exception as e:  # noqa: BLE001
-        logger.warning("[notification] 저장 실패(무시) | job_id=%s error=%s", job_id, e)
+        logger.warning("[notification] 푸시 실패(무시) | job_id=%s error=%s", job_id, e)
 
 
 def emit_detection(job: JobStatusFile) -> None:
@@ -126,6 +142,17 @@ def _purge_expired_months(keys: list[str], cutoff: datetime) -> list[str]:
     return [k for k in keys if k.split("/", 1)[0] not in expired]
 
 
+def _unread_count() -> int:
+    """읽음 커서 이후 개수 — 키 이름만으로 센다(파일 읽기 0회)."""
+    cutoff = _cutoff()
+    cursor_ts = _parse_iso(storage.get_read_cursor())
+    return sum(
+        1
+        for ts in (nkey.parse_stamp(k) for k in storage.list_notification_keys())
+        if ts is not None and ts >= cutoff and (cursor_ts is None or ts > cursor_ts)
+    )
+
+
 def list_feed(since: Optional[str] = None, limit: int = DEFAULT_LIMIT) -> dict:
     """
     알림 피드. 반환은 `{"notifications": [...], "unread_count": N}`.
@@ -181,6 +208,8 @@ def mark_all_read() -> Optional[str]:
     cursor_dt = max(stamps) if stamps else datetime.now(timezone.utc)
     cursor = cursor_dt.isoformat()
     storage.save_read_cursor(cursor)
+    # 다른 탭의 뱃지도 지워져야 한다("모두의 알림" — 커서가 공유된다). 프론트가 세지 않는다(계약 #27).
+    broker.publish({"event": "read", "data": {"unread_count": 0}})
     return cursor
 
 
