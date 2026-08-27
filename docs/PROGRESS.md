@@ -106,7 +106,7 @@
 | REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ dev 배포 완료 — 백엔드 2026-08-18 · 프론트 2026-08-21 |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
-| REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | — | 🟡 **Phase 1·2 완료 2026-08-27**(백엔드 브로커+SSE 13/13 · 프론트 EventSource 전환 8/8, F09·F11 회귀 0) — `feat/P04-sse-push` 푸시됨, **미머지·미배포**. 남은 것: Phase 3(dev 배포 + N≤2s 실측 ①~④ + 문서) |
+| REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | — | 🟡 **Phase 1·2 완료 + Phase 3 dev 배포·CLI 실측 2026-08-27**(②③④ 통과, ① 정상 0.3~1.3s / 배포 직후 3건 2.3~3.1s) — `feat/P04-sse-push` **미머지**. 남은 것: 브라우저 실측(벨·숨김 탭·탭 2개) → desired 0 → 머지 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -197,6 +197,39 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 **계약 승격 후보**(구현 뒤 재검토 조건 충족): `emit()` threadpool → `call_soon_threadsafe` 함정(08-26 예고분, P04-02가 지킨다).
 
 Phase 3 착수 전 상태: dev 백엔드 `desired 1` 켜져 있음(08-21부터). 배포 시 프론트는 Worker 수동 배포(CLAUDE.md "배포 (프론트엔드)").
+
+### REQ-P04 Phase 3 — dev 배포 + CLI 실측 (브라우저 실측·desired 0 남음) · R2 CORS 별건
+
+**배포**: 백엔드 이미지 `latest`=`p04-2a343a4`(ECS rev 2, desired 0→1), 프론트 Worker 번들 `index-6kxyztXv.js`.
+배포 직후 `/stream`이 502를 한 번 냈다 — uvicorn이 뜨기 전 요청이 닿은 롤아웃 레이스일 뿐, 재현 안 됨.
+
+**CLI 실측**(이 머신 → HKG edge → 터널, stdlib SSE 클라이언트 2개, 트리거는 정크 job 재감지 16회):
+
+| 항목 | 결과 | 수치 |
+|------|------|------|
+| ① 완료(`created_at`)→도착 | 정상 상태 ✅ · **배포 직후 3건 ❌** | 13건 **0.26~1.29s** / 03:17 첫 3건 **2.3~3.1s** (시계 편차 보정 후) |
+| ② 구독자 2개 | ✅ | 같은 이벤트 12건, 도착 편차 ≤ 0.03s |
+| ③ 5분 idle 후 도달 | ✅ | 318s 무이벤트 → 0.26~0.87s 도달, keepalive 28.0~30.5s |
+| ④ 끊김 중 발생 → `Last-Event-ID` | ✅ | 재연결 첫 이벤트 = 놓친 알림, 살아 있던 클라는 실시간 |
+
+**측정 함정 셋 — 다음에 재려면 먼저 알아야 한다.**
+- **서버(ECS) 시계가 이 머신보다 1.60~2.20s 빠르다.** raw `도착−created_at`은 0.7~0.9s(첫 3건)·**음수**(나머지)로
+  나와 그대로 읽으면 첫 3건이 "통과"로 보인다. 편차는 `POST /api/upload`의 `uploaded_at`을 로컬 시각 창으로 5회 감싸
+  교집합으로 잡았다(프로브 job은 삭제). **절대 지연을 서버 타임스탬프로 잴 때는 편차부터 잰다.**
+- **Cloudflare edge는 첫 본문 바이트가 나올 때까지 응답 헤더를 붙잡는다.** 로컬 uvicorn 직결은 헤더 4ms, 터널 경유는
+  30s heartbeat까지 무응답. 브라우저 `EventSource`가 최대 30초 `CONNECTING`으로 보이지만 유실은 없다(origin 구독은 즉시).
+  Phase 0 프로브(15s heartbeat)로는 안 보였던 것. 해법 후보: `event_stream()` 구독 직후 `: connected` 1줄 선발송.
+- **`Python-urllib` UA는 Cloudflare가 403으로 막는다** (curl은 통과). 측정 클라이언트에 브라우저 UA를 준다.
+
+**배포 직후 3건이 느린 원인은 미확인**(콜드 태스크의 R2 PUT+LIST 뒤 publish 추정). "N ≤ 2s"를 정상 상태 기준으로
+볼지는 미결로 올렸다. 계획서 ①의 "벨 뱃지 반영, 활성·숨김 탭"과 ②의 "네트워크 탭"은 **브라우저에서 사람이 봐야 한다** —
+CLI로 잰 것은 전송 지연이지 화면 반영이 아니다. 뜻밖의 확인 하나: 브라우저에서 벨을 열자 `read` 이벤트가 CLI 클라이언트에
+도달했다(읽음 동기화 실측 통과).
+
+**별건 — 생성 이력 PDF 미리보기 CORS.** `download_url`이 R2 공개 도메인 `dailystudy-dev.yejicraft-cf.com`인데 버킷 CORS가
+`localhost:5173`만 허용하고 있었다(업로드 PUT용으로 만든 것). dev 프론트 오리진 + `HEAD` + `Range` 허용 + `Content-Range`
+등 노출로 갱신(`wrangler r2 bucket cors set`, OAuth). **이 설정은 코드에 없다** — dev R2 API 토큰은 `GetBucketCors`
+권한조차 없어 aws cli로는 못 보고, wrangler 로그인으로만 닿는다. 설정 후 ~20초 전파 지연.
 
 ## 2026-08-26
 
