@@ -128,8 +128,22 @@ async def test_P04_03_저장_실패시_publish하지_않는다(monkeypatch):
 
 # ── 스트림 — 형식 ─────────────────────────────────────────
 
-def test_P04_04_stream_응답은_text_event_stream(client):
-    """근거: PLAN § 작업 단계 Phase 1 — "`text/event-stream`" """
+def test_P04_04_stream_응답은_text_event_stream(client, monkeypatch):
+    """근거: PLAN § 작업 단계 Phase 1 — "`text/event-stream`"
+
+    ⚠️ 무대 주의(2026-08-27 /testrun): Starlette `TestClient.stream()`은 응답 본문 생성기가
+    끝나야 컨텍스트를 빠져나온다. 실제 `event_stream`은 heartbeat 루프가 무한이라
+    **테스트가 영원히 매달린다**(구현 결함이 아니라 측정 도구의 한계).
+    여기서 검증하는 것은 라우트가 붙이는 응답 헤더뿐이므로, 본문 생성기를
+    유한한 것으로 바꿔 끼운다 — 헤더 단언은 그대로다. 본문 형식은 P04-05~10이 생성기를 직접 검증한다.
+    """
+    from app.routers import notification as router_mod
+
+    async def _finite(last_event_id, heartbeat_s=router_mod.HEARTBEAT_S):
+        yield ": keepalive\n\n"
+
+    monkeypatch.setattr(router_mod, "event_stream", _finite)
+
     with client.stream("GET", "/api/notifications/stream") as res:
         assert res.status_code == 200
         assert res.headers["content-type"].startswith("text/event-stream")
