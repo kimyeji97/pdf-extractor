@@ -104,6 +104,7 @@
 | REQ-D07 | 프론트 전면 리디자인 (Minimal 템플릿) | [spec](specs/20260725-REQ-D07-minimal-template-adoption.md) | — | 🟡 2안 정렬 완료, 잔여 기능 대기 |
 | REQ-D08 | 라이트/다크 모드 | [spec](specs/20260729-REQ-D08-dark-mode.md) | 2026-07-29 | ✅ |
 | REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ dev 배포 완료 — 백엔드 2026-08-18 · 프론트 2026-08-21 |
+| REQ-B11 | 알림 기준선이 피드 도착 전에 잡힘 — 새로고침마다 직전 알림 토스트 | [plan](plans/PLAN-B11-notification-baseline-before-feed.md) | — | 🟡 **Phase 1 완료 2026-08-27**(`useNotificationsReady` + 세 소비처 게이트, 10/10 · 전체 54/54) — `feat/B11-notification-baseline` 푸시, **미머지·미배포**. Phase 2: dev Worker 배포 + 육안 + 계약 #27 정정 |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | 2026-08-27 | ✅ **Phase 0~3 완료** — SSE, 폴링 0건, dev 실측 전송 0.3~1.3s·숨김 탭 즉시 · PR #2 main 머지(`d176596`) · 후속: 콜드 스타트 기준, `: connected` 선발송, 발행 전 서버 작업 ~6s |
@@ -245,6 +246,24 @@ CORS 헤더가 없고 `Vary: Origin`도 없어 미리보기가 깨진다. 프론
 `localhost:5173`만 허용하고 있었다(업로드 PUT용으로 만든 것). dev 프론트 오리진 + `HEAD` + `Range` 허용 + `Content-Range`
 등 노출로 갱신(`wrangler r2 bucket cors set`, OAuth). **이 설정은 코드에 없다** — dev R2 API 토큰은 `GetBucketCors`
 권한조차 없어 aws cli로는 못 보고, wrangler 로그인으로만 닿는다. 설정 후 ~20초 전파 지연.
+
+### REQ-B11 Phase 1 — 알림 기준선을 "기준선 GET이 돌아온 뒤"로 옮겼다 (브랜치, 미머지)
+
+**결정 셋(사용자, 오늘)**: 신호는 **`useNotificationsReady()` 훅 하나를 더 내는 방식(D)** — `useNotifications()`의 반환 형태에
+`ready`를 얹는 안(A)은 P04-26이 키를 글자 그대로 고정하고 F09 47건이 그 표면 위라 기각. 데이터에 `baseline` 표식(B)은
+`Last-Event-ID` 복구분과 구분이 애매, "처음 비어있지 않은 렌더"(C)는 새 설치에서 첫 알림을 놓치는 추정이라 기각.
+**GET 실패 시에도 즉시 ready** — 안 켜면 스낵바·재조회·완료 훅이 영영 침묵한다(재시도 로직 없음). **세 소비처 모두 게이트** —
+`useJobCompletion`은 `jobId`가 클릭으로만 들어와 지금은 재현되지 않지만, "생성 중 복원" 류가 들어오면 자동 다운로드가 튀는 자리다.
+
+**08-10 육안 검증에서 놓친 이유**: 봤는데 "방금 끝난 게 떠서 그런 줄" 정상으로 오해했다. 절차에 "새로고침 후 토스트 0건"이
+없었다 — Phase 2 육안 항목으로 넣었다. **재현 무대의 핵심은 GET의 resolve 시점을 테스트가 쥐는 것**(deferred) — 즉시 resolve면
+버그가 안 보인다. F09-45가 이 버그를 못 잡은 이유가 그것("데이터가 있는 마운트"만 봤다).
+
+**예고된 무대 붕괴가 그대로 났다**: 소비처가 새 훅을 import하자 F09 테스트 3파일의 `vi.mock`(훅 하나짜리)에서 13건이 죽었다.
+계획서에 미리 적어 둔 대로 `/testrun`이 (a)로 mock을 보강했고 단언은 손대지 않았다. **컨텍스트 모듈에 export를 추가하면
+그 모듈을 통째로 mock한 테스트가 전부 깨진다** — 부분 mock(`importOriginal`)을 안 쓰는 대가이고, 다음에도 같은 모양으로 난다.
+
+미결 1건 후속: `ready`가 켜지는 같은 렌더에 신규 알림이 실려 오면 기준선인가 신규인가(현재 동작: 기준선. 결정이 아니라 부산물).
 
 ## 2026-08-26
 
