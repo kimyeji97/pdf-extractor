@@ -334,7 +334,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
   진행 중: **REQ-P04**(상시 폴링 → 서버 푸시, SSE) — Phase 0(인프라 실측 08-18: 오리진 무전송 125s에 edge가
   끊음 → heartbeat 30s) · **Phase 1(백엔드 브로커+스트림)·Phase 2(프론트 EventSource 전환) 완료 2026-08-27**,
   **Phase 0~3 완료 2026-08-27**(dev 실측 통과: 전송 0.3~1.3s, 숨김 탭 즉시, 폴링 0건). 브랜치
-  `feat/P04-sse-push`는 dev에 배포됐지만 **main 미머지** — 머지가 남은 일이다. 파생 B11 후보(새로고침 토스트).
+  `feat/P04-sse-push`는 PR #2로 **main 머지 완료(2026-08-27, `d176596`)**. 파생 B11 후보(새로고침 토스트).
   ⚠️ dev R2 버킷 CORS는 코드가 아니라 버킷 설정이다(wrangler OAuth로만 닿음, 08-27 dev 오리진 추가).
   이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.
   (상세: [F09 계획서](docs/plans/PLAN-F09-completion-notification.md) ·
