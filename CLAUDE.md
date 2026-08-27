@@ -327,12 +327,15 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 - 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~4 완료(스펙 §4-2).
   **REQ-D08(라이트/다크) 완료** · **REQ-F09(완료 알림) v1 완료**(Phase 6 브라우저 알림은 이연) ·
   **REQ-F11(재감지 중 진입 차단) 완료** — 남은 것은 REQ-27 로그인.
-  ⚠️ **dev 백엔드는 2026-08-18 `main`으로 배포됐고(rev 2·`latest`), 2026-08-21 프론트 검증을 위해
-  `desired 1`로 켜 둔 상태** — 확인 끝나면 `--desired-count 0`으로 내린다(~$23/월 → ~$2/월). **dev 프론트는 2026-08-21 `main`(8-10 빌드)으로 배포됐다** —
+  ⚠️ **dev 백엔드는 2026-08-27 `feat/P04-sse-push`(`p04-2a343a4`)로 배포됐고 실측 후 `desired 0`으로 내렸다**
+  (켜면 ~$23/월, 꺼 두면 ~$2/월). 켤 때는 `--desired-count 1`. **dev 프론트는 2026-08-21 `main`(8-10 빌드)으로 배포됐다** —
   실체는 Pages가 아니라 **Workers `twilight-base-302d`**이고 **자동 배포는 없다**(push로 안 올라간다).
   프론트를 바꾸면 위 "배포 (프론트엔드)" 두 줄을 손으로 돌려야 한다.
-  진행 중: **REQ-P04**(상시 폴링 → 서버 푸시) — **Phase 0(인프라 실측) 완료 2026-08-18**: 경로 통과,
-  오리진 무전송 125s에 edge가 끊음 → heartbeat 30s. Phase 1~는 `/workplan`으로 정의 예정.
+  진행 중: **REQ-P04**(상시 폴링 → 서버 푸시, SSE) — Phase 0(인프라 실측 08-18: 오리진 무전송 125s에 edge가
+  끊음 → heartbeat 30s) · **Phase 1(백엔드 브로커+스트림)·Phase 2(프론트 EventSource 전환) 완료 2026-08-27**,
+  **Phase 0~3 완료 2026-08-27**(dev 실측 통과: 전송 0.3~1.3s, 숨김 탭 즉시, 폴링 0건). 브랜치
+  `feat/P04-sse-push`는 dev에 배포됐지만 **main 미머지** — 머지가 남은 일이다. 파생 B11 후보(새로고침 토스트).
+  ⚠️ dev R2 버킷 CORS는 코드가 아니라 버킷 설정이다(wrangler OAuth로만 닿음, 08-27 dev 오리진 추가).
   이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.
   (상세: [F09 계획서](docs/plans/PLAN-F09-completion-notification.md) ·
   [F11 계획서](docs/plans/PLAN-F11-analysis-detail-entry-guard.md) ·
@@ -483,19 +486,21 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ### 프론트엔드
 
-26. **폴링 경로는 `apiFetch`가 아니라 raw `fetch`를 쓴다** — `client.js`의 `apiFetch`는
-    **GET에도** `_setLoading(+1)`을 걸어 `GlobalDim`(전역 딤)을 켠다. 폴링에 쓰면 주기마다
-    화면 전체가 번쩍인다. `getStatus`·`getJobInfo`·`listNotifications`가 raw `fetch`인 것은
-    누락이 아니라 이 때문이다 — **관례를 따를수록 틀리는 자리**라 명시해 둔다.
-    (REQ-F09 Phase 2)
+26. **상시·배경 경로(알림 기준선 GET·`EventSource` 스트림)는 `apiFetch`를 거치지 않는다** — `client.js`의
+    `apiFetch`는 **GET에도** `_setLoading(+1)`을 걸어 `GlobalDim`(전역 딤)을 켠다. 사용자가 시키지 않은
+    요청에 쓰면 화면이 번쩍인다. `getStatus`·`getJobInfo`·`listNotifications`가 raw `fetch`이고
+    `NotificationContext`가 raw `EventSource`인 것은 누락이 아니라 이 때문이다 — **관례를 따를수록
+    틀리는 자리**라 명시해 둔다. (REQ-F09 Phase 2 · REQ-P04 Phase 2에서 폴링→SSE로 바뀌어도 동일)
 
 27. **알림 피드를 구독할 때는 기준선을 잡는다** — 피드는 **최근 30일치**를 담고 있어서
     (첫 진입 시 최신 50건) "내 `job_id`의 알림이 피드에 있나"로 판정하면 **작업을 시작하자마자
     지난주 알림을 보고 즉시 완료로 튄다.** `useJobCompletion`은 감시를 시작하는 순간 이미 있던
     알림을 '처리됨'으로 찍어 이걸 막는다 — **새 화면이 피드를 직접 구독하지 말고 훅을 쓸 것**
     (특정 job은 `useJobCompletion`, 목록 재조회는 `useNotificationRefresh`). 목록 쪽은 이유가
-    하나 더 있다 — 재조회를 폴링 틱에 걸면 **5초마다 목록 API(페이지네이션 + 썸네일)가 돈다**
-    (REQ-P03에서 걷어낸 병목과 같은 계열). 신규가 있을 때만, 여러 건이 와도 1회만 읽는다.
+    하나 더 있다 — 재조회를 피드 갱신마다 걸면 **알림/이벤트가 올 때마다 목록 API(페이지네이션 + 썸네일)가
+    돈다**(폴링 시절엔 5초마다였다. REQ-P03에서 걷어낸 병목과 같은 계열). 신규가 있을 때만, 여러 건이 와도 1회만 읽는다.
+    ⚠️ 전달 경로가 SSE(REQ-P04)로 바뀌어도 기준선은 그대로 필요하다 — 재연결 시 `Last-Event-ID`로 밀린 알림이
+    한꺼번에 오므로, 기준선 없이 구독하면 앱을 연 순간 30일치 스낵바가 쏟아지는 사고가 같은 모양으로 난다.
     기준선은 `useEffect`가 아니라 **렌더 중에** 잡아야 한다(effect로 미루면 그 사이 커밋에서
     옛 알림이 이미 처리된다). 증상이 "가끔 즉시 완료로 뜬다"라 재현이 어렵다.
     자동 다운로드처럼 **화면에 묶여야 하는 부수효과는 이 훅의 콜백 안에 둔다** — 훅이 화면

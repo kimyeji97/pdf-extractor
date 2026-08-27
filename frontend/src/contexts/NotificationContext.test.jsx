@@ -1,7 +1,10 @@
 /**
  * REQ-F09 Phase 2 — 전역 폴링 + 알림 상태
  *
- * 검증 계약: docs/plans/PLAN-F09-completion-notification.md `## 검증 계약` (F09-18~28)
+ * 검증 계약: docs/plans/PLAN-F09-completion-notification.md `## 검증 계약` (F09-18·25~28)
+ *
+ * F09-19~24(폴링 전제 — since·주기·감속·복귀·실패 재시도)는 REQ-P04 Phase 2(SSE 전환)에서
+ * **삭제**했다 — P04-20~27이 대체한다(2026-08-26 결정, F09 표 `결과` 열).
  *
  * ⚠️ **숫자를 단언하지 않는다.** 폴링 주기·감속 배율은 계획서에 없다. 아래 `WINDOW_MS`는
  *    스펙 값이 아니라 **관측 창**이며, 케이스는 전부 "같은 창 안에서 몇 번 불렸나"의
@@ -65,14 +68,41 @@ function setVisibility(state) {
   document.dispatchEvent(new Event('visibilitychange'));
 }
 
+/**
+ * jsdom 에는 `EventSource` 가 없다. P04 이후 증분은 스트림으로 오므로 최소 표면만 흉내 낸다
+ * (스트림 자체의 검증은 `NotificationContext.stream.test.jsx` P04-20~27).
+ */
+const streams = [];
+class FakeEventSource {
+  constructor(url) {
+    this.url = url;
+    this.listeners = {};
+    streams.push(this);
+  }
+  addEventListener(type, fn) {
+    (this.listeners[type] ??= []).push(fn);
+  }
+  removeEventListener(type, fn) {
+    this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
+  }
+  close() {}
+  emit(type, data) {
+    const ev = new MessageEvent(type, { data: JSON.stringify(data) });
+    (this.listeners[type] ?? []).forEach((fn) => fn(ev));
+  }
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  streams.length = 0;
+  vi.stubGlobal('EventSource', FakeEventSource);
   client.listNotifications.mockResolvedValue(feed([]));
   setVisibility('visible');
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -83,91 +113,6 @@ describe('전역 폴링', () => {
 
     const [firstArg] = client.listNotifications.mock.calls[0] ?? [];
     expect(firstArg?.since).toBeFalsy();
-  });
-
-  it('[F09-19] 이후 폴링은 since를 붙인다', async () => {
-    client.listNotifications.mockResolvedValueOnce(
-      feed([notif('job-a', '2026-08-07T10:00:00+00:00')]),
-    );
-    renderProvider();
-    await advance();
-
-    // 계획서가 정한 것은 "since 가 붙는다"까지다. 어떤 값이어야 하는지(마지막 알림
-    // created_at vs 마지막 폴링 시각)는 미정이라 값을 단언하지 않는다.
-    const lastArg = client.listNotifications.mock.calls.at(-1)?.[0];
-    expect(lastArg?.since).toBeTruthy();
-  });
-
-  it('[F09-20] 라우트가 바뀌어도 폴링이 끊기지 않는다', async () => {
-    let navigate;
-    function RouteProbe() {
-      navigate = useNavigate();
-      return null;
-    }
-
-    render(
-      <MemoryRouter initialEntries={['/analysis']}>
-        <NotificationProvider>
-          <Routes>
-            <Route path="/analysis" element={<RouteProbe />} />
-            <Route path="/editor" element={<RouteProbe />} />
-          </Routes>
-        </NotificationProvider>
-      </MemoryRouter>,
-    );
-    await advance();
-    const before = client.listNotifications.mock.calls.length;
-
-    await act(async () => {
-      navigate('/editor');
-    });
-    await advance();
-
-    expect(client.listNotifications.mock.calls.length).toBeGreaterThan(before);
-  });
-
-  it('[F09-21] 새 알림이 0건이어도 폴링이 멈추지 않는다', async () => {
-    renderProvider();
-    await advance();
-
-    expect(client.listNotifications.mock.calls.length).toBeGreaterThan(1);
-  });
-
-  it('[F09-22] 탭 숨김 시 같은 창 안의 요청 수가 줄어든다', async () => {
-    renderProvider();
-    await advance();
-    const visibleCalls = client.listNotifications.mock.calls.length;
-
-    setVisibility('hidden');
-    client.listNotifications.mockClear();
-    await advance();
-    const hiddenCalls = client.listNotifications.mock.calls.length;
-
-    expect(hiddenCalls).toBeLessThan(visibleCalls);
-  });
-
-  it('[F09-23] 탭 복귀 시 다음 주기를 기다리지 않고 즉시 재동기한다', async () => {
-    renderProvider();
-    await advance();
-
-    setVisibility('hidden');
-    await advance();
-    client.listNotifications.mockClear();
-
-    // 타이머를 흘리지 않는다 — 복귀 그 자체가 요청을 부르는지만 본다.
-    await act(async () => {
-      setVisibility('visible');
-    });
-
-    expect(client.listNotifications).toHaveBeenCalled();
-  });
-
-  it('[F09-24] 요청이 실패해도 다음 주기에 다시 요청한다', async () => {
-    client.listNotifications.mockRejectedValueOnce(new Error('네트워크 실패'));
-    renderProvider();
-    await advance();
-
-    expect(client.listNotifications.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('[F09-27] job 상태를 개별로 조회하지 않는다', async () => {
@@ -209,12 +154,21 @@ describe('알림 상태', () => {
   });
 
   it('[F09-28] 증분 응답이 기존 이력에 누적된다', async () => {
-    client.listNotifications
-      .mockResolvedValueOnce(feed([notif('job-a', '2026-08-07T10:00:00+00:00')]))
-      .mockResolvedValueOnce(feed([notif('job-b', '2026-08-07T10:05:00+00:00')]))
-      .mockResolvedValue(feed([]));
+    // 무대 정정(2026-08-27 /testrun, P04 Phase 2): 증분은 2번째 폴링 GET 이 아니라 스트림
+    // 이벤트로 온다 — "데이터 처리는 안 바뀌고 도착 경로만 바뀐다"(PLAN-P04 § Phase 2).
+    // 단언(교체가 아니라 누적)은 그대로다.
+    client.listNotifications.mockResolvedValueOnce(
+      feed([notif('job-a', '2026-08-07T10:00:00+00:00')]),
+    );
     renderProvider();
     await advance();
+
+    await act(async () => {
+      streams[0].emit('notification', {
+        ...notif('job-b', '2026-08-07T10:05:00+00:00'),
+        unread_count: 2,
+      });
+    });
 
     expect(screen.getByTestId('count')).toHaveTextContent('2');
   });
