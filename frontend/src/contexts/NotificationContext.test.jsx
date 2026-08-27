@@ -68,14 +68,41 @@ function setVisibility(state) {
   document.dispatchEvent(new Event('visibilitychange'));
 }
 
+/**
+ * jsdom 에는 `EventSource` 가 없다. P04 이후 증분은 스트림으로 오므로 최소 표면만 흉내 낸다
+ * (스트림 자체의 검증은 `NotificationContext.stream.test.jsx` P04-20~27).
+ */
+const streams = [];
+class FakeEventSource {
+  constructor(url) {
+    this.url = url;
+    this.listeners = {};
+    streams.push(this);
+  }
+  addEventListener(type, fn) {
+    (this.listeners[type] ??= []).push(fn);
+  }
+  removeEventListener(type, fn) {
+    this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
+  }
+  close() {}
+  emit(type, data) {
+    const ev = new MessageEvent(type, { data: JSON.stringify(data) });
+    (this.listeners[type] ?? []).forEach((fn) => fn(ev));
+  }
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  streams.length = 0;
+  vi.stubGlobal('EventSource', FakeEventSource);
   client.listNotifications.mockResolvedValue(feed([]));
   setVisibility('visible');
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -127,12 +154,21 @@ describe('알림 상태', () => {
   });
 
   it('[F09-28] 증분 응답이 기존 이력에 누적된다', async () => {
-    client.listNotifications
-      .mockResolvedValueOnce(feed([notif('job-a', '2026-08-07T10:00:00+00:00')]))
-      .mockResolvedValueOnce(feed([notif('job-b', '2026-08-07T10:05:00+00:00')]))
-      .mockResolvedValue(feed([]));
+    // 무대 정정(2026-08-27 /testrun, P04 Phase 2): 증분은 2번째 폴링 GET 이 아니라 스트림
+    // 이벤트로 온다 — "데이터 처리는 안 바뀌고 도착 경로만 바뀐다"(PLAN-P04 § Phase 2).
+    // 단언(교체가 아니라 누적)은 그대로다.
+    client.listNotifications.mockResolvedValueOnce(
+      feed([notif('job-a', '2026-08-07T10:00:00+00:00')]),
+    );
     renderProvider();
     await advance();
+
+    await act(async () => {
+      streams[0].emit('notification', {
+        ...notif('job-b', '2026-08-07T10:05:00+00:00'),
+        unread_count: 2,
+      });
+    });
 
     expect(screen.getByTestId('count')).toHaveTextContent('2');
   });
