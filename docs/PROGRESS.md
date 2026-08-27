@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-08-26
+> 최종 갱신: 2026-08-27
 
 ## 요구사항 인덱스
 
@@ -106,7 +106,7 @@
 | REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ dev 배포 완료 — 백엔드 2026-08-18 · 프론트 2026-08-21 |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
-| REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | — | 🟡 **계획 확정 2026-08-26** — SSE · 폴링 완전 제거 · N ≤ 2s · 미결 0건. Phase 0(인프라 08-18 · 숨김 탭 08-26) 완료, Phase 1(백엔드 SSE) 착수 대기 |
+| REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | — | 🟡 **Phase 1·2 완료 2026-08-27**(백엔드 브로커+SSE 13/13 · 프론트 EventSource 전환 8/8, F09·F11 회귀 0) — `feat/P04-sse-push` 푸시됨, **미머지·미배포**. 남은 것: Phase 3(dev 배포 + N≤2s 실측 ①~④ + 문서) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -172,6 +172,31 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-08-27
+
+### REQ-P04 Phase 1·2 — 폴링이 코드에서 사라졌다 (브랜치 `feat/P04-sse-push`, 미머지)
+
+**Phase 1(백엔드)의 미판정이 풀렸다.** 08-26 wip에서 P04-04(`GET /stream`이 `text/event-stream`)가 판정 불가였던 이유는
+구현이 아니라 **Starlette `TestClient.stream()`이 응답 본문 생성기가 끝나야 컨텍스트를 빠져나오기** 때문 — heartbeat
+루프가 무한이라 테스트가 영원히 매달린다(SIGALRM으로 확인). 라우트 헤더만 보는 케이스라 생성기를 유한한 것으로
+`monkeypatch`해 무대만 바꿨다((a)). 본문 형식은 P04-05~10이 생성기를 직접 돌려 검증하므로 커버리지 손실 없음.
+**교훈: 무한 스트림 엔드포인트는 `TestClient`로 본문을 읽지 말 것** — 생성기 단위로 잘라 검증한다.
+
+**Phase 2(프론트)는 P04 케이스 8건이 첫 실행부터 녹색**이었고, 걸린 것은 F09 잔여 케이스 쪽이었다.
+- F09-19~24(since·주기·감속·복귀·실패 재시도)는 **폴링 자체를 단언**하므로 정의상 깨진다 → 계획대로 삭제(P04-20~27 대체).
+- **F09-28(증분 누적)은 단언은 유효한데 무대가 폴링 전제**였다 — 증분을 "2번째 GET"으로 흘리는데 GET이 1회뿐이 됐다.
+  증분을 스트림 이벤트로 흘리게 무대만 정정((a)). 계획서 문구 "데이터 처리는 안 바뀌고 도착 경로만 바뀐다"가 분류 근거.
+  **"잔여 케이스 회귀 0건"을 완료 기준으로 둘 때는 잔여 케이스의 *무대*도 전제를 공유하는지 봐야 한다** — 단언만 보면 놓친다.
+
+**구현에서 정한 것 하나**: 스트림 URL은 `client.js`에서 export하지 않고 컨텍스트가 `VITE_API_BASE_URL`로 직접 만든다.
+테스트가 `api/client`를 통째로 mock하므로 새 export는 거기서 `undefined`가 돼 EventSource 생성 자체가 죽는다.
+`EventSource`가 없는 환경(jsdom·SSR)에선 기준선 GET만 살고 스트림은 건너뛴다 — F09 잔여 테스트가 이 경로를 탄다.
+
+`grep -rn setInterval frontend/src` 0건 달성 — 마지막 1건은 `useJobCompletion.js` 주석이었고 문구를 바꿨다.
+**계약 승격 후보**(구현 뒤 재검토 조건 충족): `emit()` threadpool → `call_soon_threadsafe` 함정(08-26 예고분, P04-02가 지킨다).
+
+Phase 3 착수 전 상태: dev 백엔드 `desired 1` 켜져 있음(08-21부터). 배포 시 프론트는 Worker 수동 배포(CLAUDE.md "배포 (프론트엔드)").
 
 ## 2026-08-26
 

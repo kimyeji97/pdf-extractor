@@ -1,6 +1,6 @@
 # PLAN-P04 · 상시 폴링 → 서버 푸시 전환
 
-> 출처: 2026-08-03 세션(REQ-F09 미결 검토에서 파생) + 2026-08-10 세션 · 작성: 2026-08-10 · 상태: 🟡 진행 (Phase 0 실측 완료 2026-08-18 · 미결 4건 확정 + Phase 1~3 정의 2026-08-26)
+> 출처: 2026-08-03 세션(REQ-F09 미결 검토에서 파생) + 2026-08-10 세션 · 작성: 2026-08-10 · 상태: 🟡 진행 (Phase 0 실측 완료 2026-08-18 · 미결 4건 확정 + Phase 1~3 정의 2026-08-26 · **Phase 1·2 완료 2026-08-27**, Phase 3 dev 배포·실측 남음)
 
 ## 배경
 
@@ -78,6 +78,8 @@
       → **절반은 답이 나왔다(Phase 0)**: 인프라 상수는 **idle 컷 125s → heartbeat 30s**(컷의 1/4),
       전달 지연은 **~0.3s**(HKG edge 왕복). 남은 건 "완료 → 화면 반영 N초"의 N — 폴링 5s/숨김 30s의
       하한을 대체하는 값이므로 **N ≤ 2s** 정도가 자연스럽지만 확정은 Phase 1 설계 때 한다.
+- [ ] **스트림이 전역 딤(`apiFetch`)을 켜지 않는지 어떻게 재나** — 계약 #26 회귀 케이스 후보인데 `client.js`의
+      로딩 카운터가 노출돼 있지 않아 측정 방법이 없다(2026-08-26 `/testgen`). 노출하면 그 자체가 표면 변경. 코드로 쓰지 않았다.
 - [x] **숨김 탭에서 `EventSource`가 스로틀링 없이 수신하는가** → **받는다** (2026-08-26 실측, 아래 § 숨김 탭 결과).
       숨김 7.5분 동안 91건 전량 도달, drift 평균 10ms·최대 485ms, **5분 경과(intensive throttling 구간) 이후도 0~4ms**. 브라우저 타이머
       스로틀링은 `setTimeout`/`setInterval` 대상이고 네트워크 이벤트는 아니라고 알려져 있으나 **실측 전**이다.
@@ -96,7 +98,7 @@
       ⚠️ 미측정 1건: **브라우저 숨김 탭**에서 스로틀링 없이 수신하는지(노드 클라이언트로는 재현 불가).
       Phase 1 착수 전 dev 프론트 콘솔에서 EventSource로 5분 확인할 것.
 
-- [ ] **Phase 1 — 백엔드: 브로커 + SSE 스트림** *(백엔드만, 프론트 무변경 — 기존 폴링과 공존)*
+- [x] **Phase 1 — 백엔드: 브로커 + SSE 스트림** ✅ 2026-08-27 (P04-01~13 13/13) *(백엔드만, 프론트 무변경 — 기존 폴링과 공존)*
       선행 조건: 숨김 탭 EventSource 5분 실측 → ✅ 2026-08-26 통과(§ 숨김 탭 결과).
       - 프로세스 내 브로커: 구독자별 `asyncio.Queue`. `notification_service.emit()`이 저장 성공 후 publish.
         **emit은 BackgroundTasks threadpool에서 돈다** → `loop.call_soon_threadsafe`로 넘긴다(아래 함정).
@@ -108,14 +110,16 @@
       read 이벤트 · 구독 해제 시 큐 정리 · 저장 실패 시 publish 안 함). 로컬 `curl -N`으로 감지 완료 시 이벤트 도달.
       **dev 배포 후** `curl -N`으로 heartbeat만으로 **≥ 5분 유지**(125s 컷 통과) — 로컬로는 이 항목을 못 잰다.
 
-- [ ] **Phase 2 — 프론트: `NotificationProvider` 전달 경로 교체** *(표면 불변)*
+- [x] **Phase 2 — 프론트: `NotificationProvider` 전달 경로 교체** ✅ 2026-08-27 (P04-20~27 8/8 · 프론트 전체 44/44 · `setInterval` 0건) *(표면 불변)*
       - `EventSource` 구독으로 `setInterval`·`visibilitychange` 감속 로직을 걷어낸다 (`ACTIVE_POLL_MS`/`HIDDEN_POLL_MS` 삭제).
       - 첫 진입 `GET /api/notifications` 1회(30일 기준선)는 그대로. 이벤트 수신은 기존 `poll`의 병합 로직
         (`keyOf` dedup · 누적 · `unread_count` 반영)을 재사용한다 — 데이터 처리는 안 바뀌고 **도착 경로만** 바뀐다.
       - `useNotifications`·`useJobCompletion`·`useNotificationRefresh`의 시그니처·동작 불변. 벨·스낵바·목록 화면 무수정.
       - raw `EventSource`(계약 #26 — `apiFetch` 경유 금지, 전역 딤 없음).
       완료 기준: `P04-` 프론트 케이스 통과(EventSource 생성 1회 · `setInterval` 0건 · 이벤트→상태 반영 · `read` 이벤트→뱃지 0 ·
-      중복 이벤트 무시) **+ F09 프론트 11건·F11 10건 회귀 0건.** `grep -rn setInterval frontend/src` 0건.
+      중복 이벤트 무시) **+ F09 잔여 케이스(18·25~28, Phase 3·5 전부)·F11 10건 회귀 0건.** `grep -rn setInterval frontend/src` 0건.
+      ⚠️ **F09-19·20·21·22·23·24는 폴링 자체를 단언하므로 정의상 깨진다** → P04-20~27로 대체(2026-08-26 `/testgen`에서
+      발견·승인). 이 6건은 Phase 2에서 테스트 코드를 지우고 F09 표에 "P04로 대체"를 남긴다. 처음 적은 "F09 11건 회귀 0건"은 틀린 기준이었다.
       ⚠️ 타이머 단언 케이스에 `waitFor` 금지(계약 #25).
 
 - [ ] **Phase 3 — dev 배포 + 실측 + 문서 정리**
@@ -177,6 +181,39 @@
 **측정 도구 결함 1건**: 3번 런에서 `http.client.IncompleteRead`(프록시가 청크 스트림 중간에 끊음)가
 `OSError`가 아니라 summary 없이 죽었다. 서버 로그로 125.1s를 읽고, 분류를 고쳐 3b·6으로 재확인했다.
 "끊김"은 EOF만이 아니다.
+
+## 검증 계약
+
+> 작성: 2026-08-26 · 스펙: 이 계획서(§ 작업 단계 · § 제약·함정 · § Phase 0 결과) · 검증: `/testrun P04`
+> 백엔드 `backend/tests/test_notification_stream.py` · 프론트 `frontend/src/contexts/NotificationContext.stream.test.jsx`
+> 테스트가 고정한 인터페이스(계획서에 없던 것): `app.services.notification_broker`(`subscribe()`/`publish()`/`subscriber_count()`),
+> `app.routers.notification.event_stream(last_event_id, heartbeat_s)`·`HEARTBEAT_S`, 이벤트명 `notification`/`read`.
+
+| ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
+|----|------|--------|:----:|------|:----:|:----:|
+| P04-01 | `emit()` | 저장 성공 후 구독자에 알림 1건 도달 | 정상 | PLAN § 작업 단계 Phase 1 — "저장 성공 후 publish" | 1 | ✅ |
+| P04-02 | `emit()` | threadpool(`run_in_threadpool`)에서 호출돼도 구독자가 깨어난다 | 회귀 | PLAN § 제약·함정 — "케이스 하나는 반드시 `run_in_threadpool` 경유로 발행한다" | 1 | ✅ |
+| P04-03 | `emit()` | 저장 실패 시 publish 하지 않는다 | 예외 | PLAN § 작업 단계 Phase 1 — "저장 실패 시 publish 안 함" | 1 | ✅ |
+| P04-04 | `GET /stream` | 응답이 `text/event-stream` | 정상 | PLAN § 작업 단계 Phase 1 — "`text/event-stream`" | 1 | ✅ |
+| P04-05 | `GET /stream` | 이벤트 `id`가 알림의 `created_at` | 정상 | PLAN § 작업 단계 Phase 1 — "이벤트 `id`=`created_at`" | 1 | ✅ |
+| P04-06 | `GET /stream` | 이벤트 페이로드에 `unread_count` 동봉 | 정상 | PLAN § 작업 단계 Phase 1 — "페이로드에 `unread_count`" | 1 | ✅ |
+| P04-07 | `GET /stream` | `Last-Event-ID` 이후 알림을 스트림 첫머리에 흘린다 | 정상 | PLAN § 작업 단계 Phase 1 — "`Last-Event-ID` 헤더가 오면 `list_feed(since=)` 결과를 먼저 흘린다" | 1 | ✅ |
+| P04-08 | `GET /stream` | 헤더 없는 첫 연결은 기존 알림을 재전송하지 않는다 | 불변식 | PLAN § 제약·함정 — "첫 연결에는 재전송하지 않는다." | 1 | ✅ |
+| P04-09 | `mark_all_read()` | `read` 이벤트(`unread_count: 0`)가 구독자에 도달 | 정상 | PLAN § 작업 단계 Phase 1 — "`read` 이벤트(`unread_count: 0`)를 publish" | 1 | ✅ |
+| P04-10 | `GET /stream` | 알림이 없어도 heartbeat 간격마다 `: keepalive`가 나간다 | 불변식 | PLAN § 작업 단계 Phase 1 — "`: keepalive` **30s**" | 1 | ✅ |
+| P04-11 | `HEARTBEAT_S` | 기본 간격 30s | 경계 | PLAN § Phase 0 결과 — "**heartbeat 30s** 권장(컷의 1/4)" | 1 | ✅ |
+| P04-12 | 브로커 | 구독 해제 후 구독자 수 0 (큐 정리) | 불변식 | PLAN § 작업 단계 Phase 1 — "구독 해제 시 큐 정리" | 1 | ✅ |
+| P04-13 | 브로커 | 구독자 2개에 같은 알림이 모두 도달 | 정상 | PLAN § 작업 단계 Phase 1 — "구독자별 `asyncio.Queue`" | 1 | ✅ |
+| P04-20 | `NotificationProvider` | `EventSource`가 `/notifications/stream`으로 1회 생성 | 정상 | PLAN § 작업 단계 Phase 2 — "EventSource 생성 1회" | 2 | ✅ |
+| P04-21 | `NotificationProvider` | `setInterval` 0건 | 불변식 | PLAN § 작업 단계 Phase 2 — "`setInterval` 0건" | 2 | ✅ |
+| P04-22 | `NotificationProvider` | 첫 진입 GET 1회, `since` 없음 | 정상 | PLAN § 작업 단계 Phase 2 — "첫 진입 `GET /api/notifications` 1회(30일 기준선)는 그대로" | 2 | ✅ |
+| P04-23 | `NotificationProvider` | 이벤트 수신 → 목록 누적 + `unreadCount` 반영 | 정상 | PLAN § 작업 단계 Phase 2 — "이벤트→상태 반영" | 2 | ✅ |
+| P04-24 | `NotificationProvider` | `read` 이벤트 → `unreadCount` 0 | 정상 | PLAN § 작업 단계 Phase 2 — "`read` 이벤트→뱃지 0" | 2 | ✅ |
+| P04-25 | `NotificationProvider` | 같은 `job_id:created_at` 중복 이벤트 무시 | 회귀 | PLAN § 작업 단계 Phase 2 — "중복 이벤트 무시" | 2 | ✅ |
+| P04-26 | `useNotifications` | 반환 형태 `{notifications, unreadCount}` 불변 | 불변식 | PLAN § 작업 단계 Phase 2 — "시그니처·동작 불변" | 2 | ✅ |
+| P04-27 | `NotificationProvider` | 라우트가 바뀌어도 스트림이 닫히지 않는다 (F09-20 대체) | 불변식 | PLAN § 제약·함정 — "화면이 구독하는 표면을 바꾸지 않는다." | 2 | ✅ |
+
+Phase 3(dev 실측 ①~④)은 코드 테스트가 없다 — 결과는 § 작업 단계 Phase 3에 수치로 적는다.
 
 ## 제약·함정
 

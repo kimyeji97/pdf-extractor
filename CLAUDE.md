@@ -331,8 +331,9 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
   `desired 1`로 켜 둔 상태** — 확인 끝나면 `--desired-count 0`으로 내린다(~$23/월 → ~$2/월). **dev 프론트는 2026-08-21 `main`(8-10 빌드)으로 배포됐다** —
   실체는 Pages가 아니라 **Workers `twilight-base-302d`**이고 **자동 배포는 없다**(push로 안 올라간다).
   프론트를 바꾸면 위 "배포 (프론트엔드)" 두 줄을 손으로 돌려야 한다.
-  진행 중: **REQ-P04**(상시 폴링 → 서버 푸시) — **Phase 0(인프라 실측) 완료 2026-08-18**: 경로 통과,
-  오리진 무전송 125s에 edge가 끊음 → heartbeat 30s. Phase 1~는 `/workplan`으로 정의 예정.
+  진행 중: **REQ-P04**(상시 폴링 → 서버 푸시, SSE) — Phase 0(인프라 실측 08-18: 오리진 무전송 125s에 edge가
+  끊음 → heartbeat 30s) · **Phase 1(백엔드 브로커+스트림)·Phase 2(프론트 EventSource 전환) 완료 2026-08-27**,
+  브랜치 `feat/P04-sse-push` **미머지·미배포**. 남은 것: Phase 3(dev 배포 + N≤2s 실측 + 문서).
   이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.
   (상세: [F09 계획서](docs/plans/PLAN-F09-completion-notification.md) ·
   [F11 계획서](docs/plans/PLAN-F11-analysis-detail-entry-guard.md) ·
