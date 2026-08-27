@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Snackbar from "@mui/material/Snackbar";
 
-import { useNotifications } from "contexts/NotificationContext";
+import { useNotifications, useNotificationsReady } from "contexts/NotificationContext";
 
 const AUTO_HIDE_MS = 6000;
 
@@ -21,16 +21,19 @@ const keyOf = (n) => `${n.job_id}:${n.created_at}`;
 
 export default function NotificationSnackbar() {
   const { notifications } = useNotifications();
+  const ready = useNotificationsReady();
 
   const seenRef = useRef(null);
   const [current, setCurrent] = useState(null);
 
-  // 구독 시작 시점에 이미 있던 알림은 '본 것'으로 찍는다 (계약 #27).
-  if (seenRef.current === null) {
+  // 기준선은 **기준선 GET 이 돌아온 뒤의** 렌더 중에 잡는다 (계약 #27 · REQ-B11).
+  // 첫 렌더는 목록이 아직 비어 있어, 거기서 잡으면 GET 도착분 전부가 신규로 보인다.
+  if (seenRef.current === null && ready) {
     seenRef.current = new Set(notifications.map(keyOf));
   }
 
   useEffect(() => {
+    if (seenRef.current === null) return; // 기준선 전 — 아직 아무것도 신규가 아니다
     const fresh = notifications.filter((n) => !seenRef.current.has(keyOf(n)));
     if (fresh.length === 0) return;
 

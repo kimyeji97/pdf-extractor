@@ -23,6 +23,12 @@ import { listNotifications } from 'api/client';
  *   내려받으면 다른 라우트에 있는 사용자에게 다운로드가 튀어나온다(REQ-B10 불변식).
  * - **job 을 개별로 조회하지 않는다.** 구독 대상은 알림 피드 1개다(계약 #15와 같은 계열).
  * - **`unread_count` 를 세지 않는다.** 서버가 이벤트마다 실어 보낸다(계약 #27).
+ *
+ * 기준선 신호 (REQ-B11): 소비처(스낵바·목록 재조회·job 완료)는 "지금 있는 알림은 옛것"이라는
+ * 기준선을 잡아야 하는데, 앱 첫 렌더에서는 기준선 GET 이 아직 안 돌아와 목록이 비어 있다.
+ * 빈 기준선은 GET 도착분 전부를 신규로 보이게 한다(새로고침마다 직전 알림 토스트).
+ * 그래서 `useNotificationsReady()` 로 "기준선 GET 이 끝났다"를 알린다 — **실패해도 켠다**
+ * (안 켜면 스낵바·재조회·완료 훅이 영영 침묵한다). `useNotifications()` 의 반환 형태는 그대로다.
  */
 
 // `client.js` 의 BASE_URL 과 같은 규칙이다. 그쪽에서 export 하지 않는 이유: 테스트가
@@ -31,6 +37,9 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api
 const STREAM_URL = `${BASE_URL}/notifications/stream`;
 
 const NotificationContext = createContext(null);
+// 기준선 GET 완료 여부. 값 컨텍스트와 분리한 이유: `useNotifications()` 반환 형태 `{notifications, unreadCount}`
+// 를 바꾸지 않기 위해서다(P04-26 · F09 표면 계약).
+const NotificationReadyContext = createContext(false);
 
 /** 알림 1건의 안정적인 키. job_id 하나로는 재감지·재생성이 같은 키가 된다(계약 #16 계열). */
 const keyOf = (n) => `${n.job_id}:${n.created_at}`;
@@ -38,6 +47,7 @@ const keyOf = (n) => `${n.job_id}:${n.created_at}`;
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [ready, setReady] = useState(false);
 
   // 기준선 GET 과 스트림 이벤트가 같은 dedup 집합을 본다 — 재연결 복구분(Last-Event-ID)이
   // 기준선과 겹쳐 와도 한 번만 누적된다.
@@ -66,6 +76,10 @@ export function NotificationProvider({ children }) {
       .catch(() => {
         // 기준선 실패는 치명적이지 않다 — 스트림이 이후분을 가져오고, 재연결 복구는
         // 브라우저가 한다. 여기서 던지면 알림 기능이 조용히 통째로 죽는다.
+      })
+      .finally(() => {
+        // 성공·실패 모두 ready — 실패 뒤 첫 이벤트부터는 전부 신규로 취급된다(B11 결정).
+        if (!cancelled) setReady(true);
       });
 
     if (typeof EventSource === 'undefined') return undefined; // SSR·구형 환경 — 기준선만 산다
@@ -110,7 +124,19 @@ export function NotificationProvider({ children }) {
     [notifications, unreadCount],
   );
 
-  return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
+  return (
+    <NotificationReadyContext.Provider value={ready}>
+      <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>
+    </NotificationReadyContext.Provider>
+  );
+}
+
+/**
+ * 기준선 GET 이 끝났는가. 소비처는 이 값이 참이 되는 **렌더 중에** 기준선을 잡는다(계약 #27).
+ * Provider 밖에서는 항상 false — 기준선을 잡을 데이터가 없다는 뜻이라 안전한 쪽이다.
+ */
+export function useNotificationsReady() {
+  return useContext(NotificationReadyContext);
 }
 
 export function useNotifications() {

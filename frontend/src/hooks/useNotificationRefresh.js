@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { useNotifications } from 'contexts/NotificationContext';
+import { useNotifications, useNotificationsReady } from 'contexts/NotificationContext';
 
 /**
  * 전역 피드에 **새 알림이 들어왔을 때만** 목록을 다시 읽게 한다 (REQ-F09 Phase 4).
@@ -20,17 +20,20 @@ import { useNotifications } from 'contexts/NotificationContext';
  */
 export function useNotificationRefresh(onFresh) {
   const { notifications } = useNotifications();
+  const ready = useNotificationsReady();
 
   const seenRef = useRef(null);
   const onFreshRef = useRef(onFresh);
   onFreshRef.current = onFresh;
 
-  // 구독 시작 시점에 이미 있던 알림은 '본 것'으로 찍는다 (계약 #27).
-  if (seenRef.current === null) {
+  // 기준선 GET 이 돌아온 뒤의 렌더에서, 그때 있던 알림을 '본 것'으로 찍는다 (계약 #27 · REQ-B11).
+  // 첫 렌더(빈 목록)에서 잡으면 GET 도착분이 전부 신규로 보여 새로고침마다 목록을 한 번 더 읽는다.
+  if (seenRef.current === null && ready) {
     seenRef.current = new Set(notifications.map((n) => `${n.job_id}:${n.created_at}`));
   }
 
   useEffect(() => {
+    if (seenRef.current === null) return; // 기준선 전
     const fresh = notifications.filter(
       (n) => !seenRef.current.has(`${n.job_id}:${n.created_at}`),
     );
