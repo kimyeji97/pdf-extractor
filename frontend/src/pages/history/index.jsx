@@ -29,6 +29,7 @@ import BookCard from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
+import { toPreviewUrl } from "utils/previewUrl";
 
 function fmtDate(iso) {
   if (!iso) return "-";
@@ -107,7 +108,8 @@ export default function HistoryPage() {
     setPdfLoading(true);
     try {
       const data = await getStatus(wb.result_job_id);
-      if (data.download_url) setPdfUrl(data.download_url);
+      // 미리보기는 다운로드 링크와 캐시 키를 가른다 (R2 CORS 재발 방지)
+      if (data.download_url) setPdfUrl(toPreviewUrl(data.download_url));
     } catch { /* PDF URL 로드 실패 시 무시 */ }
     finally { setPdfLoading(false); }
   };
