@@ -27,7 +27,7 @@
   - [x] F09: `useNotificationRefresh`에 `kind` 옵션 — 분석 목록 `detection`·생성 이력 `export`만 재조회 (소)
   - [x] P04: 계약 #26 회귀 케이스 — 스트림 이벤트 뒤 `GlobalDim`이 DOM에 없음 (테스트만, 소)
   - [x] P04: `: connected` 선발송 — edge가 첫 바이트까지 헤더를 붙잡아 `EventSource`가 최대 30s CONNECTING (백엔드, 소)
-- [x] **REQ-P05** ✅ 2026-08-28 (브랜치 미머지) 알림 전달 지연 ([계획서](plans/PLAN-P05-notification-latency.md), 2026-08-28 · 목표 뱃지 ≤ 5s · GET ≤ 1.5s)
+- [x] **REQ-P05** ✅ 2026-08-28 (PR #5 main 머지 `6fba551`) 알림 전달 지연 ([계획서](plans/PLAN-P05-notification-latency.md), 2026-08-28 · 목표 뱃지 ≤ 5s · GET ≤ 1.5s)
   - [x] 감지 완료 알림을 프리워밍 앞으로 — 재감지·최초 감지 두 경로 (중)
   - [x] 첫 진입 피드 GET 3.79s → 건별 읽기 병렬화 (소~중)
   - [x] 콜드 태스크 `onopen` ~31s — 조사 결과 **재현 안 됨**(1004·269·344ms), 원인은 edge 상태로 추정·재현 조건 불명
