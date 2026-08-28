@@ -105,6 +105,7 @@
 | REQ-D08 | 라이트/다크 모드 | [spec](specs/20260729-REQ-D08-dark-mode.md) | 2026-07-29 | ✅ |
 | REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ dev 배포 완료 — 백엔드 2026-08-18 · 프론트 2026-08-21 |
 | REQ-B11 | 알림 기준선이 피드 도착 전에 잡힘 — 새로고침마다 직전 알림 토스트 | [plan](plans/PLAN-B11-notification-baseline-before-feed.md) | 2026-08-28 | ✅ **Phase 1~2 완료**(`useNotificationsReady` + 세 소비처 게이트, 10/10 · dev Worker 배포 후 새로고침 5회 토스트 0건 · 계약 #27 정정) — PR #3 **main 머지 완료(2026-08-28, `3d35d65`)**. 미결 1건(ready 동승 알림)은 후속 |
+| REQ-C09 | 알림 경로 후속 묶음 (실패 문구 서버 `message` 단일 출처 · `useNotificationRefresh` `kind` 필터 · 계약 #26 딤 회귀 케이스 · SSE `: connected` 선발송) | [plan](plans/PLAN-C09-notification-followups.md) | 2026-08-28 | ✅ Phase 1·2 완료 (10/10 · 백엔드 34/34 · 프론트 61/61 · dev 실측 warm `onopen` 0.2~0.8s) — `feat/C09-notification-followups` **미머지**. Phase 1 육안 1건(실패 배너 문구) 미확인 |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | 2026-08-27 | ✅ **Phase 0~3 완료** — SSE, 폴링 0건, dev 실측 전송 0.3~1.3s·숨김 탭 즉시 · PR #2 main 머지(`d176596`) · 후속: 콜드 스타트 기준, `: connected` 선발송, 발행 전 서버 작업 ~6s |
@@ -175,6 +176,45 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-08-28
+
+### REQ-C09 Phase 1·2 — 알림 경로 후속 4건 (브랜치 `feat/C09-notification-followups`, 미머지)
+
+**1단계 미결 6건을 먼저 닫고 시작했다.** F09·P04·B11 계획서에 흩어져 있던 것 — 실패 문구 출처(→ 서버 `message` 단일 출처,
+계약 #12 계열) · `kind` 필터(→ 가려 받는다) · P04 콜드 기준(→ 정상 상태 기준, 콜드 제외) · 전역 딤 측정법(→ `GlobalDim` DOM,
+카운터 노출은 기각 — 그 자체가 표면 변경) · B11 동승 알림(→ 기준선, 현재 동작 명문화) · F09 Phase 6 지연 상한(→ **질문이 소멸**했다.
+전달이 타이머가 아니라 네트워크 이벤트 구동으로 바뀌어 숨김 탭 7.5분 drift 최대 485ms). 그중 **코드가 바뀌는 넷을 REQ-C09로 묶었다** —
+넷 다 알림 경로의 소규모 변경이라 계획서를 넷으로 쪼갤 이유가 없었다.
+
+**전역 딤 케이스(C09-10·11)는 이 파일만 `api/client`를 mock 하지 않는다.** 딤을 켜는 것이 `client.js`의 `_setLoading`이라
+client 를 통째로 mock 하면 **측정 대상이 사라져 어떤 구현이든 통과한다.** `fetch`만 스텁하고 실제 client 를 태운다.
+그래서 **양성 대조(C09-11)를 짝으로 붙였다** — 같은 무대에서 `apiFetch` 경유 GET 은 딤을 켠다. 이게 없으면 C09-10의 "안 켜짐"이
+측정 도구의 고장인지 구현의 정상인지 구별되지 않는다.
+
+**`: connected` 선발송의 실측**(dev, 백엔드 재배포 후):
+
+| 측정 | 값 |
+|------|-----|
+| raw fetch 첫 청크 | **107ms** · 내용 `": connected\n\n"` |
+| `EventSource.onopen` (콜드 태스크 직후) | 31.0s · 30.1s · 0.11s |
+| `EventSource.onopen` (warm, 새 탭 5회) | **762 · 324 · 250 · 196 · 267 ms** |
+
+종전 최대 30초 `CONNECTING`이 정상 상태에서 0.2~0.8s로 해소됐다. 다만 **콜드 직후 두 번은 여전히 ~31초**였고 그 값이 heartbeat
+주기(30s)와 정확히 겹친다 — 첫 바이트가 edge/터널 warm-up 구간에서 붙잡히는 것으로 보인다. 코드가 아니라 콜드 구간의 문제라
+P04 미결 ①(콜드 첫 3건이 느림)과 같은 계열이고, TODO 2단계 "콜드 원인 조사"로 넘겼다. **desired 0 운영이라 실사용자는 매번 이
+콜드를 만난다**는 점이 이 항목의 우선순위를 정한다.
+
+**예고된 무대 붕괴가 또 그대로 났다** — `: connected`가 맨 앞에 오자 "첫 N청크"를 세던 P04-05·06·07·10이 한꺼번에 깨졌다.
+계획서가 P04-07 하나를 예고했는데 실제로는 넷이었다(같은 수집기를 쓰는 케이스를 다 세지 않았다). `/testrun`이 (a)로
+`_collect_after_connected()` 헬퍼를 넣어 **선발송 한 줄만 걷어내고** 그 뒤를 세게 했다 — 각 케이스의 단언은 그대로다.
+헬퍼가 첫 청크의 `connected`를 단언하므로 선발송이 사라지면 이 케이스들도 빨간불이 된다. P04-08은 `/testgen`이 미리 갱신했다.
+
+⚠️ **Phase 1 완료 기준 중 육안 항목 하나가 미확인이다** — "재감지·생성 실패 시 화면 배너 문구 = 서버 `message`". 실패를 인위적으로
+유발해야 해서 이번 dev 실측(성공 경로)에 넣지 못했다. 케이스 7건은 전부 녹색이고 훅이 알림 객체를 그대로 넘기는 것(C09-05)까지는
+검증됐다. 화면 표시 자체는 **미검증**으로 남긴다.
+
+**작업 순서를 문서로 고정했다** — `docs/TODO.md`에 6단계 로드맵(미결 결정 → 후속 → D09/F10/D10/신규 → 서버 여백 → REQ-27 → 운영).
+사용자가 적어 둔 신규 항목 7건은 3단계 끝에 붙였다. 구 `docs/예정된작업.md`는 삭제하고 참조를 TODO.md로 돌렸다 —
+미착수는 TODO.md, 완료 이력은 PROGRESS 인덱스가 이미 담고 있어 고유 정보 유실이 없다.
 
 ### REQ-B11 Phase 2 — dev 배포·육안 확인·계약 #27 정정 (PR #3 main 머지 `3d35d65`)
 

@@ -95,11 +95,12 @@ export default function EditorPage() {
         // 다운로드 URL 취득 실패는 생성 실패가 아니다 — 결과물은 생성 이력에 있다.
       }
     },
-    onError: () => {
+    // 실패 문구의 출처는 서버 알림 하나다 (REQ-C09).
+    onError: (n) => {
       setExportJobId(null);
       setGenerating(false);
       setGenerateStatus("error");
-      setGenerateError("PDF 생성에 실패했습니다.");
+      setGenerateError(n?.message || "PDF 생성에 실패했습니다.");
     },
   });
 

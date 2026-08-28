@@ -232,7 +232,7 @@
 | P04-05 | `GET /stream` | 이벤트 `id`가 알림의 `created_at` | 정상 | PLAN § 작업 단계 Phase 1 — "이벤트 `id`=`created_at`" | 1 | ✅ |
 | P04-06 | `GET /stream` | 이벤트 페이로드에 `unread_count` 동봉 | 정상 | PLAN § 작업 단계 Phase 1 — "페이로드에 `unread_count`" | 1 | ✅ |
 | P04-07 | `GET /stream` | `Last-Event-ID` 이후 알림을 스트림 첫머리에 흘린다 | 정상 | PLAN § 작업 단계 Phase 1 — "`Last-Event-ID` 헤더가 오면 `list_feed(since=)` 결과를 먼저 흘린다" | 1 | ✅ |
-| P04-08 | `GET /stream` | 헤더 없는 첫 연결은 기존 알림을 재전송하지 않는다 | 불변식 | PLAN § 제약·함정 — "첫 연결에는 재전송하지 않는다." | 1 | ✅ |
+| P04-08 | `GET /stream` | 헤더 없는 첫 연결은 기존 알림을 재전송하지 않는다 (**2026-08-28 C09로 갱신**: 첫 2청크 `[connected, keepalive]`, 둘 다 `data` 없음) | 불변식 | PLAN § 제약·함정 — "첫 연결에는 재전송하지 않는다." | 1 | ✅ → — (재검증 필요) |
 | P04-09 | `mark_all_read()` | `read` 이벤트(`unread_count: 0`)가 구독자에 도달 | 정상 | PLAN § 작업 단계 Phase 1 — "`read` 이벤트(`unread_count: 0`)를 publish" | 1 | ✅ |
 | P04-10 | `GET /stream` | 알림이 없어도 heartbeat 간격마다 `: keepalive`가 나간다 | 불변식 | PLAN § 작업 단계 Phase 1 — "`: keepalive` **30s**" | 1 | ✅ |
 | P04-11 | `HEARTBEAT_S` | 기본 간격 30s | 경계 | PLAN § Phase 0 결과 — "**heartbeat 30s** 권장(컷의 1/4)" | 1 | ✅ |

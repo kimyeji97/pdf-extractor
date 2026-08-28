@@ -71,6 +71,19 @@ async def _collect(gen, n: int, timeout: float = 2.0) -> list[dict]:
     return got
 
 
+async def _collect_after_connected(gen, n: int, timeout: float = 2.0) -> list[dict]:
+    """
+    `: connected` 선발송(REQ-C09) **뒤의** 청크 n개.
+
+    C09 에서 구독 직후 코멘트 한 줄이 먼저 나가도록 바뀌었다. 아래 케이스들이 재는 것은
+    그 뒤의 이벤트·keepalive 이므로 선발송 한 줄을 걷어내고 센다 — 선발송 자체는
+    C09-20~22 가 따로 잰다.
+    """
+    got = await _collect(gen, n + 1, timeout)
+    assert got[0].get("comment") == "connected", f"첫 청크가 connected 가 아니다: {got[0]}"
+    return got[1:]
+
+
 # ── 브로커 — emit() 과의 결합 ─────────────────────────────
 
 @pytest.mark.anyio
@@ -156,7 +169,7 @@ async def test_P04_05_이벤트_id는_알림의_created_at():
     from app.services import notification_service
 
     gen = event_stream(last_event_id=None, heartbeat_s=60)
-    task = asyncio.ensure_future(_collect(gen, 1))
+    task = asyncio.ensure_future(_collect_after_connected(gen, 1))
     await asyncio.sleep(0.05)  # 구독이 잡힐 시간
     notification_service.emit("job-id", NotificationKind.DETECTION)
     [ev] = await task
@@ -174,7 +187,7 @@ async def test_P04_06_이벤트_페이로드에_unread_count_동봉(write_notif,
     write_notif("job-old", days_ago(1))  # 미읽음 1건이 이미 있다
 
     gen = event_stream(last_event_id=None, heartbeat_s=60)
-    task = asyncio.ensure_future(_collect(gen, 1))
+    task = asyncio.ensure_future(_collect_after_connected(gen, 1))
     await asyncio.sleep(0.05)
     notification_service.emit("job-new", NotificationKind.DETECTION)
     [ev] = await task
@@ -193,7 +206,7 @@ async def test_P04_07_Last_Event_ID_이후_알림을_첫머리에_흘린다(writ
     write_notif("job-after", days_ago(1))
     since = days_ago(2).astimezone(timezone.utc).isoformat()
 
-    got = await _collect(event_stream(last_event_id=since, heartbeat_s=60), 1)
+    got = await _collect_after_connected(event_stream(last_event_id=since, heartbeat_s=60), 1)
 
     assert [e["data"]["job_id"] for e in got] == ["job-after"]
 
@@ -205,11 +218,13 @@ async def test_P04_08_첫_연결은_기존_알림을_재전송하지_않는다(w
 
     write_notif("job-old", days_ago(1))
 
-    # heartbeat 를 짧게 줘서 "첫 청크"가 무엇인지 본다 — 알림이면 실패, keepalive 면 통과
-    [first] = await _collect(event_stream(last_event_id=None, heartbeat_s=0.05), 1)
+    # heartbeat 를 짧게 줘서 첫 청크들이 무엇인지 본다 — 알림이 섞이면 실패.
+    # REQ-C09(2026-08-28): 구독 직후 `: connected` 코멘트가 먼저 나가므로 2청크를 모은다 —
+    # [connected, keepalive] 이고 둘 다 data 가 없어야 "재전송 없음"이다. 근거: PLAN-C09 § 결정.
+    got = await _collect(event_stream(last_event_id=None, heartbeat_s=0.05), 2)
 
-    assert "data" not in first
-    assert first.get("comment") == "keepalive"
+    assert all("data" not in c for c in got)
+    assert [c.get("comment") for c in got] == ["connected", "keepalive"]
 
 
 # ── 읽음 이벤트 ───────────────────────────────────────────
@@ -237,7 +252,7 @@ async def test_P04_10_알림이_없어도_keepalive가_나간다():
     """근거: PLAN § 작업 단계 Phase 1 — "`: keepalive` **30s**" """
     from app.routers.notification import event_stream
 
-    got = await _collect(event_stream(last_event_id=None, heartbeat_s=0.05), 2, timeout=1.0)
+    got = await _collect_after_connected(event_stream(last_event_id=None, heartbeat_s=0.05), 2, timeout=1.0)
 
     assert [g.get("comment") for g in got] == ["keepalive", "keepalive"]
 
