@@ -282,6 +282,8 @@ def _run_refresh_detection(job_id: str) -> None:
     if job is None:
         return
 
+    notified = False  # 알림은 정확히 1회 (REQ-P05) — 성공 경로에서 이미 보냈으면 finally 는 건너뛴다
+
     try:
         # Step 1: 기존 캐시 무효화
         storage.clear_boundaries_cache(job_id)
@@ -315,9 +317,16 @@ def _run_refresh_detection(job_id: str) -> None:
         job.total_question_count = len(boundaries)
         job.questions_per_page = qpp
 
-        # DONE 상태를 먼저 저장해 프론트 폴링이 즉시 재감지 완료를 확인하게 한 뒤,
+        # DONE 상태를 먼저 저장해 프론트가 즉시 재감지 완료를 확인하게 한 뒤,
         # 썸네일 프리워밍(REQ-P03-01)을 이어서 실행한다 (실패해도 감지 결과엔 영향 없음)
         storage.put_status(job)
+
+        # 완료 알림은 **프리워밍보다 먼저** 보낸다 (REQ-P05). 프리워밍은 실패해도 온디맨드로
+        # 폴백되는 최적화인데, 뒤에 두면 그것이 끝날 때까지 완료 통지가 붙잡힌다(실측 ~6s).
+        # `emit_detection` 은 스스로 예외를 삼키므로 여기서 감싸지 않는다 — 알림 실패가
+        # "감지 실패"로 둔갑하면 안 된다는 성질을 그대로 쓴다.
+        notification_service.emit_detection(job)
+        notified = True
 
         try:
             page_count = len(page_infos) if page_infos is not None else len(thumbnail_service.get_page_info(pdf_bytes))
@@ -335,7 +344,9 @@ def _run_refresh_detection(job_id: str) -> None:
         # 완료 알림 (REQ-F09). 재감지는 백그라운드 경로이므로 알림 대상이다.
         # 아래 list_all_questions·list_questions 의 지연 감지에는 붙이지 않는다 —
         # 사용자가 지금 보고 있는 화면에 대해 "완료됐습니다"가 뜬다.
-        notification_service.emit_detection(job)
+        # 성공 경로는 위에서 이미 보냈다 — 여기서 또 보내면 2건이 되어 스낵바가 두 번 뜬다(REQ-P05).
+        if not notified:
+            notification_service.emit_detection(job)
 
 
 # ── 페이지 목록 ───────────────────────────────────────────
