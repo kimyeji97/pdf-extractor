@@ -10,6 +10,7 @@ B10 에서 그 구조로 문제집이 통째로 사라졌다 — 화면을 떠�
 끝나고, **평상시(신규 0건) GET 은 0회**다.
 """
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -28,6 +29,10 @@ logger = logging.getLogger(__name__)
 
 # 보관 기간 — 읽음 여부와 무관하다. 정리는 조회 시 lazy (이 레포엔 스케줄러·cron 이 없다).
 RETENTION_DAYS = 30
+
+# 첫 진입은 최대 DEFAULT_LIMIT 건을 읽는데 R2 왕복이 건당 수십~수백 ms라 순차로는 그대로 쌓인다
+# (실측 3.79s). I/O bound 라 스레드로 겹친다 — `prewarm_service` 가 R2 PUT 에 쓰는 것과 같은 이유다.
+_READ_WORKERS = 12
 
 # `since` 미지정(앱 첫 진입) 시 상한. 평상시 폴링은 since 가 붙어 GET 0회지만
 # 첫 진입은 전량을 읽으므로 여기서 끊지 않으면 LIST + N GET 이 그대로 돈다.
@@ -181,13 +186,34 @@ def list_feed(since: Optional[str] = None, limit: int = DEFAULT_LIMIT) -> dict:
 
     selected = dated[: max(limit, 0)]
 
-    notifications = []
-    for _, key in selected:
-        item = storage.read_notification(key)
-        if item is not None:
-            notifications.append(item)
+    notifications = _read_many([key for _, key in selected])
 
     return {"notifications": notifications, "unread_count": unread_count}
+
+
+def _read_many(keys: list[str]) -> list[dict]:
+    """
+    알림 본문을 **병렬로** 읽는다 (REQ-P05). 순서는 인자로 받은 키 순서를 그대로 지킨다 —
+    `list_feed` 가 이미 최신순으로 정렬해 넘기므로 여기서 다시 정렬하지 않는다.
+
+    개별 실패는 **건너뛴다**. 한 건이 깨졌다고 피드 전체가 사라지면 벨이 통째로 비는데,
+    그건 순차 구현에서도 `read_notification` 이 `None` 을 돌려주면 제외하던 동작이다
+    (`prewarm_service` 가 개별 썸네일 실패를 무시하고 계속하는 것과 같은 규칙).
+    """
+    if not keys:
+        return []
+
+    def _read(key: str) -> Optional[dict]:
+        try:
+            return storage.read_notification(key)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[notification] 항목 읽기 실패(건너뜀) | key=%s error=%s", key, e)
+            return None
+
+    with ThreadPoolExecutor(max_workers=min(_READ_WORKERS, len(keys))) as executor:
+        items = list(executor.map(_read, keys))  # map 은 입력 순서를 보존한다
+
+    return [item for item in items if item is not None]
 
 
 def mark_all_read() -> Optional[str]:
