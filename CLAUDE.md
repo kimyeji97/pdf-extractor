@@ -95,7 +95,7 @@ pdf-extractor/
 │   ├── specs/                              # 요구사항 명세 70+ (REQ-## 넘버링)
 │   ├── adr/                                # 아키텍처 결정 기록 (ADR-0001~0003)
 │   ├── infra/                              # 인프라 명세 및 배포 가이드
-│   └── 예정된작업.md                       # 예정 작업 메모
+│   └── TODO.md                             # 남은 작업 순서표 (미착수·후속·신규 항목)
 │
 ├── deploy/backend-build.sh                 # 백엔드 빌드 스크립트
 ├── QUICKSTART.md                           # 로컬 개발 셋업 가이드
@@ -323,7 +323,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 **시간순 작업 로그와 REQ 상태 인덱스는 [`docs/PROGRESS.md`](docs/PROGRESS.md)에 있다.**
 조회는 `/progress [오늘|어제|금주|전주|N일|REQ번호]`, 기록은 `/checkpoint`.
 
-- 미래 작업(아직 REQ 번호 없음): `docs/예정된작업.md`
+- 남은 작업 순서·미래 작업(아직 REQ 번호 없음): `docs/TODO.md` (2026-08-28 확정, 구 `예정된작업.md`는 삭제)
 - 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~4 완료(스펙 §4-2).
   **REQ-D08(라이트/다크) 완료** · **REQ-F09(완료 알림) v1 완료**(Phase 6 브라우저 알림은 이연) ·
   **REQ-F11(재감지 중 진입 차단) 완료** — 남은 것은 REQ-27 로그인.
