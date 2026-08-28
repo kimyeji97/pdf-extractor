@@ -315,8 +315,8 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-08-28 기준 각 prefix 다음 번호: `B12`, `C10`, `D11`, **`F12`**, `P05`, 숫자 `29`.
-(그 사이 점유: `B10`·`B11`·`C09`·`F09`·`F11`·`P04`)
+2026-08-28 기준 각 prefix 다음 번호: `B12`, `C10`, `D11`, **`F12`**, `P06`, 숫자 `29`.
+(그 사이 점유: `B10`·`B11`·`C09`·`F09`·`F11`·`P04`·`P05`)
 
 ## 진행 현황
 
@@ -334,7 +334,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
   진행 중: **REQ-P04**(상시 폴링 → 서버 푸시, SSE) — Phase 0(인프라 실측 08-18: 오리진 무전송 125s에 edge가
   끊음 → heartbeat 30s) · **Phase 1(백엔드 브로커+스트림)·Phase 2(프론트 EventSource 전환) 완료 2026-08-27**,
   **Phase 0~3 완료 2026-08-27**(dev 실측 통과: 전송 0.3~1.3s, 숨김 탭 즉시, 폴링 0건). 브랜치
-  `feat/P04-sse-push`는 PR #2로 **main 머지 완료(2026-08-27, `d176596`)**. 파생 **REQ-C09**(알림 경로 후속 4건 — 실패 문구·kind 필터·딤 케이스·`: connected` 선발송) Phase 1·2 완료 2026-08-28, `feat/C09-notification-followups` PR #4 **main 머지 완료(2026-08-28, `91a911a`)**. 파생 **REQ-B11**(새로고침 토스트 — 기준선을 빈 목록에서 잡던 버그) Phase 1~2 완료 2026-08-28(dev 프론트 Worker에 배포됨 — 새로고침 5회 토스트 0건 확인), `feat/B11-notification-baseline` PR #3로 **main 머지 완료(2026-08-28, `3d35d65`)**.
+  `feat/P04-sse-push`는 PR #2로 **main 머지 완료(2026-08-27, `d176596`)**. 파생 **REQ-P05**(알림 지연 — 발행 전 대기 8.1s 단축·피드 GET 병렬화) Phase 1~3 완료 2026-08-28, `feat/P05-notification-latency` 미머지. 파생 **REQ-C09**(알림 경로 후속 4건 — 실패 문구·kind 필터·딤 케이스·`: connected` 선발송) Phase 1·2 완료 2026-08-28, `feat/C09-notification-followups` PR #4 **main 머지 완료(2026-08-28, `91a911a`)**. 파생 **REQ-B11**(새로고침 토스트 — 기준선을 빈 목록에서 잡던 버그) Phase 1~2 완료 2026-08-28(dev 프론트 Worker에 배포됨 — 새로고침 5회 토스트 0건 확인), `feat/B11-notification-baseline` PR #3로 **main 머지 완료(2026-08-28, `3d35d65`)**.
   ⚠️ dev R2 버킷 CORS는 코드가 아니라 버킷 설정이다(wrangler OAuth로만 닿음, 08-27 dev 오리진 추가).
   이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.
   (상세: [F09 계획서](docs/plans/PLAN-F09-completion-notification.md) ·
