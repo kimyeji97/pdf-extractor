@@ -164,9 +164,11 @@ export default function AnalysisWorkPage() {
       setRefreshing(false);
       fetchPages(jobId);
     },
-    onError: () => {
+    // 실패 문구의 출처는 서버 알림 하나다 (REQ-C09) — 화면이 자체 문자열을 들면
+    // 같은 사건에 벨 팝오버와 배너가 다른 문장을 보여준다.
+    onError: (n) => {
       setRefreshing(false);
-      setRefreshError("재감지에 실패했습니다.");
+      setRefreshError(n?.message || "재감지에 실패했습니다.");
     },
   });
 

@@ -57,7 +57,7 @@ export default function HistoryPage() {
   } = usePaginatedList(fetchPage);
 
   // 생성이 끝나면 새로고침 없이 이력에 나타난다 (REQ-F09 Phase 4).
-  useNotificationRefresh(fetchWorkbooks);
+  useNotificationRefresh(fetchWorkbooks, { kind: 'export' }); // 문제집 생성 완료에만 반응 (REQ-C09)
 
   // ── 삭제 (문제집 + 결과 PDF, REQ-C08) ─────────────────
   const [deleteTarget, setDeleteTarget] = useState(null);
