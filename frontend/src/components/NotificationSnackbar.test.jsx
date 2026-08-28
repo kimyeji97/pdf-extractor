@@ -13,10 +13,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import NotificationSnackbar from 'components/NotificationSnackbar';
 
-import { useNotifications } from 'contexts/NotificationContext';
+import { useNotifications, useNotificationsReady } from 'contexts/NotificationContext';
 
 vi.mock('contexts/NotificationContext', () => ({
   useNotifications: vi.fn(),
+  // REQ-B11: 소비처가 기준선 GET 도착 신호를 읽는다. F09 케이스는 전부 "데이터가 있는 마운트"라
+  // 항상 ready 로 둔다 — 도착 순서 자체는 *.ready.test.jsx 가 잰다. (2026-08-27 /testrun (a))
+  useNotificationsReady: vi.fn(),
 }));
 
 const notif = (jobId, createdAt) => ({
@@ -28,6 +31,7 @@ const notif = (jobId, createdAt) => ({
 
 const feedIs = (items) => {
   useNotifications.mockReturnValue({ notifications: items, unreadCount: items.length });
+  useNotificationsReady.mockReturnValue(true);
 };
 
 beforeEach(() => {

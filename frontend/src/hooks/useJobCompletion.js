@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { useNotifications } from 'contexts/NotificationContext';
+import { useNotifications, useNotificationsReady } from 'contexts/NotificationContext';
 
 /**
  * 특정 job 의 완료를 전역 알림 피드에서 지켜본다 (REQ-F09 Phase 3).
@@ -21,6 +21,7 @@ import { useNotifications } from 'contexts/NotificationContext';
  */
 export function useJobCompletion(jobId, handlers = {}) {
   const { notifications } = useNotifications();
+  const ready = useNotificationsReady();
 
   const watchingRef = useRef(undefined);
   const handledRef = useRef(null);
@@ -32,13 +33,19 @@ export function useJobCompletion(jobId, handlers = {}) {
 
   // 기준선은 effect 가 아니라 렌더 중에 잡는다 — effect 로 미루면 그 사이 한 번의
   // 커밋이 지나가고, 그 커밋에서 옛 알림이 이미 처리돼 버린다.
-  if (watchingRef.current !== jobId) {
+  // 단, 기준선 GET 이 돌아오기 전에는 잡지 않는다(REQ-B11) — 그때 목록은 비어 있어, 잡으면 GET 도착분에
+  // 실린 이 job 의 옛 알림(지난 재감지)이 "방금 완료"로 보인다. 지금 화면들은 jobId 를 클릭으로만 넣어
+  // 이 순서가 나지 않지만, 규칙은 세 소비처가 같아야 한다.
+  if (!ready) {
+    watchingRef.current = undefined;
+    handledRef.current = null;
+  } else if (watchingRef.current !== jobId) {
     watchingRef.current = jobId;
     handledRef.current = new Set(notifications.map((n) => `${n.job_id}:${n.created_at}`));
   }
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId || !handledRef.current) return;
 
     notifications.forEach((n) => {
       if (n.job_id !== jobId) return; // "모두의 알림"이라 남의 완료도 같은 피드에 들어온다
@@ -50,5 +57,5 @@ export function useJobCompletion(jobId, handlers = {}) {
       if (n.severity === 'error') handlersRef.current.onError?.(n);
       else handlersRef.current.onDone?.(n);
     });
-  }, [jobId, notifications]);
+  }, [jobId, notifications, ready]);
 }
