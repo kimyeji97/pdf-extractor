@@ -328,13 +328,13 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
   **REQ-D08(라이트/다크) 완료** · **REQ-F09(완료 알림) v1 완료**(Phase 6 브라우저 알림은 이연) ·
   **REQ-F11(재감지 중 진입 차단) 완료** — 남은 것은 REQ-27 로그인.
   ⚠️ **dev 백엔드는 2026-08-27 `feat/P04-sse-push`(`p04-2a343a4`)로 배포됐고 실측 후 `desired 0`으로 내렸다**
-  (켜면 ~$23/월, 꺼 두면 ~$2/월). 켤 때는 `--desired-count 1`. **dev 프론트는 2026-08-21 `main`(8-10 빌드)으로 배포됐다** —
+  (켜면 ~$23/월, 꺼 두면 ~$2/월). 켤 때는 `--desired-count 1`. **dev 프론트는 2026-08-28 `feat/B11-notification-baseline`으로 배포됐다** —
   실체는 Pages가 아니라 **Workers `twilight-base-302d`**이고 **자동 배포는 없다**(push로 안 올라간다).
   프론트를 바꾸면 위 "배포 (프론트엔드)" 두 줄을 손으로 돌려야 한다.
   진행 중: **REQ-P04**(상시 폴링 → 서버 푸시, SSE) — Phase 0(인프라 실측 08-18: 오리진 무전송 125s에 edge가
   끊음 → heartbeat 30s) · **Phase 1(백엔드 브로커+스트림)·Phase 2(프론트 EventSource 전환) 완료 2026-08-27**,
   **Phase 0~3 완료 2026-08-27**(dev 실측 통과: 전송 0.3~1.3s, 숨김 탭 즉시, 폴링 0건). 브랜치
-  `feat/P04-sse-push`는 PR #2로 **main 머지 완료(2026-08-27, `d176596`)**. 파생 **REQ-B11**(새로고침 토스트 — 기준선을 빈 목록에서 잡던 버그) Phase 1 완료 2026-08-27, `feat/B11-notification-baseline` 미머지·미배포.
+  `feat/P04-sse-push`는 PR #2로 **main 머지 완료(2026-08-27, `d176596`)**. 파생 **REQ-B11**(새로고침 토스트 — 기준선을 빈 목록에서 잡던 버그) Phase 1~2 완료 2026-08-28(dev 프론트 Worker에 배포됨 — 새로고침 5회 토스트 0건 확인), `feat/B11-notification-baseline` 미머지.
   ⚠️ dev R2 버킷 CORS는 코드가 아니라 버킷 설정이다(wrangler OAuth로만 닿음, 08-27 dev 오리진 추가).
   이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.
   (상세: [F09 계획서](docs/plans/PLAN-F09-completion-notification.md) ·
@@ -501,8 +501,11 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
     돈다**(폴링 시절엔 5초마다였다. REQ-P03에서 걷어낸 병목과 같은 계열). 신규가 있을 때만, 여러 건이 와도 1회만 읽는다.
     ⚠️ 전달 경로가 SSE(REQ-P04)로 바뀌어도 기준선은 그대로 필요하다 — 재연결 시 `Last-Event-ID`로 밀린 알림이
     한꺼번에 오므로, 기준선 없이 구독하면 앱을 연 순간 30일치 스낵바가 쏟아지는 사고가 같은 모양으로 난다.
-    기준선은 `useEffect`가 아니라 **렌더 중에** 잡아야 한다(effect로 미루면 그 사이 커밋에서
-    옛 알림이 이미 처리된다). 증상이 "가끔 즉시 완료로 뜬다"라 재현이 어렵다.
+    기준선은 `useEffect`가 아니라 **기준선 GET이 돌아온 뒤의 렌더 중에** 잡아야 한다 —
+    `useNotificationsReady()`가 참이 되는 렌더에서 잡는다(effect로 미루면 그 사이 커밋에서
+    옛 알림이 이미 처리된다). "렌더 중"만 지키고 **첫 렌더에서 잡으면 기준선이 빈 배열**이라
+    GET 도착분 전체가 신규로 보여 새로고침마다 직전 알림이 토스트로 떴다(REQ-B11).
+    증상이 "가끔 즉시 완료로 뜬다"라 재현이 어렵다.
     자동 다운로드처럼 **화면에 묶여야 하는 부수효과는 이 훅의 콜백 안에 둔다** — 훅이 화면
     수명에 묶여 있다는 사실이 B10 불변식을 지키는 방식이다(계약 #22). (REQ-F09 Phase 3)
     ⚠️ **서버의 `unread_count`는 단조 증가하지 않는다** — 읽음 커서 **이후** 개수라
