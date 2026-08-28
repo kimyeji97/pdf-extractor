@@ -123,6 +123,8 @@ def _trigger_boundary_detection(job_id: str) -> None:
     status_file.boundaries_status = BoundariesStatus.PROCESSING
     storage.put_status(status_file)
 
+    notified = False  # 알림은 정확히 1회 (REQ-P05) — 성공 경로에서 이미 보냈으면 finally 는 건너뛴다
+
     try:
         original = storage.original_key(job_id)
         logger.info("[boundary] R2에서 PDF 다운로드 | job_id=%s key=%s", job_id, original)
@@ -163,6 +165,11 @@ def _trigger_boundary_detection(job_id: str) -> None:
         storage.put_status(status_file)
         logger.info("[boundary] DONE 상태 저장 완료 | job_id=%s", job_id)
 
+        # 완료 알림은 **프리워밍보다 먼저** 보낸다 (REQ-P05) — 재감지 경로와 같은 규칙이다.
+        # `emit_detection` 이 스스로 예외를 삼키므로 여기서 감싸지 않는다.
+        notification_service.emit_detection(status_file)
+        notified = True
+
         try:
             page_count = len(page_infos) if page_infos is not None else len(thumbnail_service.get_page_info(pdf_bytes))
             prewarm_service.prewarm_all_thumbnails(job_id, pdf_bytes, boundaries, page_count)
@@ -181,7 +188,9 @@ def _trigger_boundary_detection(job_id: str) -> None:
         # 완료 알림 (REQ-F09). 백그라운드 감지 경로이므로 알림 대상이다 —
         # 조회 경로(list_all_questions·list_questions)의 지연 감지에는 붙이지 않는다.
         # 성공·실패 모두 알린다 (severity 로 구분).
-        notification_service.emit_detection(status_file)
+        # 성공 경로는 위에서 이미 보냈다 — 중복 발행을 막는다(REQ-P05).
+        if not notified:
+            notification_service.emit_detection(status_file)
 
 
 # ── 파일 서빙 (로컬 모드 전용) ────────────────────────────
