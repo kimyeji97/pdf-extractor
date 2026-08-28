@@ -59,8 +59,12 @@ async def event_stream(
       이 헤더를 붙이므로 끊긴 동안의 알림이 프론트 코드 없이 복구된다.
     - 헤더가 없는 첫 연결에는 **아무것도 재전송하지 않는다.** 기준선은 피드 GET 이 잡는다 —
       여기서 최근분을 흘리면 앱을 열자마자 스낵바가 쏟아진다(계약 #27).
+    - 구독 직후 `: connected` 코멘트를 **재전송보다 먼저** 한 줄 흘린다 (REQ-C09). edge 가 첫
+      바이트까지 응답 헤더를 붙잡고 있어서, 이게 없으면 브라우저 `EventSource` 가 첫 keepalive
+      (30s)까지 `CONNECTING` 으로 남는다. 코멘트라 이벤트로 취급되지 않아 프론트는 무변경이다.
     """
     async with broker.subscribe() as queue:
+        yield ": connected\n\n"
         if last_event_id:
             feed = notification_service.list_feed(since=last_event_id)
             for item in reversed(feed["notifications"]):

@@ -205,11 +205,13 @@ async def test_P04_08_첫_연결은_기존_알림을_재전송하지_않는다(w
 
     write_notif("job-old", days_ago(1))
 
-    # heartbeat 를 짧게 줘서 "첫 청크"가 무엇인지 본다 — 알림이면 실패, keepalive 면 통과
-    [first] = await _collect(event_stream(last_event_id=None, heartbeat_s=0.05), 1)
+    # heartbeat 를 짧게 줘서 첫 청크들이 무엇인지 본다 — 알림이 섞이면 실패.
+    # REQ-C09(2026-08-28): 구독 직후 `: connected` 코멘트가 먼저 나가므로 2청크를 모은다 —
+    # [connected, keepalive] 이고 둘 다 data 가 없어야 "재전송 없음"이다. 근거: PLAN-C09 § 결정.
+    got = await _collect(event_stream(last_event_id=None, heartbeat_s=0.05), 2)
 
-    assert "data" not in first
-    assert first.get("comment") == "keepalive"
+    assert all("data" not in c for c in got)
+    assert [c.get("comment") for c in got] == ["connected", "keepalive"]
 
 
 # ── 읽음 이벤트 ───────────────────────────────────────────
