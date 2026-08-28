@@ -105,7 +105,7 @@
 | REQ-D08 | 라이트/다크 모드 | [spec](specs/20260729-REQ-D08-dark-mode.md) | 2026-07-29 | ✅ |
 | REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ dev 배포 완료 — 백엔드 2026-08-18 · 프론트 2026-08-21 |
 | REQ-B11 | 알림 기준선이 피드 도착 전에 잡힘 — 새로고침마다 직전 알림 토스트 | [plan](plans/PLAN-B11-notification-baseline-before-feed.md) | 2026-08-28 | ✅ **Phase 1~2 완료**(`useNotificationsReady` + 세 소비처 게이트, 10/10 · dev Worker 배포 후 새로고침 5회 토스트 0건 · 계약 #27 정정) — PR #3 **main 머지 완료(2026-08-28, `3d35d65`)**. 미결 1건(ready 동승 알림)은 후속 |
-| REQ-C09 | 알림 경로 후속 묶음 (실패 문구 서버 `message` 단일 출처 · `useNotificationRefresh` `kind` 필터 · 계약 #26 딤 회귀 케이스 · SSE `: connected` 선발송) | [plan](plans/PLAN-C09-notification-followups.md) | 2026-08-28 | ✅ Phase 1·2 완료 (10/10 · 백엔드 34/34 · 프론트 61/61 · dev 실측 warm `onopen` 0.2~0.8s) — `feat/C09-notification-followups` **미머지**. Phase 1 육안 1건(실패 배너 문구) 미확인 |
+| REQ-C09 | 알림 경로 후속 묶음 (실패 문구 서버 `message` 단일 출처 · `useNotificationRefresh` `kind` 필터 · 계약 #26 딤 회귀 케이스 · SSE `: connected` 선발송) | [plan](plans/PLAN-C09-notification-followups.md) | 2026-08-28 | ✅ Phase 1·2 완료 (10/10 · 백엔드 34/34 · 프론트 61/61 · dev 실측 warm `onopen` 0.2~0.8s) — PR #4 **main 머지 완료(2026-08-28, `91a911a`)**. Phase 1 육안 1건(실패 배너 문구) 미확인 |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | 2026-08-27 | ✅ **Phase 0~3 완료** — SSE, 폴링 0건, dev 실측 전송 0.3~1.3s·숨김 탭 즉시 · PR #2 main 머지(`d176596`) · 후속: 콜드 스타트 기준, `: connected` 선발송, 발행 전 서버 작업 ~6s |
@@ -177,7 +177,7 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 
 ## 2026-08-28
 
-### REQ-C09 Phase 1·2 — 알림 경로 후속 4건 (브랜치 `feat/C09-notification-followups`, 미머지)
+### REQ-C09 Phase 1·2 — 알림 경로 후속 4건 (PR #4 main 머지 `91a911a`)
 
 **1단계 미결 6건을 먼저 닫고 시작했다.** F09·P04·B11 계획서에 흩어져 있던 것 — 실패 문구 출처(→ 서버 `message` 단일 출처,
 계약 #12 계열) · `kind` 필터(→ 가려 받는다) · P04 콜드 기준(→ 정상 상태 기준, 콜드 제외) · 전역 딤 측정법(→ `GlobalDim` DOM,
