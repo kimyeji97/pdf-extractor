@@ -15,11 +15,12 @@
 - [x] F09 Phase 6 지연 상한 → **P04 실측으로 해소, ≤ 2s(SSE와 동일)**
 
 ### 2. 후속 작업 (완료 REQ에서 파생된 것 + 1단계 결정에서 생긴 코드 작업)
-- [ ] F09: 재감지 실패 문구를 알림 `message`로 대체 (`work.jsx` 자체 문자열 제거, 소)
-- [ ] F09: `useNotificationRefresh`에 `kind` 옵션 — 분석 목록 `detection`·생성 이력 `export`만 재조회 (소)
-- [ ] P04: 계약 #26 회귀 케이스 — 스트림 이벤트 뒤 `GlobalDim`이 DOM에 없음 (테스트만, 소)
-- [ ] P04: `: connected` 선발송 — edge가 첫 바이트까지 헤더를 붙잡아 `EventSource`가 최대 30s CONNECTING (백엔드, 소)
-- [ ] P04: 재감지 완료 → 발행 전 서버 내부 저장 ~6s 단축 (활성 탭 벨 9~12s의 대부분, 중)
+- [x] **REQ-C09** ✅ 2026-08-28 (브랜치 미머지) 알림 경로 후속 묶음 — 아래 4건 ([계획서](plans/PLAN-C09-notification-followups.md), 2026-08-28)
+  - [x] F09: 재감지·생성 실패 문구를 알림 `message`로 대체 (소)
+  - [x] F09: `useNotificationRefresh`에 `kind` 옵션 — 분석 목록 `detection`·생성 이력 `export`만 재조회 (소)
+  - [x] P04: 계약 #26 회귀 케이스 — 스트림 이벤트 뒤 `GlobalDim`이 DOM에 없음 (테스트만, 소)
+  - [x] P04: `: connected` 선발송 — edge가 첫 바이트까지 헤더를 붙잡아 `EventSource`가 최대 30s CONNECTING (백엔드, 소)
+- [ ] P04: 재감지 완료 → 발행 전 서버 내부 저장 ~6s 단축 (활성 탭 벨 9~12s의 대부분, 중) — **콜드 원인 조사 포함**(C09 실측: 콜드 직후 `EventSource.onopen` ~31s, warm은 0.2~0.8s)
 - [ ] P04: 첫 진입 알림 GET 3.8s (소~중)
 - [ ] P04 파생: 생성 이력 미리보기 URL에 쿼리를 붙여 다운로드 링크와 edge 캐시 키 분리 (R2 CORS 재발 방지, 소)
 
