@@ -130,8 +130,11 @@ export default function HistoryPage() {
       />
 
       <CardRow>
-      {/* ── 목록 패널 (책 카드 그리드, REQ-D07 Phase 3-3) ─── */}
-      <PanelCard sx={{ width: 420, flexShrink: 0 }}>
+      {/* ── 목록 패널 (책 카드 그리드, REQ-D07 Phase 3-3 · REQ-D09 Phase 1) ───
+          종전에는 420px 고정이라 한 줄에 카드 2장뿐이었고, 아무것도 고르지 않은
+          대부분의 시간 동안 **빈 미리보기 패널이 화면 절반을 차지**했다.
+          목록이 남은 영역을 갖고, 미리보기는 고른 뒤에만 나타난다. */}
+      <PanelCard sx={{ flex: 1, minWidth: 0 }}>
         <PanelCardHeader>
           <Icon icon="material-symbols:history-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
           <Typography variant="subtitle2" fontWeight={700}>생성된 문제집</Typography>
@@ -222,12 +225,14 @@ export default function HistoryPage() {
         </Box>
       </PanelCard>
 
-      <Box sx={{ width: 16, flexShrink: 0 }} />
+      {/* ── 미리보기 패널 (REQ-D09 Phase 1) ──────────────
+          **고르기 전에는 DOM에 없다.** 빈 패널을 자리만 잡아 두면 목록이 그만큼 좁아진다.
+          폭 배분·전개 애니메이션은 Phase 2가 맡는다. */}
+      {selectedWb && (
+        <>
+          <Box sx={{ width: 16, flexShrink: 0 }} />
 
-      {/* ── 미리보기 패널 ──────────────────────────── */}
-      <PanelCard sx={{ flex: 1, minWidth: 0 }}>
-        {selectedWb ? (
-          <>
+          <PanelCard sx={{ flex: 1, minWidth: 0 }}>
             <PanelCardHeader>
               <Icon icon="material-symbols:picture-as-pdf-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
               <Typography variant="subtitle2" fontWeight={700} noWrap>
@@ -245,14 +250,9 @@ export default function HistoryPage() {
                 <PdfPreviewPanel pdfUrl={pdfUrl} />
               )}
             </Box>
-          </>
-        ) : (
-          <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "text.disabled", gap: 2 }}>
-            <Icon icon="material-symbols:picture-as-pdf-outline-rounded" style={{ fontSize: 56 }} />
-            <Typography variant="body2" color="text.secondary">목록에서 문제집을 클릭하면 미리보기가 표시됩니다.</Typography>
-          </Box>
-        )}
-      </PanelCard>
+          </PanelCard>
+        </>
+      )}
       </CardRow>
 
       {/* ── 삭제 확인 다이얼로그 (REQ-C08) ──────────────── */}
