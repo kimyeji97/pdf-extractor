@@ -1,13 +1,10 @@
 import type { Breakpoint } from '@mui/material/styles';
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
 import { Icon } from '@iconify/react';
 
 import Box from '@mui/material/Box';
-import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
-import InputAdornment from '@mui/material/InputAdornment';
 import { useTheme } from '@mui/material/styles';
 
 import ColorSchemeMenu from 'components/ColorSchemeMenu';
@@ -51,25 +48,7 @@ export type DashboardLayoutProps = LayoutBaseProps & {
  */
 export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery = 'lg' }: DashboardLayoutProps) {
   const theme = useTheme();
-  const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
-  const [search, setSearch] = useState('');
-
-  /**
-   * 헤더 검색 (REQ-D07 2안).
-   *
-   * 화면 이름을 표시하던 자리다. 2안에서는 각 페이지가 **자기 헤더 + 브레드크럼**을
-   * 갖게 되어 위치 정보가 그쪽으로 옮겨 갔으므로, 헤더는 검색에 내준다.
-   *
-   * 전역 검색 대상은 문제집(SOURCE job) 하나뿐이라 **분석 목록으로 보내고 검색어를
-   * 넘긴다**. 자체 결과 드롭다운을 만들면 목록 화면의 서버 검색·무한 스크롤
-   * (REQ-P03-03)과 같은 일을 두 벌 구현하게 된다.
-   */
-  const submitSearch = () => {
-    const q = search.trim();
-    if (!q) return;
-    navigate(`/?q=${encodeURIComponent(q)}`);
-  };
 
   const renderHeader = () => {
     const headerSlots: HeaderSectionProps['slots'] = {
@@ -82,27 +61,6 @@ export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery 
             <Icon icon="material-symbols:menu-rounded" style={{ fontSize: 22 }} />
           </IconButton>
           <NavMobile data={navData} open={navOpen} onClose={() => setNavOpen(false)} />
-
-          <TextField
-            size="small"
-            placeholder="문제집 검색"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submitSearch();
-              if (e.key === 'Escape') setSearch('');
-            }}
-            sx={{ width: { xs: 160, sm: 260 } }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Box component="span" sx={{ color: 'text.disabled', display: 'flex' }}>
-                    <Icon icon="material-symbols:search-rounded" style={{ fontSize: 18 }} />
-                  </Box>
-                </InputAdornment>
-              ),
-            }}
-          />
         </>
       ),
       rightArea: (
