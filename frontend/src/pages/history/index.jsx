@@ -14,6 +14,8 @@ import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Tooltip from "@mui/material/Tooltip";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
 import { useTheme } from "@mui/material/styles";
 import { Icon } from "@iconify/react";
 
@@ -28,6 +30,7 @@ import PageHeader from "components/PageHeader";
 import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
 import BookCard from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
+import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 import { toPreviewUrl } from "utils/previewUrl";
@@ -86,12 +89,25 @@ export default function HistoryPage() {
     resizingRef.current = { dir, startX: e.clientX, startWidth: previewWidth };
   };
 
+  // ── 이름 검색 (REQ-D09 Phase 3 · F10) — 서버가 이미 name 파라미터를 받는다(REQ-P03-03) ──
+  const [searchName, setSearchName] = useState("");
+  const debouncedName = useDebouncedValue(searchName, 300);
+  const hasSearch = Boolean(debouncedName.trim());
+
   // 서버가 created_at 내림차순으로 페이지를 반환하므로 클라 재정렬은 불필요 (REQ-P03-03)
-  const fetchPage = useCallback((skip, limit) => getWorkbooks({ skip, limit }), []);
+  const fetchPage = useCallback((skip, limit) => getWorkbooks({ skip, limit, name: debouncedName }), [debouncedName]);
 
   const {
     items: workbooks, total, loading, loadingMore, error, sentinelRef, reload: fetchWorkbooks,
   } = usePaginatedList(fetchPage);
+
+  // 검색어가 바뀌면(디바운스된 값 기준) 목록이 처음부터 다시 로드되는 시점과 같이 미리보기를
+  // 닫는다 — 원본 입력 기준으로 닫으면 목록은 그대로인데 미리보기만 먼저 사라져
+  // "같은 집합을 가리킨다"는 전제가 깨진다.
+  useEffect(() => {
+    setSelectedWb(null);
+    setPdfUrl(null);
+  }, [debouncedName]);
 
   // 생성이 끝나면 새로고침 없이 이력에 나타난다 (REQ-F09 Phase 4).
   useNotificationRefresh(fetchWorkbooks, { kind: 'export' }); // 문제집 생성 완료에만 반응 (REQ-C09)
@@ -174,6 +190,24 @@ export default function HistoryPage() {
         <PanelCardHeader>
           <Icon icon="material-symbols:history-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
           <Typography variant="subtitle2" fontWeight={700}>생성된 문제집</Typography>
+          <Box sx={{ flex: 1 }} />
+          {/* 이름 검색 (REQ-D09 Phase 3 · F10) — 서버가 name 파라미터를 받는다(REQ-P03-03) */}
+          <TextField
+            size="small"
+            placeholder="이름 검색"
+            value={searchName}
+            onChange={(e) => setSearchName(e.target.value)}
+            sx={{ width: 200 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Box component="span" sx={{ color: "text.disabled", display: "flex" }}>
+                    <Icon icon="material-symbols:search-rounded" style={{ fontSize: 16 }} />
+                  </Box>
+                </InputAdornment>
+              ),
+            }}
+          />
         </PanelCardHeader>
 
         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 2 }}>
@@ -181,12 +215,18 @@ export default function HistoryPage() {
           {!loading && !error && workbooks.length === 0 && (
             <Box sx={{ p: 4, textAlign: "center", color: "text.disabled" }}>
               <Icon icon="material-symbols:history-rounded" style={{ fontSize: 40 }} />
-              <Typography variant="body2" mt={1} color="text.secondary">
-                아직 생성된 문제집이 없습니다.<br />
-                <Typography component="span" variant="caption" color="text.disabled">
-                  문제집 편집 탭에서 PDF를 생성하면<br />여기에 기록됩니다.
+              {hasSearch ? (
+                <Typography variant="body2" mt={1} color="text.secondary">
+                  검색 결과가 없습니다.
                 </Typography>
-              </Typography>
+              ) : (
+                <Typography variant="body2" mt={1} color="text.secondary">
+                  아직 생성된 문제집이 없습니다.<br />
+                  <Typography component="span" variant="caption" color="text.disabled">
+                    문제집 편집 탭에서 PDF를 생성하면<br />여기에 기록됩니다.
+                  </Typography>
+                </Typography>
+              )}
             </Box>
           )}
 
