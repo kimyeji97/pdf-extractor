@@ -4,7 +4,7 @@
  * 문제집 목록 선택 시 react-pdf 기반 PDF 뷰어로 미리보기.
  * 확대/축소, 페이지 번호 입력 이동, 스크롤 탐색 지원.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
@@ -14,6 +14,7 @@ import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Tooltip from "@mui/material/Tooltip";
+import { useTheme } from "@mui/material/styles";
 import { Icon } from "@iconify/react";
 
 import Dialog from "@mui/material/Dialog";
@@ -24,7 +25,7 @@ import Button from "@mui/material/Button";
 
 import PdfPreviewPanel from "components/PdfPreviewPanel";
 import PageHeader from "components/PageHeader";
-import { WorkCanvas, CardRow, PanelCard, PanelCardHeader } from "components/WorkCanvas";
+import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
 import BookCard from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
@@ -43,12 +44,47 @@ const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/ap
 
 const actionSx = { bgcolor: "background.paper", opacity: 0.92, "&:hover": { opacity: 1 } };
 
+/** 미리보기 패널 폭의 [최소, 최대] (REQ-D09 Phase 2) — analysis/work.jsx의 section3 패턴을 따른다. */
+const PREVIEW_WIDTH_BOUNDS = [480, 1000];
+
 export default function HistoryPage() {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [downloadingId, setDownloadingId] = useState(null);
   const [selectedWb, setSelectedWb]       = useState(null);
   const [pdfUrl, setPdfUrl]               = useState(null);
   const [pdfLoading, setPdfLoading]       = useState(false);
+
+  // ── 미리보기 폭 리사이즈 (REQ-D09 Phase 2) ─────────────
+  const [previewWidth, setPreviewWidth]     = useState(720);
+  const [resizingPreview, setResizingPreview] = useState(false);
+  const resizingRef = useRef(null);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!resizingRef.current) return;
+      const { startX, startWidth, dir } = resizingRef.current;
+      const [min, max] = PREVIEW_WIDTH_BOUNDS;
+      setPreviewWidth(Math.max(min, Math.min(max, startWidth + (e.clientX - startX) * dir)));
+    };
+    const onUp = () => {
+      resizingRef.current = null;
+      setResizingPreview(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, []);
+
+  const startResizePreview = (dir, e) => {
+    e.preventDefault();
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    setResizingPreview(true);
+    resizingRef.current = { dir, startX: e.clientX, startWidth: previewWidth };
+  };
 
   // 서버가 created_at 내림차순으로 페이지를 반환하므로 클라 재정렬은 불필요 (REQ-P03-03)
   const fetchPage = useCallback((skip, limit) => getWorkbooks({ skip, limit }), []);
@@ -174,6 +210,7 @@ export default function HistoryPage() {
                       <span>
                         <IconButton
                           size="small"
+                          aria-label="PDF 재다운로드"
                           disabled={!wb.result_job_id || downloadingId === wb.workbook_id}
                           onClick={(e) => { e.stopPropagation(); handleDownload(wb); }}
                           sx={actionSx}
@@ -225,14 +262,24 @@ export default function HistoryPage() {
         </Box>
       </PanelCard>
 
-      {/* ── 미리보기 패널 (REQ-D09 Phase 1) ──────────────
+      {/* ── 미리보기 패널 (REQ-D09 Phase 1·2) ──────────────
           **고르기 전에는 DOM에 없다.** 빈 패널을 자리만 잡아 두면 목록이 그만큼 좁아진다.
-          폭 배분·전개 애니메이션은 Phase 2가 맡는다. */}
+          폭은 고정(기본 720px, 480~1000 리사이즈 가능)이고 목록이 남은 영역을 flex:1로 갖는다.
+          전개·복귀는 CSS width 전환(225ms)만 쓴다 — JS로 매 프레임 다시 그리면 가상화 뷰어가
+          프레임마다 페이지를 다시 재는 계약 #7과 충돌한다. 드래그 중에는 전환을 끈다(계약 위반은
+          아니지만 마우스보다 늦게 따라오는 게 리사이즈에서는 어색하다). */}
       {selectedWb && (
         <>
-          <Box sx={{ width: 16, flexShrink: 0 }} />
+          <CardResizeHandle onMouseDown={(e) => startResizePreview(-1, e)} />
 
-          <PanelCard sx={{ flex: 1, minWidth: 0 }}>
+          <PanelCard
+            sx={{
+              width: previewWidth,
+              flexShrink: 0,
+              minWidth: 0,
+              transition: resizingPreview ? "none" : theme.transitions.create(["width"], { duration: 225 }),
+            }}
+          >
             <PanelCardHeader>
               <Icon icon="material-symbols:picture-as-pdf-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
               <Typography variant="subtitle2" fontWeight={700} noWrap>

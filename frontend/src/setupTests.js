@@ -7,6 +7,13 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
+// jsdom에는 IntersectionObserver가 없다 — usePaginatedList(무한 스크롤)를 쓰는 화면을
+// 렌더하는 모든 테스트가 필요로 한다.
+global.IntersectionObserver = class {
+  observe() {}
+  disconnect() {}
+};
+
 afterEach(() => {
   cleanup();
 });

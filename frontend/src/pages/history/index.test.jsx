@@ -13,6 +13,7 @@
  *    같은 기준을 반대로 적용한 것 — 대역이 가리는 것이 검증 대상인지 아닌지가 갈림길이다).
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import HistoryPage from 'pages/history';
@@ -71,9 +72,11 @@ const listIs = (items) => {
 };
 
 const renderPage = () => render(
-  <ThemeProvider>
-    <HistoryPage />
-  </ThemeProvider>,
+  <MemoryRouter>
+    <ThemeProvider>
+      <HistoryPage />
+    </ThemeProvider>
+  </MemoryRouter>,
 );
 
 /** 첫 페이지 로드가 끝난 뒤의 화면을 얻는다. */
