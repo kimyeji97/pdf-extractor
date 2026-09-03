@@ -286,17 +286,17 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 `REQ-{prefix}{seq}`의 prefix는 작업 성격을 나타낸다:
 
-| Prefix | 의미 | 점유 범위 (2026-07-29) |
+| Prefix | 의미 | 점유 범위 (2026-09-03) |
 |--------|------|-----------|
-| (숫자) | 핵심·v2·v3 기능 (기획 단위) | REQ-01~28 |
-| `B` | 버그 수정 (Bug) | REQ-B01~B09 |
-| `C` | 보완 기능 (Complement) | REQ-C01~C08 |
-| `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D10 |
+| (숫자) | 핵심·v2·v3 기능 (기획 단위) | REQ-01~30 |
+| `B` | 버그 수정 (Bug) | REQ-B01~B12 |
+| `C` | 보완 기능 (Complement) | REQ-C01~C09 |
+| `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D11 |
 | `E` | 실험·인프라성 기능 (Enhancement) | REQ-E01 |
-| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F10 |
-| `P` | 성능 (Performance) | REQ-P01~P03 |
+| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F12 |
+| `P` | 성능 (Performance) | REQ-P01~P05 |
 
-기능 대분류 참고: REQ-01~09(핵심), REQ-10~15(v2), REQ-16~26(v3), REQ-27~28(계정·공유).
+기능 대분류 참고: REQ-01~09(핵심), REQ-10~15(v2), REQ-16~26(v3), REQ-27~28(계정·공유), REQ-29~30(템플릿).
 
 > "점유 범위"는 **미착수·기각 번호를 포함한다.** 번호는 한 번 부여하면 재사용하지 않는다.
 
@@ -316,8 +316,8 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-08-28 기준 각 prefix 다음 번호: `B12`, `C10`, `D11`, **`F12`**, `P06`, 숫자 `29`.
-(그 사이 점유: `B10`·`B11`·`C09`·`F09`·`F11`·`P04`·`P05`)
+2026-09-03 기준 각 prefix 다음 번호: `B13`, `C10`, `D12`, `F13`, `P06`, 숫자 `31`.
+(2026-09-03에 예약만 된 것: `D11`·`B12`·`F12`·`REQ-29`·`REQ-30` — PROGRESS "미착수 — 번호만 부여된 것" 표)
 
 ## 진행 현황
 
