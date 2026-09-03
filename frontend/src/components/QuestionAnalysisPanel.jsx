@@ -11,6 +11,8 @@
  * Props:
  *   jobId, pageNum, pageInfo  — 현재 페이지 식별
  *   refreshTrigger            — 부모가 재감지/수동추가 완료 시 증가시키는 카운터
+ *   columns                   — 카드 그리드 열 수 (REQ-D10). 부모가 패널 너비로 계산해 넘긴다
+ *                               (`utils/questionGrid`). 이 패널은 너비를 재지 않는다
  */
 import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
 import Box from "@mui/material/Box";
@@ -88,10 +90,11 @@ const QuestionCard = memo(
         variant="outlined"
         sx={{
           overflow: "hidden",
-          // 목록이 flex 컬럼이라 카드가 flex 아이템으로 축소된다. 축소되면 카드의
-          // overflow:hidden이 문항 이미지를 잘라 버리므로(REQ-D01 대형 이미지가 깨짐)
-          // 축소를 명시적으로 막는다.
-          flexShrink: 0,
+          // 카드는 grid 아이템이다(REQ-D10). grid 아이템의 기본 min-width:auto가 이미지의
+          // min-content 폭으로 셀을 밀어내지 않게 minWidth:0을 건다 — 이미지는 width:100%라
+          // 셀 폭을 따른다. (종전 flex 컬럼 시절의 flexShrink:0 — 계약 #5 — 은 축소로 인한
+          // 이미지 잘림을 막던 것으로, grid에서는 축소 자체가 없다.)
+          minWidth: 0,
           transition: "border-color 0.15s, box-shadow 0.15s",
           ...(fp && { borderColor: "warning.light", bgcolor: tintBg("warning") }),
           ...(isChecked && { borderColor: "primary.main", boxShadow: (t) => `0 0 0 1px ${t.palette.primary.main}` }),
@@ -137,7 +140,9 @@ const QuestionCard = memo(
             <Typography
               variant="caption"
               noWrap
-              title={fp ? displayTitle : "더블클릭하여 타이틀 수정"}
+              /* 말줄임된 제목을 호버로 읽을 수 있게 전체 제목을 앞세운다 (REQ-D10).
+                 2열(카드 ~192px)에서는 긴 제목이 매번 잘린다 — 종전 문구만으로는 읽을 방법이 없었다. */
+              title={fp ? displayTitle : `${displayTitle} · 더블클릭하여 수정`}
               onDoubleClick={() => !fp && onStartEdit(q)}
               sx={{
                 flex: 1, minWidth: 0, fontWeight: 600,
@@ -179,6 +184,7 @@ export default function QuestionAnalysisPanel({
   pageNum,
   pageInfo,
   refreshTrigger = 0,
+  columns = 1,
 }) {
   // ── 문항 목록 ───────────────────────────────────────────
   const [questions, setQuestions] = useState([]);
@@ -354,12 +360,7 @@ export default function QuestionAnalysisPanel({
       {error && <Alert severity="error" sx={{ borderRadius: 0, py: 0, fontSize: 12, flexShrink: 0 }}>{error}</Alert>}
 
       {/* ── 문항 목록 ─────────────────────────────────────── */}
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 1.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
-        {loading &&
-          Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} variant="rounded" height={140} sx={{ flexShrink: 0 }} />
-          ))}
-
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 1.5, display: "flex", flexDirection: "column" }}>
         {!loading && questions.length === 0 && (
           <Box
             sx={{
@@ -377,20 +378,40 @@ export default function QuestionAnalysisPanel({
           </Box>
         )}
 
-        {questions.map((q) => (
-          <QuestionCard
-            key={q.question_id}
-            q={q}
-            isChecked={checkedIds.has(q.question_id)}
-            isEditing={editingId === q.question_id}
-            editingValue={editingValue}
-            onToggleCheck={toggleCheck}
-            onStartEdit={startEdit}
-            onCommitEdit={commitEdit}
-            onCancelEdit={cancelEdit}
-            onEditingValueChange={setEditingValue}
-          />
-        ))}
+        {/* 카드 그리드 (REQ-D10) — 열 수는 부모가 패널 너비로 계산해 넘긴다. 임계(420) 이하에서는
+            1열이라 REQ-D01 대형 이미지가 그대로다. 열 수(정수)만 바뀌므로 드래그 중에도
+            QuestionCard(memo)는 리렌더되지 않는다 — 카드에는 열 수를 넘기지 않는다. */}
+        {(loading || questions.length > 0) && (
+          <Box
+            data-columns={columns}
+            sx={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+              gap: 1.5,
+              alignItems: "start",
+            }}
+          >
+            {loading &&
+              Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} variant="rounded" height={140} />
+              ))}
+
+            {questions.map((q) => (
+              <QuestionCard
+                key={q.question_id}
+                q={q}
+                isChecked={checkedIds.has(q.question_id)}
+                isEditing={editingId === q.question_id}
+                editingValue={editingValue}
+                onToggleCheck={toggleCheck}
+                onStartEdit={startEdit}
+                onCommitEdit={commitEdit}
+                onCancelEdit={cancelEdit}
+                onEditingValueChange={setEditingValue}
+              />
+            ))}
+          </Box>
+        )}
       </Box>
 
       {/* ── Undo 토스트 (패널 하단 플로팅) ─────────────────── */}
