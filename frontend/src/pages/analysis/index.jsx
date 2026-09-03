@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useState, useCallback } from "react";
+import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
@@ -136,19 +136,11 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
 
 export default function AnalysisFilePage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
 
-  // 앱 헤더 검색은 `/?q=…`로 이 화면에 넘어온다(REQ-D07 2안).
-  // 여기서 초기값으로 흡수하고 주소는 즉시 비워, 새로고침 때 검색어가 되살아나지 않게 한다.
-  const [searchName, setSearchName] = useState(() => searchParams.get("q") || "");
+  // 헤더 전역 검색이 사라지면서(REQ-D09 Phase 4) `/?q=…`로 넘어오는 경로도 없어졌다.
+  // 손으로 친 경우만 남으므로 파라미터는 무시한다 — 주소창은 정리하지 않는다(계획서 §제약).
+  const [searchName, setSearchName] = useState("");
   const [searchType, setSearchType] = useState("");
-
-  useEffect(() => {
-    const q = searchParams.get("q");
-    if (q === null) return;
-    setSearchName(q);
-    setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams]);
 
   // 업로드 다이얼로그
   const [uploadOpen, setUploadOpen]                   = useState(false);

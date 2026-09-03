@@ -4,7 +4,7 @@
  * 문제집 목록 선택 시 react-pdf 기반 PDF 뷰어로 미리보기.
  * 확대/축소, 페이지 번호 입력 이동, 스크롤 탐색 지원.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
@@ -14,6 +14,9 @@ import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Tooltip from "@mui/material/Tooltip";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
+import { useTheme } from "@mui/material/styles";
 import { Icon } from "@iconify/react";
 
 import Dialog from "@mui/material/Dialog";
@@ -24,9 +27,10 @@ import Button from "@mui/material/Button";
 
 import PdfPreviewPanel from "components/PdfPreviewPanel";
 import PageHeader from "components/PageHeader";
-import { WorkCanvas, CardRow, PanelCard, PanelCardHeader } from "components/WorkCanvas";
+import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
 import BookCard from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
+import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 import { toPreviewUrl } from "utils/previewUrl";
@@ -43,19 +47,67 @@ const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/ap
 
 const actionSx = { bgcolor: "background.paper", opacity: 0.92, "&:hover": { opacity: 1 } };
 
+/** 미리보기 패널 폭의 [최소, 최대] (REQ-D09 Phase 2) — analysis/work.jsx의 section3 패턴을 따른다. */
+const PREVIEW_WIDTH_BOUNDS = [480, 1000];
+
 export default function HistoryPage() {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [downloadingId, setDownloadingId] = useState(null);
   const [selectedWb, setSelectedWb]       = useState(null);
   const [pdfUrl, setPdfUrl]               = useState(null);
   const [pdfLoading, setPdfLoading]       = useState(false);
 
+  // ── 미리보기 폭 리사이즈 (REQ-D09 Phase 2) ─────────────
+  const [previewWidth, setPreviewWidth]     = useState(720);
+  const [resizingPreview, setResizingPreview] = useState(false);
+  const resizingRef = useRef(null);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!resizingRef.current) return;
+      const { startX, startWidth, dir } = resizingRef.current;
+      const [min, max] = PREVIEW_WIDTH_BOUNDS;
+      setPreviewWidth(Math.max(min, Math.min(max, startWidth + (e.clientX - startX) * dir)));
+    };
+    const onUp = () => {
+      resizingRef.current = null;
+      setResizingPreview(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, []);
+
+  const startResizePreview = (dir, e) => {
+    e.preventDefault();
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    setResizingPreview(true);
+    resizingRef.current = { dir, startX: e.clientX, startWidth: previewWidth };
+  };
+
+  // ── 이름 검색 (REQ-D09 Phase 3 · F10) — 서버가 이미 name 파라미터를 받는다(REQ-P03-03) ──
+  const [searchName, setSearchName] = useState("");
+  const debouncedName = useDebouncedValue(searchName, 300);
+  const hasSearch = Boolean(debouncedName.trim());
+
   // 서버가 created_at 내림차순으로 페이지를 반환하므로 클라 재정렬은 불필요 (REQ-P03-03)
-  const fetchPage = useCallback((skip, limit) => getWorkbooks({ skip, limit }), []);
+  const fetchPage = useCallback((skip, limit) => getWorkbooks({ skip, limit, name: debouncedName }), [debouncedName]);
 
   const {
     items: workbooks, total, loading, loadingMore, error, sentinelRef, reload: fetchWorkbooks,
   } = usePaginatedList(fetchPage);
+
+  // 검색어가 바뀌면(디바운스된 값 기준) 목록이 처음부터 다시 로드되는 시점과 같이 미리보기를
+  // 닫는다 — 원본 입력 기준으로 닫으면 목록은 그대로인데 미리보기만 먼저 사라져
+  // "같은 집합을 가리킨다"는 전제가 깨진다.
+  useEffect(() => {
+    setSelectedWb(null);
+    setPdfUrl(null);
+  }, [debouncedName]);
 
   // 생성이 끝나면 새로고침 없이 이력에 나타난다 (REQ-F09 Phase 4).
   useNotificationRefresh(fetchWorkbooks, { kind: 'export' }); // 문제집 생성 완료에만 반응 (REQ-C09)
@@ -130,11 +182,32 @@ export default function HistoryPage() {
       />
 
       <CardRow>
-      {/* ── 목록 패널 (책 카드 그리드, REQ-D07 Phase 3-3) ─── */}
-      <PanelCard sx={{ width: 420, flexShrink: 0 }}>
+      {/* ── 목록 패널 (책 카드 그리드, REQ-D07 Phase 3-3 · REQ-D09 Phase 1) ───
+          종전에는 420px 고정이라 한 줄에 카드 2장뿐이었고, 아무것도 고르지 않은
+          대부분의 시간 동안 **빈 미리보기 패널이 화면 절반을 차지**했다.
+          목록이 남은 영역을 갖고, 미리보기는 고른 뒤에만 나타난다. */}
+      <PanelCard sx={{ flex: 1, minWidth: 0 }}>
         <PanelCardHeader>
           <Icon icon="material-symbols:history-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
           <Typography variant="subtitle2" fontWeight={700}>생성된 문제집</Typography>
+          <Box sx={{ flex: 1 }} />
+          {/* 이름 검색 (REQ-D09 Phase 3 · F10) — 서버가 name 파라미터를 받는다(REQ-P03-03) */}
+          <TextField
+            size="small"
+            placeholder="이름 검색"
+            value={searchName}
+            onChange={(e) => setSearchName(e.target.value)}
+            sx={{ width: 200 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Box component="span" sx={{ color: "text.disabled", display: "flex" }}>
+                    <Icon icon="material-symbols:search-rounded" style={{ fontSize: 16 }} />
+                  </Box>
+                </InputAdornment>
+              ),
+            }}
+          />
         </PanelCardHeader>
 
         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 2 }}>
@@ -142,12 +215,18 @@ export default function HistoryPage() {
           {!loading && !error && workbooks.length === 0 && (
             <Box sx={{ p: 4, textAlign: "center", color: "text.disabled" }}>
               <Icon icon="material-symbols:history-rounded" style={{ fontSize: 40 }} />
-              <Typography variant="body2" mt={1} color="text.secondary">
-                아직 생성된 문제집이 없습니다.<br />
-                <Typography component="span" variant="caption" color="text.disabled">
-                  문제집 편집 탭에서 PDF를 생성하면<br />여기에 기록됩니다.
+              {hasSearch ? (
+                <Typography variant="body2" mt={1} color="text.secondary">
+                  검색 결과가 없습니다.
                 </Typography>
-              </Typography>
+              ) : (
+                <Typography variant="body2" mt={1} color="text.secondary">
+                  아직 생성된 문제집이 없습니다.<br />
+                  <Typography component="span" variant="caption" color="text.disabled">
+                    문제집 편집 탭에서 PDF를 생성하면<br />여기에 기록됩니다.
+                  </Typography>
+                </Typography>
+              )}
             </Box>
           )}
 
@@ -171,6 +250,7 @@ export default function HistoryPage() {
                       <span>
                         <IconButton
                           size="small"
+                          aria-label="PDF 재다운로드"
                           disabled={!wb.result_job_id || downloadingId === wb.workbook_id}
                           onClick={(e) => { e.stopPropagation(); handleDownload(wb); }}
                           sx={actionSx}
@@ -222,12 +302,24 @@ export default function HistoryPage() {
         </Box>
       </PanelCard>
 
-      <Box sx={{ width: 16, flexShrink: 0 }} />
+      {/* ── 미리보기 패널 (REQ-D09 Phase 1·2) ──────────────
+          **고르기 전에는 DOM에 없다.** 빈 패널을 자리만 잡아 두면 목록이 그만큼 좁아진다.
+          폭은 고정(기본 720px, 480~1000 리사이즈 가능)이고 목록이 남은 영역을 flex:1로 갖는다.
+          전개·복귀는 CSS width 전환(225ms)만 쓴다 — JS로 매 프레임 다시 그리면 가상화 뷰어가
+          프레임마다 페이지를 다시 재는 계약 #7과 충돌한다. 드래그 중에는 전환을 끈다(계약 위반은
+          아니지만 마우스보다 늦게 따라오는 게 리사이즈에서는 어색하다). */}
+      {selectedWb && (
+        <>
+          <CardResizeHandle onMouseDown={(e) => startResizePreview(-1, e)} />
 
-      {/* ── 미리보기 패널 ──────────────────────────── */}
-      <PanelCard sx={{ flex: 1, minWidth: 0 }}>
-        {selectedWb ? (
-          <>
+          <PanelCard
+            sx={{
+              width: previewWidth,
+              flexShrink: 0,
+              minWidth: 0,
+              transition: resizingPreview ? "none" : theme.transitions.create(["width"], { duration: 225 }),
+            }}
+          >
             <PanelCardHeader>
               <Icon icon="material-symbols:picture-as-pdf-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
               <Typography variant="subtitle2" fontWeight={700} noWrap>
@@ -245,14 +337,9 @@ export default function HistoryPage() {
                 <PdfPreviewPanel pdfUrl={pdfUrl} />
               )}
             </Box>
-          </>
-        ) : (
-          <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "text.disabled", gap: 2 }}>
-            <Icon icon="material-symbols:picture-as-pdf-outline-rounded" style={{ fontSize: 56 }} />
-            <Typography variant="body2" color="text.secondary">목록에서 문제집을 클릭하면 미리보기가 표시됩니다.</Typography>
-          </Box>
-        )}
-      </PanelCard>
+          </PanelCard>
+        </>
+      )}
       </CardRow>
 
       {/* ── 삭제 확인 다이얼로그 (REQ-C08) ──────────────── */}
