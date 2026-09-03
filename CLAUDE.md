@@ -305,7 +305,8 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 새 작업의 번호는 **해당 prefix의 마지막 seq + 1**로 부여한다.
 
 > ⚠️ **`ls docs/specs/`만 보면 안 된다.** 스펙 파일 없이 번호만 점유된 REQ가 여럿이다 —
-> 구현됐지만 스펙이 없는 것(C08), 제안 단계에서 예약된 것(D08·F09·D09·F10·D10·REQ-27·REQ-28).
+> 구현됐지만 스펙이 없는 것(C08), 제안 단계에서 예약된 것(REQ-27·REQ-28 — D08·F09·D09·F10·D10도
+> 이 경로로 예약됐다가 스펙 없이 계획서만으로 완료됐다).
 > 파일 목록만 믿고 부여하면 **이미 남이 쓰기로 한 번호와 충돌한다.**
 > **[`docs/PROGRESS.md`](docs/PROGRESS.md)의 요구사항 인덱스(특히 "미착수 — 번호만 부여된 것" 표)가
 > 단일 출처다.** 아래 명령은 교차 확인용으로만 쓴다.
@@ -326,7 +327,8 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 - 남은 작업 순서·미래 작업(아직 REQ 번호 없음): `docs/TODO.md` (2026-08-28 확정, 구 `예정된작업.md`는 삭제)
 - 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~4 완료(스펙 §4-2).
   **REQ-D08(라이트/다크) 완료** · **REQ-F09(완료 알림) v1 완료**(Phase 6 브라우저 알림은 이연) ·
-  **REQ-F11(재감지 중 진입 차단) 완료** — 남은 것은 REQ-27 로그인.
+  **REQ-F11(재감지 중 진입 차단) 완료** · **REQ-D09·F10(생성 이력 개편+검색, PR #7)·REQ-D10(문항 목록
+  바둑판, PR #8) 완료 2026-09-03** — 남은 것은 TODO 3단계 신규 항목 7건, 그 뒤 REQ-27 로그인.
   ⚠️ **dev 백엔드는 2026-08-27 `feat/P04-sse-push`(`p04-2a343a4`)로 배포됐고 실측 후 `desired 0`으로 내렸다**
   (켜면 ~$23/월, 꺼 두면 ~$2/월). 켤 때는 `--desired-count 1`. **dev 프론트는 2026-08-28 `feat/B11-notification-baseline`으로 배포됐다** —
   실체는 Pages가 아니라 **Workers `twilight-base-302d`**이고 **자동 배포는 없다**(push로 안 올라간다).
