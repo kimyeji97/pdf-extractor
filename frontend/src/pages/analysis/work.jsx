@@ -38,6 +38,7 @@ import { getPages, refreshJobQuestions, addManualQuestion, getAllQuestions } fro
 import { useJobCompletion } from "hooks/useJobCompletion";
 import { useAnalysisEntryGuard } from "hooks/useAnalysisEntryGuard";
 import { isRefreshBlocked } from "utils/jobStatus";
+import { columnsForWidth } from "utils/questionGrid";
 import { tintBg } from "theme/tint";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
@@ -603,6 +604,9 @@ export default function AnalysisWorkPage() {
               pageNum={selectedPage}
               pageInfo={selectedPageInfo}
               refreshTrigger={panelRefreshTrigger}
+              /* REQ-D10: 열 수는 패널 너비 상태값에서 계산한다 — 상태값이 곧 실제 폭이다
+                 (section3은 고정폭, 창이 좁아지면 줄어드는 쪽은 section2). */
+              columns={columnsForWidth(panelWidths.section3)}
             />
           ) : (
             <>
