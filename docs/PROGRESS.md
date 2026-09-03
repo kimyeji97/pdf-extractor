@@ -112,7 +112,7 @@
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | 2026-08-27 | ✅ **Phase 0~3 완료** — SSE, 폴링 0건, dev 실측 전송 0.3~1.3s·숨김 탭 즉시 · PR #2 main 머지(`d176596`) · 후속: 콜드 스타트 기준, `: connected` 선발송, 발행 전 서버 작업 ~6s |
 | REQ-D09 | 생성 이력 화면 구조 개편 (목록 전체 폭 카드 그리드 + 클릭 시 우측 아코디언 미리보기 720px) | [plan](plans/PLAN-D09-F10-history-screen-rework.md) | 2026-09-03 | ✅ **Phase 1~5 완료**(케이스 14/14 · `/testrun` 확인 · Phase 5 육안 검증 완료). dev 배포는 미실행(프론트 배포 정책상 로드맵 완료 시점에 모아서) |
 | REQ-F10 | 생성 이력 이름 검색 | [plan](plans/PLAN-D09-F10-history-screen-rework.md) | 2026-09-03 | ✅ Phase 3(D09-08~12, 이 REQ의 전체 범위) + Phase 5 육안 검증 완료. dev 배포는 미실행(위와 동일 정책) |
-| REQ-D10 | 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존) | [plan](plans/PLAN-D10-question-grid-columns.md) | 2026-09-03 | ✅ **Phase 1~2 완료**(케이스 7/7 · `/testrun` 확인 · Phase 2 로컬 육안 — 1↔2열 전환·이미지 잘림 0·상호작용 4종·다크 실측 통과, **오탐 배지만 미확인**(검증 PDF에 오탐 0건)). 브랜치 `feat/D10-question-grid-columns` `0a4e788` — **PR 미생성·main 미머지**. dev 배포는 미실행(프론트 배포 정책) |
+| REQ-D10 | 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존) | [plan](plans/PLAN-D10-question-grid-columns.md) | 2026-09-03 | ✅ **Phase 1~2 완료**(케이스 7/7 · `/testrun` 확인 · Phase 2 로컬 육안 — 1↔2열 전환·이미지 잘림 0·상호작용 4종·다크 실측 통과, **오탐 배지만 미확인**(검증 PDF에 오탐 0건)). PR #8 **main 머지 완료(2026-09-03, `48e445d`)**. dev 배포는 미실행(프론트 배포 정책) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -271,6 +271,12 @@ Phase 1 구현은 `main` 위에서 시작하려다 게이트에 걸려 `feat/D10
 바로 그 모양(F09-22). 이번 `/checkpoint`에서 원문의 줄바꿈을 옮겨 한 줄로 맞췄다 — **인용을 짧게
 자르는 대신 원문을 한 줄로 만든 이유**는 D10-01의 근거가 "200 → 1"이라 짧게 자르면 케이스와
 인용이 안 맞기 때문이다.
+
+### REQ-D10 PR #8 머지 + 브랜치 정리
+
+`feat/D10-question-grid-columns`를 `main`에 머지했다(머지 커밋 `48e445d`, merge commit — PR #1~#7과
+같은 관례). 머지 전 전체 스위트 86/86 재확인. 머지 후 `merge-base --is-ancestor`로 tip 포함을 확인하고
+로컬·원격 브랜치를 지웠다. dev 프론트 배포는 정책대로 하지 않는다 — 3단계 신규 항목이 끝나면 모아서.
 
 ### REQ-D10 Phase 2 육안 검증 완료 — 계획서 상태 ✅ 완료 (코드 델타 0, 커밋 없음)
 
