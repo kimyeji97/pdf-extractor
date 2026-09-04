@@ -26,6 +26,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Icon } from "@iconify/react";
 
+import paths from "routes/paths";
 import { clampCellScale } from "utils/workbookLayout";
 import PageHeader from "components/PageHeader";
 import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
@@ -308,7 +309,7 @@ export default function EditorPage() {
         title="생성"
         crumbs={[
           { label: "홈", to: "/" },
-          { label: "생성", to: "/editor" },
+          { label: "생성", to: paths.create },
           ...(selectedJobFilename
             ? [{ label: selectedWorkbookName || selectedJobFilename }]
             : []),

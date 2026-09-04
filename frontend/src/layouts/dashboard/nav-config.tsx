@@ -20,17 +20,17 @@ export const navData: NavItem[] = [
   },
   {
     title: '생성',
-    path: paths.editor,
+    path: paths.create,
     icon: navIcon('material-symbols:edit-document-outline-rounded'),
   },
   {
     title: '결과',
-    path: paths.history,
+    path: paths.results,
     icon: navIcon('material-symbols:history-rounded'),
   },
   {
     title: '템플릿 관리',
-    path: paths.format,
+    path: paths.templates,
     icon: navIcon('material-symbols:imagesmode-outline-rounded'),
   },
 ];

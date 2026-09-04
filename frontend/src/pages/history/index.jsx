@@ -34,6 +34,7 @@ import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 import { toPreviewUrl } from "utils/previewUrl";
+import paths from "routes/paths";
 
 function fmtDate(iso) {
   if (!iso) return "-";
@@ -264,7 +265,7 @@ export default function HistoryPage() {
                     <Tooltip title="편집으로 불러오기">
                       <IconButton
                         size="small"
-                        onClick={(e) => { e.stopPropagation(); navigate("/editor", { state: { initialWorkbookId: wb.workbook_id } }); }}
+                        onClick={(e) => { e.stopPropagation(); navigate(paths.create, { state: { initialWorkbookId: wb.workbook_id } }); }}
                         sx={actionSx}
                       >
                         <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 16 }} />
