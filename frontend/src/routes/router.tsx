@@ -34,9 +34,9 @@ export const routes: RouteObject[] = [
         children: [
           { index: true,                 element: <AnalysisPage /> },
           { path: paths.analysisWork,    element: <AnalysisWorkPage /> },
-          { path: paths.editor,          element: <EditorPage /> },
-          { path: paths.history,         element: <HistoryPage /> },
-          { path: paths.format,          element: <FormatPage /> },
+          { path: paths.create,          element: <EditorPage /> },
+          { path: paths.results,         element: <HistoryPage /> },
+          { path: paths.templates,       element: <FormatPage /> },
         ],
       },
     ],

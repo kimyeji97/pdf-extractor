@@ -26,6 +26,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Icon } from "@iconify/react";
 
+import paths from "routes/paths";
 import { clampCellScale } from "utils/workbookLayout";
 import PageHeader from "components/PageHeader";
 import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
@@ -305,10 +306,10 @@ export default function EditorPage() {
       {/* 페이지 헤더 — 종전 컨텍스트 바를 흡수했다.
           현재 파일은 브레드크럼 꼬리로, 선택 요약과 생성 버튼은 우측 액션으로 옮겼다. */}
       <PageHeader
-        title="문제집 편집"
+        title="생성"
         crumbs={[
           { label: "홈", to: "/" },
-          { label: "문제집 편집", to: "/editor" },
+          { label: "생성", to: paths.create },
           ...(selectedJobFilename
             ? [{ label: selectedWorkbookName || selectedJobFilename }]
             : []),

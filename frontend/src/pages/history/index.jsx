@@ -34,6 +34,7 @@ import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 import { toPreviewUrl } from "utils/previewUrl";
+import paths from "routes/paths";
 
 function fmtDate(iso) {
   if (!iso) return "-";
@@ -170,8 +171,8 @@ export default function HistoryPage() {
     /* REQ-D07 2안 — 맞붙은 2패널을 캔버스 위 카드 2장으로. */
     <WorkCanvas>
       <PageHeader
-        title="생성 이력"
-        crumbs={[{ label: "홈", to: "/" }, { label: "생성 이력" }]}
+        title="결과"
+        crumbs={[{ label: "홈", to: "/" }, { label: "결과" }]}
         actions={
           <Tooltip title="새로고침">
             <IconButton size="small" onClick={fetchWorkbooks} disabled={loading}>
@@ -223,7 +224,7 @@ export default function HistoryPage() {
                 <Typography variant="body2" mt={1} color="text.secondary">
                   아직 생성된 문제집이 없습니다.<br />
                   <Typography component="span" variant="caption" color="text.disabled">
-                    문제집 편집 탭에서 PDF를 생성하면<br />여기에 기록됩니다.
+                    생성 메뉴에서 PDF를 만들면<br />여기에 기록됩니다.
                   </Typography>
                 </Typography>
               )}
@@ -264,7 +265,7 @@ export default function HistoryPage() {
                     <Tooltip title="편집으로 불러오기">
                       <IconButton
                         size="small"
-                        onClick={(e) => { e.stopPropagation(); navigate("/editor", { state: { initialWorkbookId: wb.workbook_id } }); }}
+                        onClick={(e) => { e.stopPropagation(); navigate(paths.create, { state: { initialWorkbookId: wb.workbook_id } }); }}
                         sx={actionSx}
                       >
                         <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 16 }} />

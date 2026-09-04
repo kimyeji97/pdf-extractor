@@ -28,13 +28,14 @@ import ListItemButton from "@mui/material/ListItemButton";
 import { useNotifications } from "contexts/NotificationContext";
 import { markNotificationsRead } from "api/client";
 import { tintBg } from "theme/tint";
+import paths from "routes/paths";
 
 /** 알림 1건의 안정적인 키 (계약 #16 계열 — job_id 하나로는 재감지·재생성이 같은 키가 된다). */
 const keyOf = (n) => `${n.job_id}:${n.created_at}`;
 
 /** 알림 → 화면 매핑 (2026-08-07 확정). 감지는 볼 대상이 있고, 생성은 받아 갈 곳이 이력이다. */
 function destinationOf(n) {
-  return n.kind === "export" ? "/history" : `/analysis/${n.job_id}`;
+  return n.kind === "export" ? paths.results : `/analysis/${n.job_id}`;
 }
 
 const formatTime = (iso) => {

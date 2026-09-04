@@ -278,8 +278,8 @@ export default function AnalysisFilePage() {
           아티팩트 2안의 헤더 업로드 버튼은 업로드 카드가 없는 테이블 변형용이었고,
           이 화면은 조건 ①로 카드 그리드를 유지하므로 카드 쪽을 남긴다. */}
       <PageHeader
-        title="문항 분석"
-        crumbs={[{ label: "홈", to: "/" }, { label: "문항 분석" }]}
+        title="분석"
+        crumbs={[{ label: "홈", to: "/" }, { label: "분석" }]}
       />
 
       {/* ── 요약 통계 (REQ-D07 2안) ──────────────────────
@@ -409,7 +409,7 @@ export default function AnalysisFilePage() {
           </Typography>
           <Alert severity="warning" sx={{ py: 0.5 }}>
             원본 PDF·감지된 문항·썸네일이 <b>모두 삭제</b>되며 되돌릴 수 없습니다.
-            이 문제집의 문항으로 만든 생성 이력은 남지만, 편집 화면에서 해당 문항 이미지가 보이지 않습니다.
+            이 문제집의 문항으로 만든 결과는 남지만, 생성 화면에서 해당 문항 이미지가 보이지 않습니다.
           </Alert>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

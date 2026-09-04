@@ -5,9 +5,9 @@ export const rootPaths = {
 const paths = {
   analysis: '/',
   analysisWork: '/analysis/:jobId',
-  editor: '/editor',
-  history: '/history',
-  format: '/format',
+  create: '/create',
+  results: '/results',
+  templates: '/templates',
 };
 
 export default paths;
