@@ -113,7 +113,7 @@
 | REQ-D09 | 생성 이력 화면 구조 개편 (목록 전체 폭 카드 그리드 + 클릭 시 우측 아코디언 미리보기 720px) | [plan](plans/PLAN-D09-F10-history-screen-rework.md) | 2026-09-03 | ✅ **Phase 1~5 완료**(케이스 14/14 · `/testrun` 확인 · Phase 5 육안 검증 완료). dev 배포는 미실행(프론트 배포 정책상 로드맵 완료 시점에 모아서) |
 | REQ-F10 | 생성 이력 이름 검색 | [plan](plans/PLAN-D09-F10-history-screen-rework.md) | 2026-09-03 | ✅ Phase 3(D09-08~12, 이 REQ의 전체 범위) + Phase 5 육안 검증 완료. dev 배포는 미실행(위와 동일 정책) |
 | REQ-D10 | 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존) | [plan](plans/PLAN-D10-question-grid-columns.md) | 2026-09-03 | ✅ **Phase 1~2 완료**(케이스 7/7 · `/testrun` 확인 · Phase 2 로컬 육안 — 1↔2열 전환·이미지 잘림 0·상호작용 4종·다크 실측 통과, **오탐 배지만 미확인**(검증 PDF에 오탐 0건)). PR #8 **main 머지 완료(2026-09-03, `48e445d`)**. dev 배포는 미실행(프론트 배포 정책) |
-| REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | — | 🟡 **Phase 1(이름·헤더·안내 문구) 완료 2026-09-04** — `f1d603a`, `/testrun` 7/7, `feat/D11-menu-rename` 푸시됨. Phase 2(경로 변경)는 케이스 미작성 — 다음은 `/testgen D11 2` → `/implement D11 2` |
+| REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | 2026-09-04 | ✅ Phase 1·2 완료, 검증 계약 18/18. 브랜치 `feat/D11-menu-rename`(`17297fd`) 푸시됨 — **PR·main 머지 미실행**. dev 프론트 재배포 시 옛 URL(`/editor`·`/history`·`/format`) 깨짐은 결정 사항 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -227,6 +227,33 @@ feat 커밋 하나로 만들었다(미푸시라 안전, Phase 1개 = 커밋 1개
 Phase 2(경로 변경)는 케이스가 아직 없다 — 계획서가 "착수 직전에 `/testgen`을 다시 돌린다"고 명시해
 둔 상태라 누락이 아니다. `history/index.test.jsx`(12건)의 `MemoryRouter` 초기 경로가 옛 경로면
 그때 (a)로 깨질 것을 계획서 함정에 이미 적어 뒀다.
+
+### REQ-D11 Phase 2 완료 — 경로 `/create`·`/results`·`/templates` (`/testrun` 18/18, 계획서 ✅)
+
+**계획서가 센 "경로 문자열을 직접 든 곳 네 곳"은 다섯 곳이었다** — `/testgen`이 접점을 다시 전수 확인하다가
+결과 화면 카드의 "편집으로 불러오기"가 `navigate("/editor", { state })`를 직접 드는 것을 찾았다. 계획서
+작성 시 `grep`이 `paths.ts`·벨·브레드크럼·F11 가드까지만 잡은 이유는 **검색어를 `to:`와 `destinationOf`
+주변으로 좁혀서**다 — `navigate(` 호출 인자는 안 봤다. 옛 경로를 라우터에서 지우면 이 버튼이 빈 화면으로
+갔을 것이라 D11-15로 포함했고(사용자 승인), 구현은 다른 접점과 같이 `paths` 참조로 모았다. 교훈: 경로
+문자열 전수 확인은 **따옴표 뒤 슬래시(`['"\`]/(editor|history|format)`)로 잡아야** 호출 형태와 무관하게
+걸린다 — D11-18이 그 정규식을 불변식으로 남겼으므로 다음 경로 변경에서는 같은 누락이 테스트로 잡힌다.
+
+**nav "활성" 판정은 계산된 `font-weight`로 읽는다**(활성 600 · 비활성 500). 색은 `var(--palette-*)`라
+jsdom이 못 풀고, `Link`라 `aria-current`도 없다. 프로브로 무대를 먼저 확인한 뒤 케이스를 썼다 — Phase 1의
+셀렉터 사고(MUI aria-label·subtitle2→h6)를 겪은 직후라 **무대는 실행해 보고, 단언은 실행하지 않는** 선을
+지켰다. `aria-current` 추가를 구현에 요구하는 안은 완료 기준에 없는 요구가 늘어 기각, 활성 케이스 제거는
+완료 기준의 "nav 활성 표시가 새 경로 4개에서 동작"이 자동 검증에서 빠져 기각(사용자 확인).
+
+**기존 테스트는 하나도 안 깨졌다** — 계획서는 `history/index.test.jsx`가 옛 경로로 무대를 잡았을까 걱정했지만
+`MemoryRouter` 기본 경로(`/`)를 쓰고 있었고, 옛 경로를 든 유일한 테스트(`NotificationContext.stream.test.jsx`)는
+자기 `Route`를 직접 정의하는 무대라 라우터 변경과 무관했다.
+
+`paths.ts`의 **키 이름도 함께 바꿨다**(`editor`→`create` 등) — 계획서는 값만 말했지만, 이름과 주소를 맞추는
+것이 이 REQ의 취지라 키가 옛 이름이면 절반만 바꾼 셈이다. 테스트는 `Object.values`로 키에 독립적이라
+어느 쪽이든 통과하므로 구현 재량으로 처리했다.
+
+남은 것: PR → main 머지(사용자), dev 프론트 재배포는 로드맵 3단계 완료 시. 재배포하면 옛 URL이 깨지는데
+그건 2026-09-03 결정이다 — 그때 PROGRESS에 한 줄.
 
 ## 2026-09-03
 

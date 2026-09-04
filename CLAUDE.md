@@ -328,7 +328,9 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 - 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~4 완료(스펙 §4-2).
   **REQ-D08(라이트/다크) 완료** · **REQ-F09(완료 알림) v1 완료**(Phase 6 브라우저 알림은 이연) ·
   **REQ-F11(재감지 중 진입 차단) 완료** · **REQ-D09·F10(생성 이력 개편+검색, PR #7)·REQ-D10(문항 목록
-  바둑판, PR #8) 완료 2026-09-03** — 남은 것은 TODO 3단계 신규 항목 7건, 그 뒤 REQ-27 로그인.
+  바둑판, PR #8) 완료 2026-09-03** · **REQ-D11(메뉴 분석/생성/결과/템플릿 관리 + 경로 `/create`·`/results`·`/templates`,
+  리다이렉트 없음) 완료 2026-09-04**(`feat/D11-menu-rename`, PR 미생성 — 재배포 시 옛 URL 깨짐은 결정) — 남은 것은
+  TODO 3단계 신규 항목 B12·F12·REQ-29·REQ-30, 그 뒤 REQ-27 로그인.
   ⚠️ **dev 백엔드는 2026-08-27 `feat/P04-sse-push`(`p04-2a343a4`)로 배포됐고 실측 후 `desired 0`으로 내렸다**
   (켜면 ~$23/월, 꺼 두면 ~$2/월). 켤 때는 `--desired-count 1`. **dev 프론트는 2026-08-28 `feat/B11-notification-baseline`으로 배포됐다** —
   실체는 Pages가 아니라 **Workers `twilight-base-302d`**이고 **자동 배포는 없다**(push로 안 올라간다).
