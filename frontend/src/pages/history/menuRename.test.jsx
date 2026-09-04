@@ -73,9 +73,13 @@ afterEach(() => {
 describe('결과 화면 헤더·안내 문구 (Phase 1)', () => {
   it('[D11-04] 결과 화면의 헤더 제목과 브레드크럼 마지막이 "결과"다', async () => {
     const { container } = await renderEmpty();
+    // ⚠️ 이 화면은 h6가 둘이다 — MUI가 `subtitle2`(패널 제목 "생성된 문제집")를 h6 태그로 매핑한다.
+    //    role 단일 조회는 던지므로 `PageHeader`의 h6 변형(`MuiTypography-h6`)을 집는다.
+    //    브레드크럼은 MUI `Breadcrumbs`가 `aria-label`을 기본으로 안 붙여 `ol` 클래스로 찾는다.
+    //    (D11-04 (a) 수정, 2026-09-04)
     const header = {
-      title: screen.getByRole('heading', { level: 6 }).textContent,
-      lastCrumb: container.querySelector('nav[aria-label="breadcrumb"] li:last-child')?.textContent ?? null,
+      title: container.querySelector('h6.MuiTypography-h6')?.textContent ?? null,
+      lastCrumb: container.querySelector('.MuiBreadcrumbs-ol li:last-child')?.textContent ?? null,
     };
     expect(header).toEqual({ title: '결과', lastCrumb: '결과' });
   });

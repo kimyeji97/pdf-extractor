@@ -153,8 +153,8 @@ export default function FormatPage() {
       {/* ── 페이지 헤더 + 브레드크럼 (REQ-D07 2안) ────────
           앱 헤더가 검색에 자리를 내주면서 화면 이름은 다시 여기가 책임진다. */}
       <PageHeader
-        title="표지 관리"
-        crumbs={[{ label: "홈", to: "/" }, { label: "표지 관리" }]}
+        title="템플릿 관리"
+        crumbs={[{ label: "홈", to: "/" }, { label: "템플릿 관리" }]}
         actions={
           <Tooltip title="새로고침">
             <IconButton size="small" onClick={fetchCovers} disabled={loading}>

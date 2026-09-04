@@ -378,7 +378,7 @@ export default function AnalysisWorkPage() {
         title={workbookName || filename}
         crumbs={[
           { label: "홈", to: "/" },
-          { label: "문항 분석", to: "/" },
+          { label: "분석", to: "/" },
           { label: workbookName || filename },
         ]}
         actions={

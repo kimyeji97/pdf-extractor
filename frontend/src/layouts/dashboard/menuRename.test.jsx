@@ -67,10 +67,16 @@ const productSources = (dir = 'src') => {
 const stripComments = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
 
-/** `PageHeader`의 제목과 브레드크럼 마지막 항목. */
+/**
+ * `PageHeader`의 제목과 브레드크럼 마지막 항목.
+ *
+ * ⚠️ MUI `Breadcrumbs`는 `nav`에 `aria-label`을 기본으로 붙이지 않는다(호출자가 넘겨야 한다) —
+ *    `nav[aria-label="breadcrumb"]`로 찾으면 어떤 구현에서도 0건이다. 목록 `ol`의 클래스로 찾는다.
+ *    (D11-03 (a) 수정, 2026-09-04)
+ */
 const headerOf = (container) => ({
   title: screen.getByRole('heading', { level: 6 }).textContent,
-  lastCrumb: container.querySelector('nav[aria-label="breadcrumb"] li:last-child')?.textContent ?? null,
+  lastCrumb: container.querySelector('.MuiBreadcrumbs-ol li:last-child')?.textContent ?? null,
 });
 
 const renderAnalysis = () =>
