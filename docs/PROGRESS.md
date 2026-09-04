@@ -113,7 +113,7 @@
 | REQ-D09 | 생성 이력 화면 구조 개편 (목록 전체 폭 카드 그리드 + 클릭 시 우측 아코디언 미리보기 720px) | [plan](plans/PLAN-D09-F10-history-screen-rework.md) | 2026-09-03 | ✅ **Phase 1~5 완료**(케이스 14/14 · `/testrun` 확인 · Phase 5 육안 검증 완료). dev 배포는 미실행(프론트 배포 정책상 로드맵 완료 시점에 모아서) |
 | REQ-F10 | 생성 이력 이름 검색 | [plan](plans/PLAN-D09-F10-history-screen-rework.md) | 2026-09-03 | ✅ Phase 3(D09-08~12, 이 REQ의 전체 범위) + Phase 5 육안 검증 완료. dev 배포는 미실행(위와 동일 정책) |
 | REQ-D10 | 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존) | [plan](plans/PLAN-D10-question-grid-columns.md) | 2026-09-03 | ✅ **Phase 1~2 완료**(케이스 7/7 · `/testrun` 확인 · Phase 2 로컬 육안 — 1↔2열 전환·이미지 잘림 0·상호작용 4종·다크 실측 통과, **오탐 배지만 미확인**(검증 PDF에 오탐 0건)). PR #8 **main 머지 완료(2026-09-03, `48e445d`)**. dev 배포는 미실행(프론트 배포 정책) |
-| REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | 2026-09-04 | ✅ Phase 1·2 완료, 검증 계약 18/18. 브랜치 `feat/D11-menu-rename`(`17297fd`) 푸시됨 — **PR·main 머지 미실행**. dev 프론트 재배포 시 옛 URL(`/editor`·`/history`·`/format`) 깨짐은 결정 사항 |
+| REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | 2026-09-04 | ✅ Phase 1·2 완료, 검증 계약 18/18. PR #9 **main 머지 완료(2026-09-04, `1fc5bac`)**, 브랜치 삭제됨. dev 프론트 재배포 시 옛 URL(`/editor`·`/history`·`/format`) 깨짐은 결정 사항 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -252,7 +252,7 @@ jsdom이 못 풀고, `Link`라 `aria-current`도 없다. 프로브로 무대를 
 것이 이 REQ의 취지라 키가 옛 이름이면 절반만 바꾼 셈이다. 테스트는 `Object.values`로 키에 독립적이라
 어느 쪽이든 통과하므로 구현 재량으로 처리했다.
 
-남은 것: PR → main 머지(사용자), dev 프론트 재배포는 로드맵 3단계 완료 시. 재배포하면 옛 URL이 깨지는데
+PR #9로 같은 날 **main 머지 완료(`1fc5bac`)**, 브랜치 삭제. dev 프론트 재배포는 로드맵 3단계 완료 시. 재배포하면 옛 URL이 깨지는데
 그건 2026-09-03 결정이다 — 그때 PROGRESS에 한 줄.
 
 ## 2026-09-03

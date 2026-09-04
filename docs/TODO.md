@@ -62,7 +62,7 @@
 
 ## 신규 항목 (2026-08-28 사용자 작성 — 3단계 마지막에 이 순서로)
 
-[x] **REQ-D11** 메뉴 이름 변경 + 경로 변경 (1순위, 소) — ✅ 2026-09-04 [계획서](plans/PLAN-D11-menu-rename.md) · Phase 1·2 완료(`feat/D11-menu-rename`, PR 미생성). 다음은 REQ-B12
+[x] **REQ-D11** 메뉴 이름 변경 + 경로 변경 (1순위, 소) — ✅ 2026-09-04 [계획서](plans/PLAN-D11-menu-rename.md) · Phase 1·2 완료, PR #9 main 머지 `1fc5bac`. 다음은 REQ-B12
   - 분석 (as-is 문항 분석)
   - 생성 (as-is: 문제집 생성)
   - 결과 (as-is: 생성 이력)
