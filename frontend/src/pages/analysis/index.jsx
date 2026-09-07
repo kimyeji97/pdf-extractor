@@ -231,9 +231,7 @@ export default function AnalysisFilePage() {
   };
 
   const handleCardClick = (job) => {
-    navigate(`/analysis/${job.job_id}`, {
-      state: { filename: job.filename, workbookName: job.workbook_name },
-    });
+    navigate(`/analysis/${job.job_id}`);
   };
 
   const openUpload = () => {

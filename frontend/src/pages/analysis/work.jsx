@@ -11,7 +11,7 @@
  *   - 좌표 변환: PDF pt = CSS px / scale (react-pdf가 pt×scale로 렌더하므로)
  */
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useParams, useLocation, useNavigate } from "react-router";
+import { useParams, useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -39,6 +39,7 @@ import { useJobCompletion } from "hooks/useJobCompletion";
 import { useAnalysisEntryGuard } from "hooks/useAnalysisEntryGuard";
 import { isRefreshBlocked } from "utils/jobStatus";
 import { columnsForWidth } from "utils/questionGrid";
+import { resolveDocumentName } from "utils/documentName";
 import { tintBg } from "theme/tint";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
@@ -48,11 +49,7 @@ const PANEL_BOUNDS = { section1: [150, 400], section3: [200, 800] };
 
 export default function AnalysisWorkPage() {
   const { jobId } = useParams();
-  const { state } = useLocation();
   const navigate  = useNavigate();
-
-  const filename    = state?.filename    || jobId;
-  const workbookName = state?.workbookName || "";
 
   // ── 페이지 목록 ───────────────────────────────────────
   const [pages, setPages]               = useState([]);
@@ -145,6 +142,11 @@ export default function AnalysisWorkPage() {
   // ⚠️ 원본 PDF URL도 이 훅이 받아 온 응답에서 꺼낸다. 화면이 따로 getJobInfo 를 부르면
   //    같은 응답을 두 번 받는다(raw fetch 라 dedup 되지 않는다). 계획서 § 제약 참조.
   const { blocked, reason, jobInfo, loading: guardLoading, confirm } = useAnalysisEntryGuard(jobId);
+
+  // 문서 이름은 jobInfo(가드 응답) 하나로만 판단한다 (REQ-B12) — 벨·URL 직접 입력·
+  // 새로고침·목록 클릭 어느 경로로 들어와도 같은 이름이 뜨고, 도착 전에는 job-id 대신
+  // 로딩 문구를 보인다.
+  const displayName = resolveDocumentName(jobInfo, jobId);
 
   // 대기 중(PENDING)이면 재감지가 이미 걸려 있다 — 버튼만 막는다 (REQ-F11 Phase 2).
   // 목록과 같은 판정 함수를 쓴다.
@@ -375,11 +377,11 @@ export default function AnalysisWorkPage() {
 
       {/* ── 페이지 헤더 + 브레드크럼 ─────────────────── */}
       <PageHeader
-        title={workbookName || filename}
+        title={displayName}
         crumbs={[
           { label: "홈", to: "/" },
           { label: "분석", to: "/" },
-          { label: workbookName || filename },
+          { label: displayName },
         ]}
         actions={
           <>
