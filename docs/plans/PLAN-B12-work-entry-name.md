@@ -1,6 +1,6 @@
 # PLAN-B12 · 목록을 거치지 않는 작업 화면 진입 — 문서 이름이 job-id로 뜸 (+ 직접 진입 목록 복귀 재현)
 
-> 출처: 2026-08-28 `docs/TODO.md` 신규 항목 ⑤ 원문 + 2026-09-03 D10 Phase 2 관찰(PROGRESS) + 2026-09-04 결정 3건 · 작성: 2026-09-04 · 상태: 📝 초안 (미결 1건 — Phase 2 재현 결과에 달림)
+> 출처: 2026-08-28 `docs/TODO.md` 신규 항목 ⑤ 원문 + 2026-09-03 D10 Phase 2 관찰(PROGRESS) + 2026-09-04 결정 3건 · 작성: 2026-09-04 · 상태: 🟡 진행 (Phase 1 완료 7/7, Phase 2 대기 — 미결 1건은 Phase 2 재현 결과에 달림)
 
 ## 배경
 
@@ -62,9 +62,31 @@
 - [ ] **증상 2의 원인** — Phase 2 재현 결과로 닫힌다. 재현되면 `/workplan B12`로 돌아와 원인·결정을 적고
       Phase 3을 연다. 재현 안 되면 "재현 불가, 관찰 기록만"으로 닫는다. **Phase 1은 이 미결과 무관하다.**
 
+## 검증 계약
+
+> 작성: 2026-09-07 · 검증: `/testrun B12`
+>
+> Phase 1만 자동 케이스 대상이다. Phase 2(증상 2 재현)는 육안·재현이라 자동 케이스가 없다 — 완료 기준은
+> "결과를 PROGRESS에 기록"이며 `/implement` 게이트의 "케이스 0건" 예외로 체크리스트 진행한다.
+>
+> `work.jsx`는 렌더 무대가 없어(API mock 5~6개 필요) 이름 파생을 순수 함수(`utils/documentName.js`의
+> `resolveDocumentName(jobInfo, jobId)`)로 분리해 단위 테스트하고, 화면 쪽 배선은 소스 스캔으로 확인한다.
+> 헤더 제목·브레드크럼이 실제로 이 함수의 결과를 렌더하는지는 렌더 무대가 없어 자동 검증 밖 — `/implement`
+> 완료 후 육안 확인 대상이다(계획서 §제약·함정 "네 경로 전부를 렌더로 검증하는 건 이 범위에 비해 크다").
+
+| ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
+|----|------|--------|:----:|------|:----:|:----:|
+| B12-01 | `resolveDocumentName()` | `workbook_name`이 있으면 그것을 반환 | 정상 | §결정 — "`workbook_name` → `filename` 순(현행 우선순위 유지)" | 1 | ✅ |
+| B12-02 | `resolveDocumentName()` | `workbook_name` 없고 `filename` 있으면 `filename` 반환 | 정상 | §결정 — 위와 동일 | 1 | ✅ |
+| B12-03 | `resolveDocumentName()` | 둘 다 없으면 `jobId` 반환 | 경계 | §결정 — "둘 다 없으면 현행대로 `jobId`" | 1 | ✅ |
+| B12-04 | `resolveDocumentName()` | `jobInfo`가 `null`이면 로딩 문구를 반환하고 `jobId`를 노출하지 않는다 | 예외/불변식 | §범위·포함 — "`jobInfo` 도착 전 헤더 제목·브레드크럼 마지막 항목은 **"불러오는 중…"** — job-id를 사용자에게 보이지 않는다" / §제약·함정 — "실패 화면에 "불러오는 중…"이 남는 건 허용 — 다이얼로그가 덮는다" | 1 | ✅ |
+| B12-05 | `work.jsx` (소스 스캔) | `location.state`에서 `filename`·`workbookName`을 더 이상 읽지 않는다 | 회귀 | §배경 — "`location.state`에서만 읽고, 없으면 `jobId`로 떨어진다" / §작업단계 Phase1 — "목록의 state 전달 제거" | 1 | ✅ |
+| B12-06 | `analysis/index.jsx` `handleCardClick` (소스 스캔) | `navigate(...)` 호출에 `state` 옵션을 넘기지 않는다 | 회귀 | §작업단계 Phase1 완료기준 — "`handleCardClick`이 state를 넘기지 않는다" | 1 | ✅ |
+| B12-07 | `work.jsx` (소스 스캔) | `api/client`의 `getJobInfo`를 직접 호출하지 않는다(가드가 유일 호출자) | 회귀 | §제약·함정 — "**`getJobInfo`의 유일 호출자는 가드다**" / "새 요청·새 훅을 만들지 않는다" | 1 | ✅ |
+
 ## 작업 단계
 
-- [ ] **Phase 1** — 작업 화면 이름을 `jobInfo`에서 읽고, 로드 전 "불러오는 중…", 목록의 state 전달 제거.
+- [x] **Phase 1** — 작업 화면 이름을 `jobInfo`에서 읽고, 로드 전 "불러오는 중…", 목록의 state 전달 제거.
       완료 기준: 벨 알림 클릭·URL 직접 입력·새로고침·목록 카드 클릭 네 경로 모두 헤더 제목과 브레드크럼
       마지막 항목이 `workbook_name`(없으면 `filename`)이다. `jobInfo` 도착 전에는 둘 다 "불러오는 중…"이고
       **job-id 문자열이 제목·브레드크럼에 나타나지 않는다.** `getJobInfo` 호출은 마운트당 1회 그대로(가드).

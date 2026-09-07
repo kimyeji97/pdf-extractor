@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-09-04
+> 최종 갱신: 2026-09-07
 
 ## 요구사항 인덱스
 
@@ -114,7 +114,7 @@
 | REQ-F10 | 생성 이력 이름 검색 | [plan](plans/PLAN-D09-F10-history-screen-rework.md) | 2026-09-03 | ✅ Phase 3(D09-08~12, 이 REQ의 전체 범위) + Phase 5 육안 검증 완료. dev 배포는 미실행(위와 동일 정책) |
 | REQ-D10 | 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존) | [plan](plans/PLAN-D10-question-grid-columns.md) | 2026-09-03 | ✅ **Phase 1~2 완료**(케이스 7/7 · `/testrun` 확인 · Phase 2 로컬 육안 — 1↔2열 전환·이미지 잘림 0·상호작용 4종·다크 실측 통과, **오탐 배지만 미확인**(검증 PDF에 오탐 0건)). PR #8 **main 머지 완료(2026-09-03, `48e445d`)**. dev 배포는 미실행(프론트 배포 정책) |
 | REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | 2026-09-04 | ✅ Phase 1·2 완료, 검증 계약 18/18. PR #9 **main 머지 완료(2026-09-04, `1fc5bac`)**, 브랜치 삭제됨. dev 프론트 재배포 시 옛 URL(`/editor`·`/history`·`/format`) 깨짐은 결정 사항 |
-| REQ-B12 | 목록을 거치지 않는 작업 화면 진입 — 문서 이름이 job-id로 뜸(+직접 진입 목록 복귀 재현) | [plan](plans/PLAN-B12-work-entry-name.md) | — | 🟡 계획서 작성. 미결 1건(증상 2 재현 결과에 달림) |
+| REQ-B12 | 목록을 거치지 않는 작업 화면 진입 — 문서 이름이 job-id로 뜸(+직접 진입 목록 복귀 재현) | [plan](plans/PLAN-B12-work-entry-name.md) | — | 🟡 Phase 1 완료(케이스 7/7, `/testrun` 확인) — 브랜치 `feat/B12-work-entry-name` 푸시됨, PR 미생성. Phase 2(증상 2 재현) 대기. 미결 1건(증상 2 재현 결과에 달림) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -196,6 +196,29 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-09-07
+
+### REQ-B12 Phase 1 완료 — 작업 화면 이름 출처를 jobInfo 하나로 (`/testrun` 7/7)
+
+이름 파생을 순수 함수(`utils/documentName.js`의 `resolveDocumentName(jobInfo, jobId)`)로 뺐다 —
+`work.jsx`는 API mock 5~6개가 필요해 렌더 무대가 없다는 계획서 제약을 그대로 따른 것. D10의
+`columnsForWidth`·D11의 소스 스캔과 같은 패턴이라 새로운 함정은 없었고, 1차 구현이 바로 7/7 녹색이었다
+(수정 루프 0회).
+
+`work.jsx`에서 `useLocation`·`state?.filename`·`state?.workbookName`을 걷어내고 `jobInfo`(F11 가드
+응답)에서 바로 이름을 뽑는다. `analysis/index.jsx`의 `handleCardClick`도 더 이상 `state`를 넘기지 않는다
+— 읽는 곳이 없어졌으니 죽은 코드였다. 기존 프론트 테스트 111건 전부 회귀 없음.
+
+**`/testrun`이 검증 계약 표의 근거 인용 3건(B12-04·05·07)이 원문과 안 맞는 걸 잡아냈다** — `/testgen`이
+두 출처를 `"..."`으로 이어 붙여 인용해서, 표 자기 자신에서만 매치되고 원문 산문에서는 그 문자열이 안
+나오는 상태였다. CLAUDE.md 계약 #25가 이미 경고해 둔 F09-22 유형의 재발이다("인용은 원문의 줄바꿈을
+넘지 않는 범위에서 딴다"). 이번 체크포인트에서 세 근거를 원문 그대로(줄바꿈 안 넘는 한 문장 단위)로
+다시 잘라 정정했다 — 계약 #25에 새로 보탤 내용은 없다, 이미 있는 규칙이 실전에서 또 걸린 것뿐.
+
+브랜치 `feat/B12-work-entry-name`으로 커밋·푸시 완료(`7563c0b`), PR은 아직 안 열었다. Phase 2(증상 2 —
+직접 진입 시 목록 복귀 재현 시도)는 육안·실제 브라우저 작업이라 이번 세션에서 진행하지 않았고, 미결
+1건(증상 2 원인)은 그 결과에 그대로 달려 있다.
 
 ## 2026-09-04
 
