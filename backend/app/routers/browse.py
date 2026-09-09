@@ -1,5 +1,6 @@
 """
 GET    /api/stats                                                        - 대시보드 요약 통계 (REQ-D07 Phase 4)
+GET    /api/stats/detail                                                 - 통계 타일 상세(파일·페이지 목록, REQ-F12 Phase 2)
 GET    /api/jobs                                                         - 업로드된 파일 목록 조회
 GET    /api/jobs/{job_id}                                                - 단일 job 정보 조회
 DELETE /api/jobs/{job_id}                                                - job + 연관 저장물 전체 삭제
@@ -30,7 +31,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from app.models.schemas import (
-    BoundariesStatus, JobStatus, JobType,
+    BoundariesStatus, JobStatus, JobType, StatsDetailField,
     ManualQuestion, ManualQuestionCreate, QuestionTitleUpdate, RegionCoord,
 )
 from app.services import storage
@@ -121,6 +122,76 @@ def get_stats():
         manual_count=manual_count,
         detection_rate=detection_rate,
     )
+
+
+class StatsDetailJob(BaseModel):
+    """`/api/stats/detail` 응답의 항목 하나 — 해당 지표가 걸린 job."""
+    job_id: str
+    filename: Optional[str] = None
+    workbook_name: Optional[str] = None
+    count: Optional[int] = None    # processing_count는 페이지 개념이 없어 null
+    pages: Optional[List[int]] = None   # 위와 동일
+
+
+class StatsDetailResponse(BaseModel):
+    field: StatsDetailField
+    items: List[StatsDetailJob]
+
+
+@router.get("/stats/detail", response_model=StatsDetailResponse)
+def get_stats_detail(field: StatsDetailField = Query(...)):
+    """
+    통계 타일 클릭 시 아코디언에 채울 상세 목록 (REQ-F12 Phase 2).
+
+    `/api/stats`는 집계 숫자만 준다 — "어느 파일·어느 페이지인지"는 여기서 온다.
+    job 캐시 필드(0보다 큰 것)로 먼저 대상 job을 추리고, **그 job들만** boundaries·수동
+    문항을 읽어 `pages`를 계산한다 — 매 요청 전체 job의 원본을 읽지 않는다는 점에서
+    `/api/stats`와 같은 원칙이다.
+    """
+    sources = [j for j in storage.list_jobs() if j.job_type == JobType.SOURCE]
+    items: List[StatsDetailJob] = []
+
+    if field == StatsDetailField.PROCESSING_COUNT:
+        for j in sources:
+            if j.boundaries_status == BoundariesStatus.PROCESSING:
+                items.append(StatsDetailJob(
+                    job_id=j.job_id, filename=j.filename, workbook_name=j.workbook_name,
+                ))
+        return StatsDetailResponse(field=field, items=items)
+
+    for j in sources:
+        if field == StatsDetailField.FALSE_POSITIVE_COUNT:
+            count = j.false_positive_count or 0
+            if count <= 0:
+                continue
+            cached = storage.get_boundaries_cache(j.job_id) or []
+            pages = sorted({
+                b.get("page_index") for b in cached if b.get("is_false_positive")
+            })
+        elif field == StatsDetailField.MANUAL_COUNT:
+            count = j.manual_count or 0
+            if count <= 0:
+                continue
+            manual_list = storage.get_manual_questions(j.job_id)
+            pages = sorted({m.get("page_num") for m in manual_list})
+        else:  # UNDETECTED_PAGE_COUNT
+            count = j.undetected_page_count or 0
+            if count <= 0:
+                continue
+            cached = storage.get_boundaries_cache(j.job_id) or []
+            manual_list = storage.get_manual_questions(j.job_id)
+            covered = (
+                {b.get("page_index") for b in cached}
+                | {m.get("page_num") for m in manual_list}
+            )
+            pages = [p for p in range(j.total_pages or 0) if p not in covered]
+
+        items.append(StatsDetailJob(
+            job_id=j.job_id, filename=j.filename, workbook_name=j.workbook_name,
+            count=count, pages=pages,
+        ))
+
+    return StatsDetailResponse(field=field, items=items)
 
 
 @router.get("/jobs", response_model=JobListResponse)

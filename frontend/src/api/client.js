@@ -79,6 +79,19 @@ export async function getStats() {
   return res.json();
 }
 
+/**
+ * 통계 타일 상세 — 그 지표가 걸린 파일·페이지 목록 (REQ-F12 Phase 2).
+ * `/api/stats`는 합계만 주므로, 타일 클릭 시(사용자 액션이라 apiFetch로 딤 처리) 이걸로
+ * "어느 파일인지"를 받는다.
+ * @param {"processing_count"|"undetected_page_count"|"false_positive_count"|"manual_count"} field
+ * @returns {Promise<{field:string, items:Array<{job_id:string, filename:?string, workbook_name:?string, count:?number, pages:?number[]}>}>}
+ */
+export async function getStatsDetail(field) {
+  const res = await apiFetch(`${BASE_URL}/stats/detail?field=${encodeURIComponent(field)}`);
+  if (!res.ok) throw new Error("통계 상세 조회 실패");
+  return res.json();
+}
+
 export async function listJobs(opts = {}) {
   const { jobType = "SOURCE", skip = 0, limit = 20, name = "", types = "" } = opts;
   const qs = new URLSearchParams({ job_type: jobType, skip: String(skip), limit: String(limit) });
