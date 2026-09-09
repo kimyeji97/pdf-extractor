@@ -115,7 +115,7 @@
 | REQ-D10 | 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존) | [plan](plans/PLAN-D10-question-grid-columns.md) | 2026-09-03 | ✅ **Phase 1~2 완료**(케이스 7/7 · `/testrun` 확인 · Phase 2 로컬 육안 — 1↔2열 전환·이미지 잘림 0·상호작용 4종·다크 실측 통과, **오탐 배지만 미확인**(검증 PDF에 오탐 0건)). PR #8 **main 머지 완료(2026-09-03, `48e445d`)**. dev 배포는 미실행(프론트 배포 정책) |
 | REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | 2026-09-04 | ✅ Phase 1·2 완료, 검증 계약 18/18. PR #9 **main 머지 완료(2026-09-04, `1fc5bac`)**, 브랜치 삭제됨. dev 프론트 재배포 시 옛 URL(`/editor`·`/history`·`/format`) 깨짐은 결정 사항 |
 | REQ-B12 | 목록을 거치지 않는 작업 화면 진입 — 문서 이름이 job-id로 뜸(+직접 진입 목록 복귀 재현) | [plan](plans/PLAN-B12-work-entry-name.md) | 2026-09-07 | ✅ Phase 1(케이스 7/7) + Phase 2(재현 시도 6회 전부 미재현, Phase 3 없이 종결). 브랜치 `feat/B12-work-entry-name` 푸시됨, PR은 미생성(다음에 오픈 예정) |
-| REQ-F12 | 문항분석 현황판 — 목록 화면 통계 5타일(분석중·미탐지·오탐·수동·탐지율, 기존 StatCards 대체) + 아코디언 상세 | [plan](plans/PLAN-F12-detection-stats-dashboard.md) | — | 🟡 **Phase 1·2 완료**(백엔드 통계 캐시 + `GET /api/stats/detail` 신설 + 목록 위젯/아코디언, 케이스 32/32 · `/testrun` 확인 · 회귀 없음 백엔드 68/68·프론트 119/119). Phase 3(`work.jsx` 페이지 스크롤)만 남음. 브랜치 `feat/F12-detection-stats-dashboard` 푸시됨, PR은 미생성 |
+| REQ-F12 | 문항분석 현황판 — 목록 화면 통계 5타일(분석중·미탐지·오탐·수동·탐지율, 기존 StatCards 대체) + 아코디언 상세 + 페이지 진입 스크롤 | [plan](plans/PLAN-F12-detection-stats-dashboard.md) | 2026-09-09 | ✅ **Phase 1~3 전부 완료**(케이스 40/40 · `/testrun` 확인 · 회귀 없음 백엔드 68/68·프론트 30파일 127/127). 브랜치 `feat/F12-detection-stats-dashboard` 푸시됨, PR은 미생성(다음에 오픈 예정) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -268,6 +268,53 @@ N+1(REQ-P01이 이미 푼 문제를 되풀이) ③`JobSummary`는 다른 화면�
 
 브랜치 `feat/F12-detection-stats-dashboard`에 커밋(`aadb771`)·푸시 완료. 남은 것은 Phase 3
 (`work.jsx` 페이지 진입 스크롤)뿐.
+
+### REQ-F12 Phase 3 착수 전 — Phase 2가 실제로는 "페이지 클릭"을 구현 안 했음을 발견
+
+Phase 3 완료 기준("아코디언에서 특정 페이지를 클릭해 진입하면...")을 케이스로 뽑으려는데,
+Phase 2가 끝났다고 체크한 아코디언이 실제로는 페이지 번호를 `"3건 · 페이지 1, 3, 5"` 같은
+**읽기 전용 텍스트**로만 보여주고 있었다 — Phase 2 완료 기준 자체가 "파일 클릭"까지만이었고
+"페이지 클릭"은 어디에도 배정돼 있지 않았다. 계획서를 조용히 넘기지 않고 Phase 3에 "페이지를
+클릭 가능하게 만드는 것"부터 포함하는 것으로 대화에서 정리했다 — 계획서 Phase 3 텍스트("아코
+디언에서 페이지 클릭 시")가 애초에 그 클릭 대상이 이미 있다고 가정한 문장이었던 것으로 판명.
+
+`work.jsx`가 렌더 테스트 무대가 없다는 것도 재확인했다 — `PLAN-B12` § 제약·함정의 결론
+("API mock 5~6개가 필요해 렌더 무대가 없다")이 그대로 유효했고, 실제로 이 레포에 `work.jsx`를
+렌더해서 돈 테스트가 지금까지 단 한 번도 없었다(`workEntryName.test.js`·`menuRename.test.jsx`
+둘 다 소스 문자열 검사). 그래서 대상 페이지 판정 로직을 순수 함수(`utils/targetPage.js`)로
+빼서 렌더 없이 완전히 유닛 테스트하고, `work.jsx` 쪽 배선은 소스 스캔으로만 확인하기로
+했다(D10의 `columnsForWidth`, B12의 `resolveDocumentName`과 같은 패턴). 전달 방식은 계획서가
+예시로 든 **쿼리 파라미터**(`?page=<1-based>`)로 확정 — `location.state`는 B12가 이름 표시
+에서 이미 걷어낸 방식이고, URL 직접 진입·새로고침에서 안 살아남는다.
+
+### REQ-F12 Phase 3 완료 — 아코디언 페이지 클릭 + 작업 화면 자동 스크롤 (`/testrun` 40/40)
+
+`utils/targetPage.js`의 `resolveTargetPage(pages, pageParam)`(1-based ↔ 0-based `page_num`
+변환을 한 곳에 고정), 아코디언 페이지 번호를 개별 클릭 가능하게(`onSelectFile(jobId, page)`로
+확장, `e.stopPropagation()`으로 파일 클릭과 분리), `work.jsx`가 `?page=`를 읽어 기존 스크롤
+경로(`handlePageClick`)로 그대로 넘기는 배선을 구현했다.
+
+**구현 중 발견한 진짜 타이밍 함정** — `work.jsx`에서 페이지 목록(`fetchPages`)과 원본 PDF URL
+(`useAnalysisEntryGuard` → `pdfUrl`)이 **순서 보장 없이 경쟁하는 두 비동기 로드**였다.
+`viewerRef`(PDF 뷰어)는 `pdfUrl`이 준비돼야 마운트되므로, `pages`만 보고 스크롤을 시도하면
+뷰어가 아직 없어 조용히 no-op될 수 있었다 — `pages`·`pdfUrl`·`pdfUrlLoading` 셋 다 끝난
+뒤에만 시도하도록 가드해 해결. 계획서엔 없던 구현 세부지만 Phase 3 범위(스크롤이 실제로
+동작하게 만드는 것) 안이라 별도 승인 없이 진행.
+
+`/testrun` 확인: Phase 1~3 합쳐 40/40 통과, 백엔드 전체 68/68·프론트 전체 30파일 127/127
+회귀 없음, 검증 계약 표-테스트 매칭 40건 전부 대응, 근거 인용 전부 원문에서 재확인.
+**Phase 3 완료 기준의 "그 페이지가 뷰포트에 보이는 상태로 화면이 열림"(시각적 결과)은
+`work.jsx` 렌더 무대 부재로 이 레포 어떤 테스트로도 검증 불가** — 이건 이번 Phase의 미비가
+아니라 이 레포의 기존·재확인된 한계이고, 커버되는 부분(클릭 배선·순수 함수·소스 스캔 배선)은
+전부 확인됐다.
+
+브랜치 `feat/F12-detection-stats-dashboard`에 커밋(`7d7602c`)·푸시 완료.
+
+### REQ-F12 완료 — Phase 1~3 전부 (2026-09-08 계획서 작성 ~ 2026-09-09 Phase 3)
+
+목록 화면 통계 5타일 + 아코디언 상세 + 페이지 진입 스크롤, 케이스 40/40. PR은 아직 안
+열었다(D11·B12와 동일하게 다음에 오픈 예정). 로드맵 순서(F12 → REQ-29 → REQ-30 → 테마
+재정의 → REQ-27 → REQ-28)상 다음은 **REQ-29**(각주·워터마크 등록).
 
 ## 2026-09-08
 

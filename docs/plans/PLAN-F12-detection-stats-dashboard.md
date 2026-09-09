@@ -1,6 +1,6 @@
 # PLAN-F12 · 문항분석 현황판 (오탐·미탐지·수동 개수 + 탐지율)
 
-> 출처: 현재 세션 대화 · 작성: 2026-09-08 · 상태: 🟡 진행 (Phase 1·2 완료)
+> 출처: 현재 세션 대화 · 작성: 2026-09-08 · 상태: ✅ 완료 (Phase 1~3, 2026-09-09)
 
 ## 배경
 
@@ -81,7 +81,7 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
       `/api/stats/detail` 응답 그대로의 파일·페이지 목록이 보임. 파일 클릭 시 해당 작업
       화면으로 이동.
 
-- [ ] **Phase 3** — `work.jsx` 페이지 진입 스크롤
+- [x] **Phase 3** — `work.jsx` 페이지 진입 스크롤
       아코디언에서 페이지 클릭 시 전달할 대상 페이지 정보(예: 쿼리 파라미터)를 `work.jsx`가
       읽어 해당 페이지로 자동 스크롤·포커스.
       완료 기준: 아코디언에서 특정 페이지를 클릭해 진입하면 그 페이지가 뷰포트에 보이는
@@ -105,7 +105,10 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
 > 테스트: `backend/tests/test_question_stats_cache.py`(F12-01~12) ·
 > `backend/tests/test_question_stats_api.py`(F12-13~17) ·
 > `backend/tests/test_stats_detail_api.py`(F12-18~24) ·
-> `frontend/src/pages/analysis/index.test.jsx`(F12-25~32)
+> `frontend/src/pages/analysis/index.test.jsx`(F12-25~35) ·
+> `frontend/src/utils/targetPage.test.js`(F12-36~38) ·
+> `frontend/src/pages/analysis/workPageScroll.test.js`(F12-39~40, 소스 스캔 — `work.jsx`는
+> 렌더 무대가 없다, PLAN-B12 § 제약·함정과 동일 결론)
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
 |----|------|--------|:----:|------|:----:|:----:|
@@ -141,3 +144,11 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
 | F12-30 | 목록 화면 통계 위젯 | 아코디언의 파일 클릭 시 해당 작업 화면으로 이동 | 정상 | PLAN § Phase 2 — "아코디언에서 파일 클릭 → `work.jsx`로 이동." | 2 | ✅ |
 | F12-31 | 목록 화면 통계 위젯 | 문항 탐지율 타일은 클릭해도 아코디언이 열리지 않음 | 예외 | PLAN § Phase 2 — "문항 탐지율 타일은 상세 API의 `field` 4종에 없으므로 클릭해도 아코디언이 열리지 않는다." | 2 | ✅ |
 | F12-32 | 목록 화면 통계 위젯 | 다른 타일을 클릭하면 아코디언 내용이 새 field 목록으로 교체됨(이전 목록 안 남음) | 회귀 | PLAN § 결정 — "아코디언 상세 데이터 출처" | 2 | ✅ |
+| F12-33 | 아코디언(`analysis/index.jsx`) | 오탐/수동/미탐지 항목의 개별 페이지 번호가 클릭 가능한 요소로 렌더됨 | 정상 | PLAN § 결정 — "페이지 클릭 → 작업 화면 진입 + 해당 페이지로 스크롤·포커스" | 3 | ✅ |
+| F12-34 | 아코디언 | 페이지 클릭 시 `/analysis/{job_id}?page={N}`(1-based)으로 이동 | 정상 | 위와 동일 | 3 | ✅ |
+| F12-35 | 아코디언 | `pages`가 `null`인 항목(분석중 파일수)엔 페이지 클릭 요소가 없음 | 경계 | PLAN § 결정 — "`processing_count`는 `count`·`pages` 둘 다 `null`(페이지 개념이 없음)" | 3 | ✅ |
+| F12-36 | `resolveTargetPage()` | `page` 파라미터 없으면 `null` 반환 | 정상 | PLAN § 작업 단계 Phase 3 — "전달할 대상 페이지 정보(예: 쿼리 파라미터)를 `work.jsx`가 읽어" | 3 | ✅ |
+| F12-37 | `resolveTargetPage()` | `page`가 가리키는 페이지가 목록에 있으면 그 페이지 객체 반환 | 정상 | 위와 동일 | 3 | ✅ |
+| F12-38 | `resolveTargetPage()` | `page`가 목록에 없는 번호를 가리키면 `null` 반환 | 예외 | 위와 동일 | 3 | ✅ |
+| F12-39 | `work.jsx`(소스 스캔) | `resolveTargetPage`를 import해서 쓴다 | 정상 | PLAN § 작업 단계 Phase 3 — "`work.jsx`가 읽어 해당 페이지로 자동 스크롤·포커스" | 3 | ✅ |
+| F12-40 | `work.jsx`(소스 스캔) | `pages` 로드 이펙트 안에서 `handlePageClick`을 대상 페이지로 호출하는 배선이 있다 | 정상 | 위와 동일 | 3 | ✅ |
