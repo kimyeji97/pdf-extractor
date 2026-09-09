@@ -77,7 +77,7 @@ class StatsResponse(BaseModel):
     undetected_page_count: int     # 자동+수동 합쳐 문항 0개인 페이지 수 합산
     false_positive_count: int      # 오탐 문항 수 합산
     manual_count: int              # 수동 문항 수 합산
-    detection_rate: float          # (문항수(자동)-오탐-수동)/문항수(자동), 분모 0이면 0.0
+    detection_rate: Optional[float] = None   # (문항수(자동)-오탐-수동)/문항수(자동), 분모 0이면 null(계측 불가)
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -93,7 +93,9 @@ def get_stats():
 
     감지 품질 필드(REQ-F12)는 job 상태 파일에 이미 캐시된 값을 합산만 한다 — 여기서
     boundaries·수동 문항을 다시 읽지 않는다. `detection_rate`의 분모(자동 감지 문항 총합)가
-    0이면(문항이 전혀 없거나 전부 삭제된 경우) 0.0을 반환한다 — 계획서 미결 질문, 잠정 처리.
+    0이면(문항이 전혀 없거나 전부 삭제된 경우) `null`을 반환한다 — 0/0은 0%가 아니라
+    "측정 불가"이므로, 0.0을 주면 "문항이 없음"과 "감지가 전부 오탐"이 구별되지 않는다
+    (계획서 § 결정 "detection_rate 분모 0 처리").
     """
     jobs = storage.list_jobs()
     sources = [j for j in jobs if j.job_type == JobType.SOURCE]
@@ -104,7 +106,7 @@ def get_stats():
     detection_rate = (
         (total_question_count - false_positive_count - manual_count) / total_question_count
         if total_question_count
-        else 0.0
+        else None
     )
 
     return StatsResponse(

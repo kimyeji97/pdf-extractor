@@ -145,3 +145,18 @@ def test_F12_16_EXPORT_job은_통계_합산에서_제외(
 
     # EXPORT의 오탐 2건이 섞이면 3이 된다 — SOURCE의 1건만 집계돼야 한다
     assert res.json()["false_positive_count"] == 1
+
+
+def test_F12_17_자동감지_문항_총합이_0이면_detection_rate는_null(
+    client, make_job, stub_multi_page_detection, fake_pdf
+):
+    """근거: PLAN § 결정 — "API는 `null`을 반환하고 프론트는 "—"(계측 불가)로 표시" """
+    from app.routers.upload import _trigger_boundary_detection
+
+    make_job("job-zero")
+    stub_multi_page_detection(boundaries=[], page_count=1)
+    _trigger_boundary_detection("job-zero")
+
+    res = client.get("/api/stats")
+
+    assert res.json()["detection_rate"] is None
