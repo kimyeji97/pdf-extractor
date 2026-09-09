@@ -44,12 +44,11 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
 | 아코디언 클릭 이동 범위 | 파일 클릭 → 작업 화면 이동 / 페이지 클릭 → 작업 화면 진입 + 해당 페이지로 스크롤·포커스 | 사용자 확정 | — |
 | 기존 `StatCards`와의 관계 | 새 5타일 위젯이 **대체**한다(업로드한 문제집 수·감지된 문항 수·생성한 문제집 수 3타일은 없어짐) | 사용자 확정 | 3타일은 유지하고 5타일을 별도로 추가 |
 | 통계 집계 대상 | `SOURCE` job만 — `EXPORT`(생성 결과)는 제외 | 사용자 확정: "문항 분석 메뉴에만 존재하니까" — 문항 감지·오탐·수동 편집은 애초에 `SOURCE` job에서만 일어나는 개념 | `EXPORT` job도 포함 |
+| `detection_rate` 분모 0 처리 | 자동 감지 문항 총합이 0이면(전부 삭제됐거나 원래 0개) API는 `null`을 반환하고 프론트는 "—"(계측 불가)로 표시 | 0/0은 0%가 아니라 "측정 불가"다 — 0%로 보이면 "문항이 전혀 없음"과 "감지가 완전히 실패함"이 화면에서 구별되지 않는다 | 0.0(0%)으로 표시 — Phase 1 최초 구현이 크래시 방지용으로 잠정 채택했던 값, 이번에 뒤집힘 |
 
 ## 미결 질문
 
-- [ ] `detection_rate` 계산 시 분모(`total_question_count`, 자동 감지분)가 0인 경우(모든 자동
-      문항이 삭제된 job) 어떤 값을 반환할지 — 결정 표의 공식엔 0-분모 처리가 없다.
-      (`/testgen` F12 Phase 1 케이스 도출 중 발견, 2026-09-08)
+(없음 — `detection_rate` 0-분모 처리 2026-09-09 확정, 위 결정 표로 이동)
 
 ## 작업 단계
 
@@ -63,9 +62,10 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
       `total_question_count` 갱신과 같은 방식 — 델타 누적이 아니다). `/api/stats`
       (`StatsResponse`)에 `processing_count`·`undetected_page_count`·`false_positive_count`·
       `manual_count`·`detection_rate`를 추가 — `SOURCE` job 캐시 필드만 합산(`EXPORT` 제외,
-      위 결정 표).
+      위 결정 표). `detection_rate`는 분모(자동 감지 총합)가 0이면 `null`(위 결정 표).
       완료 기준: 문항 삭제·수동 추가/삭제·재감지 각 지점에서 네 캐시 필드가 정확한 값으로
-      갱신됨을 확인. `/api/stats` 응답이 기존 job들의 캐시 합산값과 일치.
+      갱신됨을 확인. `/api/stats` 응답이 기존 job들의 캐시 합산값과 일치. 분모 0일 때
+      `detection_rate`가 `null`.
 
 - [ ] **Phase 2** — 목록 화면 통계 위젯 + 아코디언
       기존 `StatCards`(3타일)를 새 5타일 위젯으로 **대체**. 타일 클릭 시 우측 아코디언(D09
@@ -115,3 +115,4 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
 | F12-14 | `GET /api/stats` | `processing_count`가 `boundaries_status == PROCESSING`인 job 개수와 일치 | 정상 | PLAN § 결정 — "`boundaries_status == PROCESSING`인 job 개수" | 1 | ✅ |
 | F12-15 | `GET /api/stats` | `detection_rate`가 결정 표 공식과 일치 | 정상 | PLAN § 결정 — "`(total_question_count(자동) − 오탐 수 − 수동 수) / total_question_count(자동)`" | 1 | ✅ |
 | F12-16 | `GET /api/stats` | `EXPORT` job은 이 5개 필드 합산에서 제외됨 | 예외 | PLAN § 결정 — "`SOURCE` job만 — `EXPORT`(생성 결과)는 제외" | 1 | ✅ |
+| F12-17 | `GET /api/stats` | 자동 감지 문항 총합이 0이면 `detection_rate`가 `null` | 경계 | PLAN § 결정 — "API는 `null`을 반환하고 프론트는 "—"(계측 불가)로 표시" | 1 | ✅ |
