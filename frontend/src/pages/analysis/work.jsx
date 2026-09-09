@@ -11,7 +11,7 @@
  *   - 좌표 변환: PDF pt = CSS px / scale (react-pdf가 pt×scale로 렌더하므로)
  */
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useSearchParams } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -40,6 +40,7 @@ import { useAnalysisEntryGuard } from "hooks/useAnalysisEntryGuard";
 import { isRefreshBlocked } from "utils/jobStatus";
 import { columnsForWidth } from "utils/questionGrid";
 import { resolveDocumentName } from "utils/documentName";
+import { resolveTargetPage } from "utils/targetPage";
 import { tintBg } from "theme/tint";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
@@ -50,6 +51,7 @@ const PANEL_BOUNDS = { section1: [150, 400], section3: [200, 800] };
 export default function AnalysisWorkPage() {
   const { jobId } = useParams();
   const navigate  = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // ── 페이지 목록 ───────────────────────────────────────
   const [pages, setPages]               = useState([]);
@@ -206,6 +208,20 @@ export default function AnalysisWorkPage() {
     handleCancelManual();
     viewerRef.current?.scrollToPage(page.page_num + 1);
   }, [handleCancelManual]);
+
+  // ── 아코디언에서 진입 시 대상 페이지로 자동 스크롤 (REQ-F12 Phase 3) ──
+  //
+  // `?page=`(1-based)는 목록 화면 통계 아코디언에서 온다. viewerRef는 pdfUrl이 준비돼야
+  // (PdfPreviewPanel이 마운트돼야) 값이 생기므로, pages 로드와 pdfUrl 준비 둘 다 끝난
+  // 뒤에만 시도한다 — 순서가 보장되지 않는 두 비동기 로드(페이지 목록 · 가드+원본 URL)의
+  // 경쟁을 피하는 것. 기존 페이지 클릭과 같은 경로(handlePageClick)를 그대로 태운다.
+  useEffect(() => {
+    if (pdfUrlLoading || !pdfUrl) return;
+    if (pages.length === 0) return;
+
+    const target = resolveTargetPage(pages, searchParams.get("page"));
+    if (target) handlePageClick(target);
+  }, [pages, pdfUrl, pdfUrlLoading, searchParams, handlePageClick]);
 
   // ── 뷰어 스크롤 → 페이지·문항 목록 동기화 (250ms 디바운스) ──
   const pageChangeTimer = useRef(null);

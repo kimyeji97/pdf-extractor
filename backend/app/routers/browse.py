@@ -1,5 +1,6 @@
 """
 GET    /api/stats                                                        - 대시보드 요약 통계 (REQ-D07 Phase 4)
+GET    /api/stats/detail                                                 - 통계 타일 상세(파일·페이지 목록, REQ-F12 Phase 2)
 GET    /api/jobs                                                         - 업로드된 파일 목록 조회
 GET    /api/jobs/{job_id}                                                - 단일 job 정보 조회
 DELETE /api/jobs/{job_id}                                                - job + 연관 저장물 전체 삭제
@@ -30,13 +31,14 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from app.models.schemas import (
-    BoundariesStatus, JobStatus, JobType,
+    BoundariesStatus, JobStatus, JobType, StatsDetailField,
     ManualQuestion, ManualQuestionCreate, QuestionTitleUpdate, RegionCoord,
 )
 from app.services import storage
 from app.services import thumbnail_service
 from app.services import prewarm_service
 from app.services import notification_service
+from app.services import question_stats_service
 from app.utils.question_parser import detect_question_boundaries, QuestionBoundary
 
 router = APIRouter()
@@ -67,10 +69,16 @@ class JobListResponse(BaseModel):
 
 
 class StatsResponse(BaseModel):
-    """대시보드 요약 통계 (REQ-D07 2안 — 템플릿의 대표 요소)."""
+    """대시보드 요약 통계 (REQ-D07 2안 — 템플릿의 대표 요소. REQ-F12로 감지 품질 필드 추가)."""
     source_count: int      # 업로드한 문제집(SOURCE job) 수
     question_count: int    # 감지 완료된 문항 총합
     workbook_count: int    # 생성한 문제집 수
+    # ── 감지 품질 (REQ-F12) — SOURCE job의 캐시 필드만 합산, EXPORT는 제외 ──
+    processing_count: int          # boundaries_status == PROCESSING인 job 수
+    undetected_page_count: int     # 자동+수동 합쳐 문항 0개인 페이지 수 합산
+    false_positive_count: int      # 오탐 문항 수 합산
+    manual_count: int              # 수동 문항 수 합산
+    detection_rate: Optional[float] = None   # (문항수(자동)-오탐-수동)/문항수(자동), 분모 0이면 null(계측 불가)
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -83,14 +91,107 @@ def get_stats():
 
     `list_jobs()`는 이미 전체를 메모리에 올리는 구현이라 별도 비용이 없다.
     항목 수가 커지면 여기가 먼저 느려지므로, 그때는 상태 파일에 집계를 캐싱할 것.
+
+    감지 품질 필드(REQ-F12)는 job 상태 파일에 이미 캐시된 값을 합산만 한다 — 여기서
+    boundaries·수동 문항을 다시 읽지 않는다. `detection_rate`의 분모(자동 감지 문항 총합)가
+    0이면(문항이 전혀 없거나 전부 삭제된 경우) `null`을 반환한다 — 0/0은 0%가 아니라
+    "측정 불가"이므로, 0.0을 주면 "문항이 없음"과 "감지가 전부 오탐"이 구별되지 않는다
+    (계획서 § 결정 "detection_rate 분모 0 처리").
     """
     jobs = storage.list_jobs()
     sources = [j for j in jobs if j.job_type == JobType.SOURCE]
+
+    total_question_count = sum(j.total_question_count or 0 for j in sources)
+    false_positive_count = sum(j.false_positive_count or 0 for j in sources)
+    manual_count = sum(j.manual_count or 0 for j in sources)
+    detection_rate = (
+        (total_question_count - false_positive_count - manual_count) / total_question_count
+        if total_question_count
+        else None
+    )
+
     return StatsResponse(
         source_count=len(sources),
-        question_count=sum(j.total_question_count or 0 for j in sources),
+        question_count=total_question_count,
         workbook_count=len(storage.list_workbooks()),
+        processing_count=sum(
+            1 for j in sources if j.boundaries_status == BoundariesStatus.PROCESSING
+        ),
+        undetected_page_count=sum(j.undetected_page_count or 0 for j in sources),
+        false_positive_count=false_positive_count,
+        manual_count=manual_count,
+        detection_rate=detection_rate,
     )
+
+
+class StatsDetailJob(BaseModel):
+    """`/api/stats/detail` 응답의 항목 하나 — 해당 지표가 걸린 job."""
+    job_id: str
+    filename: Optional[str] = None
+    workbook_name: Optional[str] = None
+    count: Optional[int] = None    # processing_count는 페이지 개념이 없어 null
+    pages: Optional[List[int]] = None   # 위와 동일
+
+
+class StatsDetailResponse(BaseModel):
+    field: StatsDetailField
+    items: List[StatsDetailJob]
+
+
+@router.get("/stats/detail", response_model=StatsDetailResponse)
+def get_stats_detail(field: StatsDetailField = Query(...)):
+    """
+    통계 타일 클릭 시 아코디언에 채울 상세 목록 (REQ-F12 Phase 2).
+
+    `/api/stats`는 집계 숫자만 준다 — "어느 파일·어느 페이지인지"는 여기서 온다.
+    job 캐시 필드(0보다 큰 것)로 먼저 대상 job을 추리고, **그 job들만** boundaries·수동
+    문항을 읽어 `pages`를 계산한다 — 매 요청 전체 job의 원본을 읽지 않는다는 점에서
+    `/api/stats`와 같은 원칙이다.
+    """
+    sources = [j for j in storage.list_jobs() if j.job_type == JobType.SOURCE]
+    items: List[StatsDetailJob] = []
+
+    if field == StatsDetailField.PROCESSING_COUNT:
+        for j in sources:
+            if j.boundaries_status == BoundariesStatus.PROCESSING:
+                items.append(StatsDetailJob(
+                    job_id=j.job_id, filename=j.filename, workbook_name=j.workbook_name,
+                ))
+        return StatsDetailResponse(field=field, items=items)
+
+    for j in sources:
+        if field == StatsDetailField.FALSE_POSITIVE_COUNT:
+            count = j.false_positive_count or 0
+            if count <= 0:
+                continue
+            cached = storage.get_boundaries_cache(j.job_id) or []
+            pages = sorted({
+                b.get("page_index") for b in cached if b.get("is_false_positive")
+            })
+        elif field == StatsDetailField.MANUAL_COUNT:
+            count = j.manual_count or 0
+            if count <= 0:
+                continue
+            manual_list = storage.get_manual_questions(j.job_id)
+            pages = sorted({m.get("page_num") for m in manual_list})
+        else:  # UNDETECTED_PAGE_COUNT
+            count = j.undetected_page_count or 0
+            if count <= 0:
+                continue
+            cached = storage.get_boundaries_cache(j.job_id) or []
+            manual_list = storage.get_manual_questions(j.job_id)
+            covered = (
+                {b.get("page_index") for b in cached}
+                | {m.get("page_num") for m in manual_list}
+            )
+            pages = [p for p in range(j.total_pages or 0) if p not in covered]
+
+        items.append(StatsDetailJob(
+            job_id=j.job_id, filename=j.filename, workbook_name=j.workbook_name,
+            count=count, pages=pages,
+        ))
+
+    return StatsDetailResponse(field=field, items=items)
 
 
 @router.get("/jobs", response_model=JobListResponse)
@@ -296,7 +397,8 @@ def _run_refresh_detection(job_id: str) -> None:
             boundaries = detect_question_boundaries(pdf_path)
 
         # Step 3: 새 결과 캐시 저장
-        storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
+        boundary_dicts = [dataclasses.asdict(b) for b in boundaries]
+        storage.save_boundaries_cache(job_id, boundary_dicts)
 
         # 페이지 메타 캐시 워밍 (REQ-P03-02) — 같은 PDF라 치수는 불변이나,
         # 이미 읽은 pdf_bytes로 캐시를 보장해 list_pages 재다운로드를 막는다
@@ -313,9 +415,19 @@ def _run_refresh_detection(job_id: str) -> None:
             key = str(b.page_index)
             qpp[key] = qpp.get(key, 0) + 1
 
+        # 문항 통계 캐시 (REQ-F12) — 재감지도 감지 완료 지점이므로 total_pages를 다시 정한다.
+        # 옛 오탐수·미탐지수가 새 boundaries 기준으로 덮어써진다(전량 재계산, 델타 아님).
+        page_count = len(page_infos) if page_infos is not None else len(thumbnail_service.get_page_info(pdf_bytes))
+        manual_list = storage.get_manual_questions(job_id)
+        stats = question_stats_service.compute_question_stats(boundary_dicts, manual_list, page_count)
+
         job.boundaries_status = BoundariesStatus.DONE
         job.total_question_count = len(boundaries)
         job.questions_per_page = qpp
+        job.total_pages = page_count
+        job.false_positive_count = stats["false_positive_count"]
+        job.manual_count = stats["manual_count"]
+        job.undetected_page_count = stats["undetected_page_count"]
 
         # DONE 상태를 먼저 저장해 프론트가 즉시 재감지 완료를 확인하게 한 뒤,
         # 썸네일 프리워밍(REQ-P03-01)을 이어서 실행한다 (실패해도 감지 결과엔 영향 없음)
@@ -732,6 +844,14 @@ def delete_question(job_id: str, page_num: int, question_num: int):
             qpp[key] = qpp.get(key, 0) + 1
         job.questions_per_page = qpp
         job.total_question_count = len(cached)
+
+        # 문항 통계 캐시 (REQ-F12) — total_pages는 안 바뀐다. 나머지 셋만 전량 재계산.
+        manual_list = storage.get_manual_questions(job_id)
+        stats = question_stats_service.compute_question_stats(cached, manual_list, job.total_pages)
+        job.false_positive_count = stats["false_positive_count"]
+        job.manual_count = stats["manual_count"]
+        job.undetected_page_count = stats["undetected_page_count"]
+
         storage.put_status(job)
 
     # 썸네일 캐시 삭제
@@ -777,6 +897,15 @@ def add_manual_question(job_id: str, page_num: int, body: ManualQuestionCreate):
     manual_list = storage.get_manual_questions(job_id)
     manual_list.append(new_item)
     storage.save_manual_questions(job_id, manual_list)
+
+    # 문항 통계 캐시 (REQ-F12) — 오탐수는 안 바뀐다(제약·함정). manual_count·
+    # undetected_page_count만 전량 재계산.
+    cached_boundaries = storage.get_boundaries_cache(job_id) or []
+    stats = question_stats_service.compute_question_stats(cached_boundaries, manual_list, job.total_pages)
+    job.false_positive_count = stats["false_positive_count"]
+    job.manual_count = stats["manual_count"]
+    job.undetected_page_count = stats["undetected_page_count"]
+    storage.put_status(job)
 
     # 수동 문항 영역 썸네일 생성 및 캐시 저장
     try:
@@ -837,6 +966,17 @@ def delete_manual_question(job_id: str, page_num: int, manual_id: str):
         raise HTTPException(status_code=404, detail=f"수동 문항 {manual_id}를 찾을 수 없습니다.")
 
     storage.save_manual_questions(job_id, manual_list)
+
+    # 문항 통계 캐시 (REQ-F12)
+    job = storage.get_status(job_id)
+    if job:
+        cached_boundaries = storage.get_boundaries_cache(job_id) or []
+        stats = question_stats_service.compute_question_stats(cached_boundaries, manual_list, job.total_pages)
+        job.false_positive_count = stats["false_positive_count"]
+        job.manual_count = stats["manual_count"]
+        job.undetected_page_count = stats["undetected_page_count"]
+        storage.put_status(job)
+
     storage.delete_manual_thumbnail_cache(job_id, page_num, manual_id)
 
 
@@ -907,6 +1047,21 @@ def bulk_delete_questions(job_id: str, page_num: int, body: BulkDeleteRequest):
             storage.save_manual_questions(job_id, remaining_manual)
             for mid in target_ids:
                 storage.delete_manual_thumbnail_cache(job_id, page_num, mid)
+
+    # 문항 통계 캐시 (REQ-F12) — 자동·수동 어느 쪽이 지워졌든 최종 상태 기준으로 1회 재계산.
+    # 각 블록이 자기 목록만 알아 부분 재계산하면 반대쪽 변경을 놓치므로 여기서 합쳐서 한다.
+    if deleted_auto or deleted_manual:
+        job = storage.get_status(job_id)
+        if job:
+            final_boundaries = storage.get_boundaries_cache(job_id) or []
+            final_manual = storage.get_manual_questions(job_id)
+            stats = question_stats_service.compute_question_stats(
+                final_boundaries, final_manual, job.total_pages
+            )
+            job.false_positive_count = stats["false_positive_count"]
+            job.manual_count = stats["manual_count"]
+            job.undetected_page_count = stats["undetected_page_count"]
+            storage.put_status(job)
 
     return {"deleted_auto": deleted_auto, "deleted_manual": deleted_manual}
 

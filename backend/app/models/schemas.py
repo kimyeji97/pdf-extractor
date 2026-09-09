@@ -23,6 +23,14 @@ class BoundariesStatus(str, Enum):
     FAILED     = "FAILED"      # 감지 실패
 
 
+class StatsDetailField(str, Enum):
+    """GET /api/stats/detail?field=... 의 field 값 (REQ-F12 Phase 2)."""
+    PROCESSING_COUNT       = "processing_count"
+    UNDETECTED_PAGE_COUNT  = "undetected_page_count"
+    FALSE_POSITIVE_COUNT   = "false_positive_count"
+    MANUAL_COUNT           = "manual_count"
+
+
 # ── 업로드 ──────────────────────────────────────────
 class UploadResponse(BaseModel):
     job_id: str
@@ -72,6 +80,13 @@ class JobStatusFile(BaseModel):
     questions_per_page: Optional[dict] = None   # { "0": 5, "1": 3, ... }
     workbook_name: Optional[str] = None          # 업로드 시 사용자 입력 문제집 이름
     workbook_types: Optional[list[str]] = None   # 업로드 시 사용자 입력 문제집 유형 목록
+    # ── 문항 통계 캐시 (REQ-F12) ───────────────────
+    # total_pages는 감지 완료 시 1회만 설정되고 문항 편집으로 바뀌지 않는다.
+    # 나머지 셋은 감지 완료·문항 삭제·수동 문항 추가/삭제·벌크 삭제 지점마다 전량 재계산된다.
+    total_pages: Optional[int] = None
+    false_positive_count: Optional[int] = None
+    manual_count: Optional[int] = None
+    undetected_page_count: Optional[int] = None
 
 
 # ── v2 추출 요청 ──────────────────────────────────────────

@@ -18,7 +18,8 @@ import { Icon } from "@iconify/react";
 
 import UploadForm from "components/UploadForm";
 import PageHeader from "components/PageHeader";
-import StatCards from "components/StatCards";
+// 파일 경로는 components/StatCards.jsx 그대로다 — 그 안의 주석 참조.
+import StatsBoard from "components/StatCards";
 import BookCard, { BOOK_CARD_W } from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
@@ -280,9 +281,14 @@ export default function AnalysisFilePage() {
         crumbs={[{ label: "홈", to: "/" }, { label: "분석" }]}
       />
 
-      {/* ── 요약 통계 (REQ-D07 2안) ──────────────────────
-          별도 홈 라우트가 없어 진입 화면인 이곳에 얹는다. */}
-      <StatCards refreshTrigger={statsTrigger} />
+      {/* ── 감지 품질 통계 + 상세 아코디언 (REQ-F12 Phase 2) ─────
+          별도 홈 라우트가 없어 진입 화면인 이곳에 얹는다. 기존 StatCards(3타일)를 대체한다. */}
+      <StatsBoard
+        refreshTrigger={statsTrigger}
+        onSelectFile={(jobId, page) =>
+          navigate(page ? `/analysis/${jobId}?page=${page}` : `/analysis/${jobId}`)
+        }
+      />
 
       {/* ── 검색 바 ────────────────────────────────────── */}
       <Box sx={{

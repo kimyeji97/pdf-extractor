@@ -21,6 +21,7 @@ from app.services import storage
 from app.services import thumbnail_service
 from app.services import prewarm_service
 from app.services import notification_service
+from app.services import question_stats_service
 from app.utils.question_parser import detect_question_boundaries
 
 logger = logging.getLogger(__name__)
@@ -138,9 +139,8 @@ def _trigger_boundary_detection(job_id: str) -> None:
 
         logger.info("[boundary] 감지 완료 | job_id=%s count=%d", job_id, len(boundaries))
 
-        storage.save_boundaries_cache(
-            job_id, [dataclasses.asdict(b) for b in boundaries]
-        )
+        boundary_dicts = [dataclasses.asdict(b) for b in boundaries]
+        storage.save_boundaries_cache(job_id, boundary_dicts)
 
         # 페이지 메타 캐시 프리워밍 (REQ-P03-02) — 이미 받은 pdf_bytes 재사용,
         # 이후 list_pages가 전체 PDF 재다운로드 없이 캐시만 읽도록 함
@@ -156,9 +156,18 @@ def _trigger_boundary_detection(job_id: str) -> None:
             k = str(b.page_index)
             questions_per_page[k] = questions_per_page.get(k, 0) + 1
 
+        # 문항 통계 캐시 (REQ-F12) — total_pages는 감지 완료 시 1회만 정해진다.
+        page_count = len(page_infos) if page_infos is not None else len(thumbnail_service.get_page_info(pdf_bytes))
+        manual_list = storage.get_manual_questions(job_id)
+        stats = question_stats_service.compute_question_stats(boundary_dicts, manual_list, page_count)
+
         status_file.boundaries_status = BoundariesStatus.DONE
         status_file.total_question_count = len(boundaries)
         status_file.questions_per_page = questions_per_page
+        status_file.total_pages = page_count
+        status_file.false_positive_count = stats["false_positive_count"]
+        status_file.manual_count = stats["manual_count"]
+        status_file.undetected_page_count = stats["undetected_page_count"]
 
         # DONE 상태를 먼저 저장해 프론트 폴링이 즉시 결과를 확인할 수 있게 한 뒤,
         # 썸네일 프리워밍(REQ-P03-01)은 그 뒤에 이어서 실행한다 (실패해도 감지 결과엔 영향 없음)
