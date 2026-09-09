@@ -115,7 +115,7 @@
 | REQ-D10 | 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존) | [plan](plans/PLAN-D10-question-grid-columns.md) | 2026-09-03 | ✅ **Phase 1~2 완료**(케이스 7/7 · `/testrun` 확인 · Phase 2 로컬 육안 — 1↔2열 전환·이미지 잘림 0·상호작용 4종·다크 실측 통과, **오탐 배지만 미확인**(검증 PDF에 오탐 0건)). PR #8 **main 머지 완료(2026-09-03, `48e445d`)**. dev 배포는 미실행(프론트 배포 정책) |
 | REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | 2026-09-04 | ✅ Phase 1·2 완료, 검증 계약 18/18. PR #9 **main 머지 완료(2026-09-04, `1fc5bac`)**, 브랜치 삭제됨. dev 프론트 재배포 시 옛 URL(`/editor`·`/history`·`/format`) 깨짐은 결정 사항 |
 | REQ-B12 | 목록을 거치지 않는 작업 화면 진입 — 문서 이름이 job-id로 뜸(+직접 진입 목록 복귀 재현) | [plan](plans/PLAN-B12-work-entry-name.md) | 2026-09-07 | ✅ Phase 1(케이스 7/7) + Phase 2(재현 시도 6회 전부 미재현, Phase 3 없이 종결). 브랜치 `feat/B12-work-entry-name` 푸시됨, PR은 미생성(다음에 오픈 예정) |
-| REQ-F12 | 문항분석 현황판 — 목록 화면 통계 5타일(분석중·미탐지·오탐·수동·탐지율, 기존 StatCards 대체) + 아코디언 상세 + 페이지 진입 스크롤 | [plan](plans/PLAN-F12-detection-stats-dashboard.md) | 2026-09-09 | ✅ **Phase 1~3 전부 완료**(케이스 40/40 · `/testrun` 확인 · 회귀 없음 백엔드 68/68·프론트 30파일 127/127). 브랜치 `feat/F12-detection-stats-dashboard` 푸시됨, PR은 미생성(다음에 오픈 예정) |
+| REQ-F12 | 문항분석 현황판 — 목록 화면 통계 5타일(분석중·미탐지·오탐·수동·탐지율, 기존 StatCards 대체) + 아코디언 상세 + 페이지 진입 스크롤 | [plan](plans/PLAN-F12-detection-stats-dashboard.md) | 2026-09-09 | ✅ **Phase 1~3 전부 완료**(케이스 40/40 · `/testrun` 확인 · 회귀 없음 백엔드 68/68·프론트 30파일 127/127). PR #11 **main 머지 완료(2026-09-09, `d1ad297`)**, 브랜치 삭제됨 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -315,6 +315,16 @@ Phase 2가 끝났다고 체크한 아코디언이 실제로는 페이지 번호�
 목록 화면 통계 5타일 + 아코디언 상세 + 페이지 진입 스크롤, 케이스 40/40. PR은 아직 안
 열었다(D11·B12와 동일하게 다음에 오픈 예정). 로드맵 순서(F12 → REQ-29 → REQ-30 → 테마
 재정의 → REQ-27 → REQ-28)상 다음은 **REQ-29**(각주·워터마크 등록).
+
+### REQ-F12 PR #11 main 머지 + 브랜치 정리
+
+`feat/F12-detection-stats-dashboard` → `main` PR #11(`d1ad297`, merge commit) — CI 미구성
+상태라 체크 없이 `mergeable: CLEAN` 확인 후 병합. 병합 뒤 로컬을 `main`으로 전환·
+fast-forward pull, `feat/F12-detection-stats-dashboard`를 원격·로컬 양쪽에서 삭제.
+
+**부수 발견**: 이미 머지된 `feat/B12-work-entry-name`(PR #10)도 지우려 했더니 원격엔
+이미 없었다 — 로컬 `remotes/origin/feat/B12-work-entry-name`는 낡은 추적 참조였을 뿐이라
+`git fetch --prune`로 정리. 원격 브랜치는 `main` 하나만 남음.
 
 ## 2026-09-08
 
