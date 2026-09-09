@@ -115,7 +115,7 @@
 | REQ-D10 | 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존) | [plan](plans/PLAN-D10-question-grid-columns.md) | 2026-09-03 | ✅ **Phase 1~2 완료**(케이스 7/7 · `/testrun` 확인 · Phase 2 로컬 육안 — 1↔2열 전환·이미지 잘림 0·상호작용 4종·다크 실측 통과, **오탐 배지만 미확인**(검증 PDF에 오탐 0건)). PR #8 **main 머지 완료(2026-09-03, `48e445d`)**. dev 배포는 미실행(프론트 배포 정책) |
 | REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | 2026-09-04 | ✅ Phase 1·2 완료, 검증 계약 18/18. PR #9 **main 머지 완료(2026-09-04, `1fc5bac`)**, 브랜치 삭제됨. dev 프론트 재배포 시 옛 URL(`/editor`·`/history`·`/format`) 깨짐은 결정 사항 |
 | REQ-B12 | 목록을 거치지 않는 작업 화면 진입 — 문서 이름이 job-id로 뜸(+직접 진입 목록 복귀 재현) | [plan](plans/PLAN-B12-work-entry-name.md) | 2026-09-07 | ✅ Phase 1(케이스 7/7) + Phase 2(재현 시도 6회 전부 미재현, Phase 3 없이 종결). 브랜치 `feat/B12-work-entry-name` 푸시됨, PR은 미생성(다음에 오픈 예정) |
-| REQ-F12 | 문항분석 현황판 — 목록 화면 통계 5타일(분석중·미탐지·오탐·수동·탐지율, 기존 StatCards 대체) + 아코디언 상세 | [plan](plans/PLAN-F12-detection-stats-dashboard.md) | — | 🟡 **Phase 1 완료**(백엔드 통계 캐시, 케이스 16/16 · `/testrun` 확인 · 회귀 없음 60/60). Phase 2(목록 위젯+아코디언)·Phase 3(`work.jsx` 페이지 스크롤) 남음. 브랜치 `feat/F12-detection-stats-dashboard` 푸시됨, PR은 미생성 |
+| REQ-F12 | 문항분석 현황판 — 목록 화면 통계 5타일(분석중·미탐지·오탐·수동·탐지율, 기존 StatCards 대체) + 아코디언 상세 | [plan](plans/PLAN-F12-detection-stats-dashboard.md) | — | 🟡 **Phase 1·2 완료**(백엔드 통계 캐시 + `GET /api/stats/detail` 신설 + 목록 위젯/아코디언, 케이스 32/32 · `/testrun` 확인 · 회귀 없음 백엔드 68/68·프론트 119/119). Phase 3(`work.jsx` 페이지 스크롤)만 남음. 브랜치 `feat/F12-detection-stats-dashboard` 푸시됨, PR은 미생성 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -220,6 +220,54 @@ Phase 1은 이미 완료·체크된 상태였지만, 그 안의 잠정 처리 �
 계획서 미결 질문에서 결정 표로 옮기고, 검증 계약에 F12-17 행 추가·결과 `✅`.
 
 브랜치 `feat/F12-detection-stats-dashboard`에 커밋(`51fd8a4` fix + 문서)·푸시 완료.
+
+### REQ-F12 Phase 2 착수 전 — 상세 조회 전용 API 신설로 결정
+
+Phase 2 완료 기준("타일 클릭 시 아코디언에 파일·페이지 목록이 보임")을 뽑으려는데, 그 목록을
+채울 API가 없었다 — Phase 1이 `/api/stats`에 넣은 건 **집계 숫자**뿐이고, `GET /api/jobs`
+(`JobSummary`)에도 `false_positive_count` 등 job별 필드가 없었다. 사용자가 `/api/jobs` 응답
+규격을 확인한 뒤 "전용 API를 새로 만드는 게 낫겠다"고 판단, 3가지 근거로 동의했다 —
+①`/api/jobs`는 검색·페이지네이션(기본 20·최대 100건)용이라 "조건에 맞는 전체"를 가져오는
+용도와 계약이 다름 ②페이지 단위 상세까지 필요한데 파일마다 `GET .../questions`를 또 부르면
+N+1(REQ-P01이 이미 푼 문제를 되풀이) ③`JobSummary`는 다른 화면도 겸용이라 통계 전용 필드를
+얹으면 그 화면과 무관한 필드가 섞임. `GET /api/stats/detail?field=...`로 확정(계획서 § 결정
+"아코디언 상세 데이터 출처").
+
+### REQ-F12 Phase 2 검증 계약 작성 (15케이스, F12-18~32)
+
+백엔드(`GET /api/stats/detail`)·프론트(5타일 위젯+아코디언) 양쪽을 한 Phase로 묶어 뽑았다 —
+계획서 Phase 2가 원래 "프론트 위주"로 추정됐지만 상세 API 신설이 얹히며 백엔드도 포함.
+문항 탐지율 타일은 상세 API의 `field` 4종에 없어 "클릭해도 아코디언이 안 열린다"는 점을
+계획서에 명시적으로 추가한 뒤 케이스(F12-31)로 고정했다 — 근거 없이는 코드로 못 쓴다는
+`/testgen` 원칙 때문에, 유추만 있던 사실을 문장으로 박아 넣은 것.
+
+### REQ-F12 Phase 2 완료 — 목록 화면 통계 위젯 + 아코디언 (`/testrun` 32/32)
+
+백엔드는 `SOURCE` job 중 캐시 필드가 0보다 큰 것만 골라 boundaries/수동 문항에서 실제 페이지
+번호를 뽑는 방식(계획서 그대로). 프론트는 5타일 + 우측 아코디언으로 기존 `StatCards`를 대체.
+
+**구현 중 발견한 함정 하나 — CLAUDE.md 계약 #28로 승격.** 새 컴포넌트를 `StatsBoard.jsx`라는
+별도 파일로 만들었더니, 전혀 무관한 기존 테스트 2개(`headerSearchRemoval.test.jsx`·
+`menuRename.test.jsx`, D09·D11 소속)가 깨졌다 — 그 테스트들이 `vi.mock('components/StatCards',
+...)`로 **그 모듈 경로**를 가로채 무해한 스텁으로 바꿔 두고 있었는데, 새 파일이라 그 mock이
+더는 아무것도 안 가로채고 **실제 컴포넌트가 처음 렌더**돼 그 테스트의 (일부러 축약해 둔)
+`api/client` mock에 없는 `getStats`를 호출해 "No getStats export" 로 터졌다. 테스트 파일은
+`/implement` 권한 밖이라 고칠 수 없어서, 대신 새 컴포넌트 내용을 **`StatCards.jsx` 파일
+경로 그대로**에 얹는 쪽으로 해결 — 컴포넌트 교체 시 새 파일을 만들지 말고 기존 경로를
+재사용해야 한다는 게 이번에 얻은 일반 규칙이라 계약으로 올렸다(향후 비슷한 "컴포넌트 통째
+교체" 작업에서 반드시 걸릴 함정이라 로그가 아니라 CLAUDE.md에 둠).
+
+`detection_rate` 타일의 퍼센트 표시 형식(반올림 `%`)은 검증 계약에 형식을 고정하는 케이스가
+없어 구현 시 합리적으로 고른 것일 뿐 결정된 스펙은 아니다 — 코드 주석에 명시해 뒀다.
+
+`/testrun` 확인: 32/32 통과(Phase 1 17건 + Phase 2 15건), 백엔드 전체 68/68·프론트 전체
+119/119 회귀 없음, 검증 계약 표-테스트 매칭 32건 전부 대응, 근거 인용 13건 전부 원문에서
+재확인. (`vitest -t 'F12-'`처럼 파일 하나만 골라 돌릴 때 `@iconify/react`의 비동기 아이콘
+로더가 테스트 환경 종료 뒤 `window is not defined`를 던지는 게 관찰됐지만, 전체 스위트로
+돌리면 재현 안 되는 vitest 필터-실행 특성이라 판정에서 제외 — 실제 실패 아님.)
+
+브랜치 `feat/F12-detection-stats-dashboard`에 커밋(`aadb771`)·푸시 완료. 남은 것은 Phase 3
+(`work.jsx` 페이지 진입 스크롤)뿐.
 
 ## 2026-09-08
 

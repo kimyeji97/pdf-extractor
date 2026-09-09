@@ -1,6 +1,6 @@
 # PLAN-F12 · 문항분석 현황판 (오탐·미탐지·수동 개수 + 탐지율)
 
-> 출처: 현재 세션 대화 · 작성: 2026-09-08 · 상태: 🟡 진행 (Phase 1 완료)
+> 출처: 현재 세션 대화 · 작성: 2026-09-08 · 상태: 🟡 진행 (Phase 1·2 완료)
 
 ## 배경
 
@@ -45,6 +45,7 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
 | 기존 `StatCards`와의 관계 | 새 5타일 위젯이 **대체**한다(업로드한 문제집 수·감지된 문항 수·생성한 문제집 수 3타일은 없어짐) | 사용자 확정 | 3타일은 유지하고 5타일을 별도로 추가 |
 | 통계 집계 대상 | `SOURCE` job만 — `EXPORT`(생성 결과)는 제외 | 사용자 확정: "문항 분석 메뉴에만 존재하니까" — 문항 감지·오탐·수동 편집은 애초에 `SOURCE` job에서만 일어나는 개념 | `EXPORT` job도 포함 |
 | `detection_rate` 분모 0 처리 | 자동 감지 문항 총합이 0이면(전부 삭제됐거나 원래 0개) API는 `null`을 반환하고 프론트는 "—"(계측 불가)로 표시 | 0/0은 0%가 아니라 "측정 불가"다 — 0%로 보이면 "문항이 전혀 없음"과 "감지가 완전히 실패함"이 화면에서 구별되지 않는다 | 0.0(0%)으로 표시 — Phase 1 최초 구현이 크래시 방지용으로 잠정 채택했던 값, 이번에 뒤집힘 |
+| 아코디언 상세 데이터 출처 | 전용 엔드포인트 `GET /api/stats/detail?field=<processing_count\|undetected_page_count\|false_positive_count\|manual_count>` 신설. 응답 `{ field, items: [{ job_id, filename, workbook_name, count, pages }] }` — `pages`는 `false_positive_count`·`manual_count`·`undetected_page_count`일 때만 채우고(해당 지표가 걸린 페이지 번호 목록), `processing_count`는 `count`·`pages` 둘 다 `null`(페이지 개념이 없음). `SOURCE` job만, 그 field 값이 0보다 큰 job만 포함 | `/testgen` 착수 중 발견 — `GET /api/jobs`(`JobSummary`)엔 이 4필드가 없어 아코디언을 채울 수 없었다. `/api/jobs`를 확장하는 대신 전용 엔드포인트로 간 이유: ①`/api/jobs`는 검색·페이지네이션(기본 20·최대 100건)용이라 "조건에 맞는 전체"를 가져오는 용도와 계약이 다르다 ②페이지 단위 상세까지 필요한데 파일마다 `GET .../questions`를 또 부르면 N+1이 된다(REQ-P01이 이미 푼 문제를 되풀이) ③`JobSummary`는 다른 화면도 겸용이라 통계 전용 필드를 얹으면 그 화면과 무관한 필드가 섞인다 | `GET /api/jobs`에 4필드 추가 + 필터 파라미터로 대응 |
 
 ## 미결 질문
 
@@ -67,11 +68,18 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
       갱신됨을 확인. `/api/stats` 응답이 기존 job들의 캐시 합산값과 일치. 분모 0일 때
       `detection_rate`가 `null`.
 
-- [ ] **Phase 2** — 목록 화면 통계 위젯 + 아코디언
-      기존 `StatCards`(3타일)를 새 5타일 위젯으로 **대체**. 타일 클릭 시 우측 아코디언(D09
-      패턴)에 해당 통계의 파일·페이지 리스트 표시. 아코디언에서 파일 클릭 → `work.jsx`로 이동.
-      완료 기준: 5개 타일 값이 `/api/stats` 응답과 일치. 타일 클릭 시 아코디언이 열리고 올바른
-      파일·페이지 목록이 보임. 파일 클릭 시 해당 작업 화면으로 이동.
+- [x] **Phase 2** — 목록 화면 통계 위젯 + 아코디언 (+ 상세 조회 API 신설)
+      **백엔드**: `GET /api/stats/detail?field=...` 신설(위 결정 표 계약 그대로) — job 캐시
+      필드가 0보다 큰 `SOURCE` job만 골라, `false_positive_count`/`manual_count`는 boundaries·
+      manual 목록에서 해당 페이지 번호를 뽑고, `undetected_page_count`는 `total_pages`에서
+      자동+수동이 있는 페이지를 뺀 나머지를 뽑는다. `processing_count`는 job 목록 필터만.
+      **프론트**: 기존 `StatCards`(3타일)를 새 5타일 위젯으로 **대체**. 타일 클릭 시 우측
+      아코디언(D09의 리사이즈 가능한 우측 패널 매커니즘 재사용 — 내용은 PDF 미리보기가 아니라
+      이 API가 준 파일·페이지 목록)이 펼쳐진다. 아코디언에서 파일 클릭 → `work.jsx`로 이동.
+      문항 탐지율 타일은 상세 API의 `field` 4종에 없으므로 클릭해도 아코디언이 열리지 않는다.
+      완료 기준: 5개 타일 값이 `/api/stats` 응답과 일치. 타일 클릭 시 아코디언이 열리고
+      `/api/stats/detail` 응답 그대로의 파일·페이지 목록이 보임. 파일 클릭 시 해당 작업
+      화면으로 이동.
 
 - [ ] **Phase 3** — `work.jsx` 페이지 진입 스크롤
       아코디언에서 페이지 클릭 시 전달할 대상 페이지 정보(예: 쿼리 파라미터)를 `work.jsx`가
@@ -95,7 +103,9 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
 
 > 작성: 2026-09-08 · 계획서: 본 문서 (별도 스펙 없음) · 검증: `/testrun F12`
 > 테스트: `backend/tests/test_question_stats_cache.py`(F12-01~12) ·
-> `backend/tests/test_question_stats_api.py`(F12-13~16)
+> `backend/tests/test_question_stats_api.py`(F12-13~17) ·
+> `backend/tests/test_stats_detail_api.py`(F12-18~24) ·
+> `frontend/src/pages/analysis/index.test.jsx`(F12-25~32)
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
 |----|------|--------|:----:|------|:----:|:----:|
@@ -116,3 +126,18 @@ TODO(2026-08-28) 신규 항목 ⑥로 번호 없이 남아 있다가 2026-09-03 
 | F12-15 | `GET /api/stats` | `detection_rate`가 결정 표 공식과 일치 | 정상 | PLAN § 결정 — "`(total_question_count(자동) − 오탐 수 − 수동 수) / total_question_count(자동)`" | 1 | ✅ |
 | F12-16 | `GET /api/stats` | `EXPORT` job은 이 5개 필드 합산에서 제외됨 | 예외 | PLAN § 결정 — "`SOURCE` job만 — `EXPORT`(생성 결과)는 제외" | 1 | ✅ |
 | F12-17 | `GET /api/stats` | 자동 감지 문항 총합이 0이면 `detection_rate`가 `null` | 경계 | PLAN § 결정 — "API는 `null`을 반환하고 프론트는 "—"(계측 불가)로 표시" | 1 | ✅ |
+| F12-18 | `GET /api/stats/detail` | `field=processing_count` → `PROCESSING` job만, `count`·`pages`는 `null` | 정상 | PLAN § 결정 — "`processing_count`는 `count`·`pages` 둘 다 `null`(페이지 개념이 없음)" | 2 | ✅ |
+| F12-19 | `GET /api/stats/detail` | `field=false_positive_count` → 오탐 있는 job의 `count`·오탐 페이지 번호 목록 | 정상 | PLAN § 결정 — "`false_positive_count`·`manual_count`·`undetected_page_count`일 때만 채우고(해당 지표가 걸린 페이지 번호 목록)" | 2 | ✅ |
+| F12-20 | `GET /api/stats/detail` | `field=manual_count` → 수동 문항 있는 job의 `count`·수동 페이지 번호 목록 | 정상 | 위와 동일 | 2 | ✅ |
+| F12-21 | `GET /api/stats/detail` | `field=undetected_page_count` → `pages`가 실제 미탐지 페이지 번호와 일치, `count == len(pages)` | 정상 | 위와 동일 | 2 | ✅ |
+| F12-22 | `GET /api/stats/detail` | 해당 field 값이 0인 job은 목록에서 빠짐 | 경계 | PLAN § 결정 — "그 field 값이 0보다 큰 job만 포함" | 2 | ✅ |
+| F12-23 | `GET /api/stats/detail` | `EXPORT` job은 제외 | 회귀 | PLAN § 결정 — "`SOURCE` job만" | 2 | ✅ |
+| F12-24 | `GET /api/stats/detail` | 잘못된/누락된 `field` 값은 4xx | 예외 | PLAN § 결정 — "`field=<processing_count\|undetected_page_count\|false_positive_count\|manual_count>`" | 2 | ✅ |
+| F12-25 | 목록 화면 통계 위젯 | 5개 타일 값이 `/api/stats` 응답과 일치 | 정상 | PLAN § Phase 2 — "완료 기준: 5개 타일 값이 `/api/stats` 응답과 일치" | 2 | ✅ |
+| F12-26 | 목록 화면 통계 위젯 | 기존 `StatCards` 3타일은 더 이상 렌더되지 않음 | 회귀 | PLAN § Phase 2 — "기존 `StatCards`(3타일)를 새 5타일 위젯으로 **대체**." | 2 | ✅ |
+| F12-27 | 목록 화면 통계 위젯 | `detection_rate`가 `null`이면 "—"로 표시(0%로 안 보임) | 경계 | PLAN § 결정 — "API는 `null`을 반환하고 프론트는 "—"(계측 불가)로 표시" | 2 | ✅ |
+| F12-28 | 목록 화면 통계 위젯 | 타일 클릭 시 아코디언이 열리고 해당 field로 `/api/stats/detail`을 호출 | 정상 | PLAN § Phase 2 — "타일 클릭 시 아코디언이 열리고" | 2 | ✅ |
+| F12-29 | 목록 화면 통계 위젯 | 같은 타일 재클릭 시 아코디언이 닫힘 | 정상 | PLAN § 범위 — "타일 클릭 시 우측 아코디언에 해당 통계의 상세(파일·페이지 리스트) 표시" | 2 | ✅ |
+| F12-30 | 목록 화면 통계 위젯 | 아코디언의 파일 클릭 시 해당 작업 화면으로 이동 | 정상 | PLAN § Phase 2 — "아코디언에서 파일 클릭 → `work.jsx`로 이동." | 2 | ✅ |
+| F12-31 | 목록 화면 통계 위젯 | 문항 탐지율 타일은 클릭해도 아코디언이 열리지 않음 | 예외 | PLAN § Phase 2 — "문항 탐지율 타일은 상세 API의 `field` 4종에 없으므로 클릭해도 아코디언이 열리지 않는다." | 2 | ✅ |
+| F12-32 | 목록 화면 통계 위젯 | 다른 타일을 클릭하면 아코디언 내용이 새 field 목록으로 교체됨(이전 목록 안 남음) | 회귀 | PLAN § 결정 — "아코디언 상세 데이터 출처" | 2 | ✅ |

@@ -488,6 +488,17 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
     기다린다. 셋 다 **단언이 아니라 무대가 틀린 경우**이고, 단언에 닿기 전에 터져 원인 판독을
     방해한다. (REQ-F09 Phase 3·5 · REQ-F11 Phase 1 실측)
 
+28. **컴포넌트를 다른 파일로 옮기며 교체하면, 그 파일 경로를 `vi.mock('components/X', ...)`로
+    가로채던 무관한 테스트가 조용히 깨진다.** `vi.mock`은 **모듈 경로**를 가로채지 컴포넌트
+    이름을 가로채지 않는다 — 새 파일(`StatsBoard.jsx` 등)로 옮기면 그 mock은 더는 아무것도
+    가로채지 못하고, 옛 컴포넌트를 스텁으로 바꿔 두던 무관한 테스트에서 **실제 컴포넌트가
+    처음으로 렌더돼** 그 테스트의 (일부러 축약해 둔) `api/client` mock에 없는 함수를 호출해
+    터진다(실측: `headerSearchRemoval.test.jsx`·`menuRename.test.jsx`가 `components/StatCards`를
+    가로채고 있었는데, 내용을 새 `StatsBoard.jsx`로 옮기자 "No getStats export" 로 깨짐,
+    REQ-F12 Phase 2). **기존 컴포넌트의 내용을 통째로 바꿀 때는 새 파일을 만들지 말고
+    기존 파일 경로를 그대로 쓴다** — 그 경로를 가로채는 테스트가 있는지 먼저
+    `grep -rn "vi.mock('components/<이름>'"` 로 확인할 것.
+
 ### 프론트엔드
 
 26. **상시·배경 경로(알림 기준선 GET·`EventSource` 스트림)는 `apiFetch`를 거치지 않는다** — `client.js`의
