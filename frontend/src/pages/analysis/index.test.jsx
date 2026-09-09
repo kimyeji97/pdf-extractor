@@ -184,3 +184,45 @@ describe('아코디언 (Phase 2)', () => {
     expect(files[0]).toHaveTextContent('m.pdf');
   });
 });
+
+describe('아코디언 — 페이지 클릭 (Phase 3)', () => {
+  it('[F12-33] 페이지가 있는 항목은 개별 페이지 번호가 클릭 가능한 요소로 렌더된다', async () => {
+    detailIs({
+      false_positive_count: [
+        { job_id: 'job-x', filename: 'a.pdf', workbook_name: null, count: 2, pages: [0, 2] },
+      ],
+    });
+    await renderLoaded();
+    await clickTile('false_positive_count');
+
+    expect(screen.getAllByTestId('stat-detail-page')).toHaveLength(2);
+  });
+
+  it('[F12-34] 페이지 클릭 시 /analysis/{job_id}?page={N}(1-based)으로 이동한다', async () => {
+    detailIs({
+      false_positive_count: [
+        { job_id: 'job-x', filename: 'a.pdf', workbook_name: null, count: 2, pages: [0, 2] },
+      ],
+    });
+    await renderLoaded();
+    await clickTile('false_positive_count');
+
+    // pages=[0, 2] 중 두 번째(page_index=2) 클릭 → 1-based 3
+    fireEvent.click(screen.getAllByTestId('stat-detail-page')[1]);
+
+    expect(navigate).toHaveBeenCalledWith('/analysis/job-x?page=3');
+    expect(navigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('[F12-35] pages가 null인 항목(분석중 파일수)엔 페이지 클릭 요소가 없다', async () => {
+    detailIs({
+      processing_count: [
+        { job_id: 'job-p', filename: 'p.pdf', workbook_name: null, count: null, pages: null },
+      ],
+    });
+    await renderLoaded();
+    await clickTile('processing_count');
+
+    expect(screen.queryByTestId('stat-detail-page')).not.toBeInTheDocument();
+  });
+});

@@ -285,7 +285,9 @@ export default function AnalysisFilePage() {
           별도 홈 라우트가 없어 진입 화면인 이곳에 얹는다. 기존 StatCards(3타일)를 대체한다. */}
       <StatsBoard
         refreshTrigger={statsTrigger}
-        onSelectFile={(jobId) => navigate(`/analysis/${jobId}`)}
+        onSelectFile={(jobId, page) =>
+          navigate(page ? `/analysis/${jobId}?page=${page}` : `/analysis/${jobId}`)
+        }
       />
 
       {/* ── 검색 바 ────────────────────────────────────── */}

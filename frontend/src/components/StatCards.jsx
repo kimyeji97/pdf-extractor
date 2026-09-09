@@ -82,7 +82,10 @@ function formatValue(field, stats) {
 }
 
 /**
- * @param {{ refreshTrigger?: number, onSelectFile?: (jobId: string) => void }} props
+ * @param {{ refreshTrigger?: number, onSelectFile?: (jobId: string, page1Based?: number) => void }} props
+ *   `onSelectFile`의 `page1Based`는 파일 이름 클릭이면 없고(문서만 이동), 개별 페이지
+ *   번호 클릭이면 그 페이지(1-based)가 온다(REQ-F12 Phase 3 — "페이지 클릭 → 작업 화면
+ *   진입 + 해당 페이지로 스크롤·포커스").
  */
 export default function StatsBoard({ refreshTrigger = 0, onSelectFile }) {
   const [stats, setStats] = useState(null);
@@ -204,8 +207,27 @@ export default function StatsBoard({ refreshTrigger = 0, onSelectFile }) {
                     {item.workbook_name || item.filename || item.job_id}
                   </Typography>
                   {item.pages != null && (
-                    <Typography variant="caption" color="text.disabled">
-                      {item.count}건 · 페이지 {item.pages.map((p) => p + 1).join(", ")}
+                    <Typography variant="caption" color="text.disabled" component="div">
+                      {item.count}건 · 페이지{" "}
+                      {item.pages.map((p, i) => (
+                        <Box
+                          key={p}
+                          component="span"
+                          data-testid="stat-detail-page"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectFile?.(item.job_id, p + 1);
+                          }}
+                          sx={{
+                            cursor: "pointer",
+                            textDecoration: "underline",
+                            "&:hover": { color: "text.primary" },
+                          }}
+                        >
+                          {p + 1}
+                          {i < item.pages.length - 1 ? ", " : ""}
+                        </Box>
+                      ))}
                     </Typography>
                   )}
                 </Box>
