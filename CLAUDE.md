@@ -414,6 +414,12 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
     `Document.add_font`가 없어 helv로 폴백되고 한글이 점으로 깨진다.
 11. **문항 감지 정확도 > 성능** — adaptive 감지를 조건부로 건너뛰는 최적화는
     문항 15개 누락을 유발해 기각했다(P03-06). 감지 경로에 성능 트레이드오프를 넣지 않는다.
+29. **PyMuPDF `Page.insert_image()`의 `mask`는 `Pixmap`이 아니라 bytes-like(png 등)여야
+    하고, `pixmap=`이 아니라 `stream=`(원본 이미지 바이트)과 짝을 이뤄야 한다** — `mask`에
+    `Pixmap` 객체를 그대로 넘기면 `TypeError`, `pixmap=`과 함께 쓰면 `mask requires stream
+    or filename` `ValueError`가 난다(실측, PyMuPDF `utils.py`의 `insert_image` 소스로 확인,
+    REQ-29 워터마크 반투명 삽입). 반투명 이미지를 넣을 땐 원본 바이트를 `stream=`으로,
+    알파 마스크는 별도로 인코딩한 bytes를 `mask=`로 넘길 것.
 
 ### 동기화가 필요한 짝
 
