@@ -278,10 +278,14 @@ export async function refreshJobQuestions(jobId) {
  */
 export async function startExtractV2(
   selections, layout = "2단", coverId = null, workbookName = null,
+  footnoteId = null, watermarkId = null,
 ) {
   const body = {
     layout,
     ...(coverId ? { cover_id: coverId } : {}),
+    // REQ-29: 표지와 같은 패턴 — 값이 있을 때만 키를 싣는다.
+    ...(footnoteId ? { footnote_id: footnoteId } : {}),
+    ...(watermarkId ? { watermark_id: watermarkId } : {}),
     // REQ-B10: 생성될 문제집 이름. **이 필드가 실려 있으면 백엔드가 완료 시 메타를 저장한다**
     // (없으면 저장하지 않는다). 즉 이걸 보내면서 createWorkbookMeta 도 호출하면 이력에 2건이 뜬다.
     ...(workbookName ? { workbook_name: workbookName } : {}),
@@ -535,5 +539,76 @@ export async function listCovers() {
 export async function deleteCover(coverId) {
   const res = await apiFetch(`${BASE_URL}/covers/${coverId}`, { method: "DELETE" });
   if (!res.ok) throw new Error("표지 삭제 실패");
+  return res.json();
+}
+
+/**
+ * POST /api/footnotes
+ * 각주 등록 (REQ-29) — 표지와 같은 모양이되 이미지 대신 텍스트를 저장한다.
+ */
+export async function createFootnote(name, text) {
+  const res = await apiFetch(`${BASE_URL}/footnotes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, text }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "각주 등록 실패");
+  }
+  return res.json(); // { footnote_id, name, text, created_at }
+}
+
+/**
+ * GET /api/footnotes
+ * 각주 목록 조회 (REQ-29)
+ */
+export async function listFootnotes() {
+  const res = await apiFetch(`${BASE_URL}/footnotes`);
+  if (!res.ok) throw new Error("각주 목록 조회 실패");
+  return res.json(); // { footnotes: [...] }
+}
+
+/**
+ * DELETE /api/footnotes/{footnoteId}
+ */
+export async function deleteFootnote(footnoteId) {
+  const res = await apiFetch(`${BASE_URL}/footnotes/${footnoteId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("각주 삭제 실패");
+  return res.json();
+}
+
+/**
+ * POST /api/watermarks
+ * 워터마크 이미지 업로드 (REQ-29) — 표지와 완전히 동일한 업로드 방식.
+ */
+export async function uploadWatermark(file, name = "") {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("name", name);
+  const res = await fetch(`${BASE_URL}/watermarks`, { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "워터마크 업로드 실패");
+  }
+  return res.json(); // { watermark_id, name, thumbnail_url, created_at }
+}
+
+/**
+ * GET /api/watermarks
+ * 워터마크 목록 조회 (REQ-29)
+ */
+export async function listWatermarks() {
+  const res = await apiFetch(`${BASE_URL}/watermarks`);
+  if (!res.ok) throw new Error("워터마크 목록 조회 실패");
+  return res.json(); // { watermarks: [...] }
+}
+
+/**
+ * DELETE /api/watermarks/{watermarkId}
+ */
+export async function deleteWatermark(watermarkId) {
+  const res = await apiFetch(`${BASE_URL}/watermarks/${watermarkId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("워터마크 삭제 실패");
   return res.json();
 }

@@ -387,6 +387,8 @@ def upload_file(local_path: str, key: str) -> None:
 # ── 표지 이미지 (covers) ─────────────────────────────────
 
 COVERS_PREFIX = "covers"
+FOOTNOTES_PREFIX = "footnotes"
+WATERMARKS_PREFIX = "watermarks"
 
 
 def list_covers() -> list:
@@ -434,6 +436,87 @@ def get_cover_image(cover_id: str) -> Optional[tuple]:
 def delete_cover(cover_id: str) -> None:
     for ext in ["jpg", "jpeg", "png", "json"]:
         _delete(_key(COVERS_PREFIX, f"{cover_id}.{ext}"))
+
+
+# ── 각주 (footnotes, REQ-29) — 표지와 같은 모양이되 이미지 대신 텍스트를 저장 ──
+
+def list_footnotes() -> list:
+    prefix = _key(FOOTNOTES_PREFIX) + "/"
+    paginator = r2.get_paginator("list_objects_v2")
+    keys = []
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".json"):
+                keys.append(obj["Key"])
+    footnotes = []
+    for k in keys:
+        try:
+            footnotes.append(_get_json(k))
+        except Exception:
+            continue
+    footnotes.sort(key=lambda f: f.get("created_at", ""), reverse=True)
+    return footnotes
+
+
+def get_footnote_meta(footnote_id: str) -> Optional[dict]:
+    return _get_json_or_none(_key(FOOTNOTES_PREFIX, f"{footnote_id}.json"))
+
+
+def save_footnote(footnote_id: str, meta: dict) -> None:
+    _put_json(_key(FOOTNOTES_PREFIX, f"{footnote_id}.json"), meta)
+
+
+def delete_footnote(footnote_id: str) -> None:
+    _delete(_key(FOOTNOTES_PREFIX, f"{footnote_id}.json"))
+
+
+# ── 워터마크 (watermarks, REQ-29) — 표지와 동일한 이미지 업로드 방식 ──────
+
+def list_watermarks() -> list:
+    prefix = _key(WATERMARKS_PREFIX) + "/"
+    paginator = r2.get_paginator("list_objects_v2")
+    keys = []
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".json"):
+                keys.append(obj["Key"])
+    watermarks = []
+    for k in keys:
+        try:
+            watermarks.append(_get_json(k))
+        except Exception:
+            continue
+    watermarks.sort(key=lambda w: w.get("created_at", ""), reverse=True)
+    return watermarks
+
+
+def get_watermark_meta(watermark_id: str) -> Optional[dict]:
+    return _get_json_or_none(_key(WATERMARKS_PREFIX, f"{watermark_id}.json"))
+
+
+def save_watermark(watermark_id: str, meta: dict, image_bytes: bytes, ext: str = "jpg") -> None:
+    ct = "image/png" if ext == "png" else "image/jpeg"
+    r2.put_object(
+        Bucket=BUCKET,
+        Key=_key(WATERMARKS_PREFIX, f"{watermark_id}.{ext}"),
+        Body=image_bytes,
+        ContentType=ct,
+        CacheControl=_CC_IMMUTABLE,
+    )
+    _put_json(_key(WATERMARKS_PREFIX, f"{watermark_id}.json"), meta)
+
+
+def get_watermark_image(watermark_id: str) -> Optional[tuple]:
+    for ext, ct in [("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("png", "image/png")]:
+        data = _get_bytes_or_none(_key(WATERMARKS_PREFIX, f"{watermark_id}.{ext}"))
+        if data is not None:
+            return data, ct
+    return None
+
+
+def delete_watermark(watermark_id: str) -> None:
+    for ext in ["jpg", "jpeg", "png", "json"]:
+        _delete(_key(WATERMARKS_PREFIX, f"{watermark_id}.{ext}"))
 
 
 # ── job / 문제집 삭제 ─────────────────────────────────────

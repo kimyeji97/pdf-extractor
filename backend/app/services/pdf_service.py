@@ -362,6 +362,8 @@ def extract_questions_v2(
     tmpdir: str,
     layout: str = "2단",
     cover_id: str | None = None,
+    footnote_id: str | None = None,
+    watermark_id: str | None = None,
 ) -> int:
     """
     복수 job/page/question 선택을 하나의 PDF로 추출하여 스토리지에 저장한다.
@@ -502,6 +504,20 @@ def extract_questions_v2(
     effective_layout = layout if layout in LAYOUTS else DEFAULT_LAYOUT
     _build_grid_pdf(all_regions, grid_path, effective_layout)
 
+    # ── Step 4-a: 각주·워터마크 반영 (footnote_id·watermark_id 지정 시, REQ-29) ──
+    # 표지를 제외한 모든 문항 페이지에만 적용돼야 하므로 grid_path(표지 삽입 전)에
+    # 반영한다 — 표지 삽입(Step 4-b)은 grid_path **앞에** 별도 페이지를 통째로 붙이는
+    # 구조라, 순서가 바뀌면 표지 페이지에도 반영돼 버린다.
+    if footnote_id:
+        footnote_meta = storage.get_footnote_meta(footnote_id)
+        if footnote_meta:
+            _apply_footnote(grid_path, footnote_meta["text"])
+    if watermark_id:
+        watermark_result = storage.get_watermark_image(watermark_id)
+        if watermark_result:
+            watermark_bytes, _ = watermark_result
+            _apply_watermark(grid_path, watermark_bytes)
+
     # ── Step 4-b: 표지 삽입 (cover_id 지정 시) ──────────────
     output_path = str(Path(tmpdir) / "result.pdf")
     if cover_id:
@@ -551,6 +567,69 @@ def _prepend_cover_image(
 
     cover_doc.save(output_path, garbage=4, deflate=True)
     cover_doc.close()
+
+
+_WATERMARK_OPACITY = 0.15   # 낮은 투명도 — 정확한 수치는 결정된 스펙이 아니라 합리적 기본값
+
+
+def _apply_footnote(pdf_path: str, text: str) -> None:
+    """
+    각주 텍스트를 모든 페이지 하단·좌측에 삽입한다 (REQ-29).
+
+    한글은 TextWriter + Font("korea")로 그린다 — `insert_text`+`add_font` 조합은 이
+    PyMuPDF 버전에서 helv로 폴백되어 한글이 점(·)으로 깨진다(계약 #10, REQ-B09와 같은 원인).
+    """
+    doc = fitz.open(pdf_path)
+    font = _get_label_font()
+    fontsize = 8.0
+    margin = 12.0
+
+    for page in doc:
+        tw = fitz.TextWriter(page.rect)
+        tw.append(
+            fitz.Point(margin, page.rect.height - margin),
+            text,
+            font=font,
+            fontsize=fontsize,
+        )
+        tw.write_text(page, color=(0.4, 0.4, 0.4))
+
+    tmp_path = pdf_path + ".tmp"
+    doc.save(tmp_path, garbage=4, deflate=True)
+    doc.close()
+    Path(tmp_path).replace(pdf_path)
+
+
+def _apply_watermark(pdf_path: str, image_bytes: bytes) -> None:
+    """
+    워터마크 이미지를 모든 페이지 중앙에 반투명하게 삽입한다 (REQ-29).
+
+    `insert_image` 자체엔 opacity 인자가 없어, 원본 이미지에 알파 채널이 없어도 낮은
+    투명도를 강제하려면 단색 회색조 픽스맵을 알파 마스크로 따로 넘겨야 한다.
+    """
+    src_pix = fitz.Pixmap(image_bytes)
+    if src_pix.alpha:
+        src_pix = fitz.Pixmap(src_pix, 0)
+    mask_pix = fitz.Pixmap(fitz.csGRAY, src_pix.irect, False)
+    mask_pix.set_rect(mask_pix.irect, (int(255 * _WATERMARK_OPACITY),))
+    # insert_image의 mask 인자는 Pixmap이 아니라 bytes-like(png/등)여야 하고,
+    # pixmap이 아니라 stream(원본 바이트)과 짝을 이뤄야 한다(PyMuPDF utils.insert_image).
+    mask_bytes = mask_pix.tobytes("png")
+
+    doc = fitz.open(pdf_path)
+    for page in doc:
+        pw, ph = page.rect.width, page.rect.height
+        size = min(pw, ph) * 0.6
+        rect = fitz.Rect(
+            (pw - size) / 2, (ph - size) / 2,
+            (pw + size) / 2, (ph + size) / 2,
+        )
+        page.insert_image(rect, stream=image_bytes, mask=mask_bytes, overlay=True)
+
+    tmp_path = pdf_path + ".tmp"
+    doc.save(tmp_path, garbage=4, deflate=True)
+    doc.close()
+    Path(tmp_path).replace(pdf_path)
 
 
 def _get_label_font() -> "fitz.Font":
