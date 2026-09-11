@@ -328,6 +328,89 @@ def delete_cover(cover_id: str) -> None:
         path.unlink(missing_ok=True)
 
 
+# ── 각주 (footnotes, REQ-29) — 표지와 같은 모양이되 이미지 대신 텍스트를 저장 ──
+
+def list_footnotes() -> list:
+    """저장된 각주 메타데이터 전체를 created_at 내림차순으로 반환."""
+    footnotes_dir = _BASE / "footnotes"
+    if not footnotes_dir.exists():
+        return []
+    footnotes = []
+    for path in footnotes_dir.glob("*.json"):
+        try:
+            footnotes.append(json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    footnotes.sort(key=lambda f: f.get("created_at", ""), reverse=True)
+    return footnotes
+
+
+def get_footnote_meta(footnote_id: str) -> Optional[dict]:
+    path = _BASE / "footnotes" / f"{footnote_id}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_footnote(footnote_id: str, meta: dict) -> None:
+    """각주 메타데이터(이름+텍스트)를 저장한다."""
+    _ensure(_BASE / "footnotes" / f"{footnote_id}.json").write_text(
+        json.dumps(meta, ensure_ascii=False, default=str), encoding="utf-8"
+    )
+
+
+def delete_footnote(footnote_id: str) -> None:
+    path = _BASE / "footnotes" / f"{footnote_id}.json"
+    path.unlink(missing_ok=True)
+
+
+# ── 워터마크 (watermarks, REQ-29) — 표지와 동일한 이미지 업로드 방식 ──────
+
+def list_watermarks() -> list:
+    """저장된 워터마크 메타데이터 전체를 created_at 내림차순으로 반환."""
+    watermarks_dir = _BASE / "watermarks"
+    if not watermarks_dir.exists():
+        return []
+    watermarks = []
+    for path in watermarks_dir.glob("*.json"):
+        try:
+            watermarks.append(json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    watermarks.sort(key=lambda w: w.get("created_at", ""), reverse=True)
+    return watermarks
+
+
+def get_watermark_meta(watermark_id: str) -> Optional[dict]:
+    path = _BASE / "watermarks" / f"{watermark_id}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_watermark(watermark_id: str, meta: dict, image_bytes: bytes, ext: str = "jpg") -> None:
+    """워터마크 이미지 + 메타데이터를 저장한다."""
+    _ensure(_BASE / "watermarks" / f"{watermark_id}.{ext}").write_bytes(image_bytes)
+    _ensure(_BASE / "watermarks" / f"{watermark_id}.json").write_text(
+        json.dumps(meta, ensure_ascii=False, default=str), encoding="utf-8"
+    )
+
+
+def get_watermark_image(watermark_id: str) -> Optional[tuple[bytes, str]]:
+    """(이미지 bytes, content_type) 반환. 없으면 None."""
+    for ext, ct in [("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("png", "image/png")]:
+        path = _BASE / "watermarks" / f"{watermark_id}.{ext}"
+        if path.exists():
+            return path.read_bytes(), ct
+    return None
+
+
+def delete_watermark(watermark_id: str) -> None:
+    watermarks_dir = _BASE / "watermarks"
+    for path in watermarks_dir.glob(f"{watermark_id}.*"):
+        path.unlink(missing_ok=True)
+
+
 # ── job / 문제집 삭제 ─────────────────────────────────────
 
 def delete_job(job_id: str) -> None:
