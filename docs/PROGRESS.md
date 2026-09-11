@@ -116,7 +116,7 @@
 | REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | 2026-09-04 | ✅ Phase 1·2 완료, 검증 계약 18/18. PR #9 **main 머지 완료(2026-09-04, `1fc5bac`)**, 브랜치 삭제됨. dev 프론트 재배포 시 옛 URL(`/editor`·`/history`·`/format`) 깨짐은 결정 사항 |
 | REQ-B12 | 목록을 거치지 않는 작업 화면 진입 — 문서 이름이 job-id로 뜸(+직접 진입 목록 복귀 재현) | [plan](plans/PLAN-B12-work-entry-name.md) | 2026-09-07 | ✅ Phase 1(케이스 7/7) + Phase 2(재현 시도 6회 전부 미재현, Phase 3 없이 종결). 브랜치 `feat/B12-work-entry-name` 푸시됨, PR은 미생성(다음에 오픈 예정) |
 | REQ-F12 | 문항분석 현황판 — 목록 화면 통계 5타일(분석중·미탐지·오탐·수동·탐지율, 기존 StatCards 대체) + 아코디언 상세 + 페이지 진입 스크롤 | [plan](plans/PLAN-F12-detection-stats-dashboard.md) | 2026-09-09 | ✅ **Phase 1~3 전부 완료**(케이스 40/40 · `/testrun` 확인 · 회귀 없음 백엔드 68/68·프론트 30파일 127/127). PR #11 **main 머지 완료(2026-09-09, `d1ad297`)**, 브랜치 삭제됨 |
-| REQ-29 | 각주·워터마크 등록(표지 CRUD와 같은 모양) + 생성 PDF 반영(표지 제외 전 페이지) | [plan](plans/PLAN-29-footnote-watermark-registration.md) | — | 🟡 **Phase 1 완료**(백엔드 CRUD + PDF 반영, 케이스 15/15 · `/testrun` 확인 · 회귀 없음 83/83). Phase 2(템플릿 관리 탭 + 생성 화면 선택 UI) 남음. 브랜치 `feat/29-footnote-watermark-registration` 푸시됨, PR은 미생성 |
+| REQ-29 | 각주·워터마크 등록(표지 CRUD와 같은 모양) + 생성 PDF 반영(표지 제외 전 페이지) | [plan](plans/PLAN-29-footnote-watermark-registration.md) | 2026-09-11 | ✅ **완료**(Phase 1+2, 케이스 28/28 · `/testrun` 확인 · 회귀 없음 140/140). 브랜치 `feat/29-footnote-watermark-registration` 푸시됨, PR은 미생성 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -241,6 +241,35 @@ stream or filename" `ValueError`). PyMuPDF `utils.py`의 `insert_image` 소스�
 
 브랜치 `feat/29-footnote-watermark-registration`에 커밋(`bf2cb09`)·푸시 완료. 남은 것은
 Phase 2(템플릿 관리 탭 + 생성 화면 선택 UI)뿐.
+
+### REQ-29 Phase 2 완료 — 템플릿 관리 탭 + 생성 화면 선택 UI (`/testrun` 28/28, REQ-29 전체 완료)
+
+`format/index.jsx`에 표지/각주/워터마크 3탭 추가(각주는 이름+텍스트 폼, 워터마크는 표지와
+동일한 업로드 모달), `editor/index.jsx`에 각주·워터마크 선택 칩 행을 표지 칩과 같은 자리·
+같은 패턴으로 추가했다.
+
+**API mock 여러 개가 필요해 렌더 무대가 없는 화면**(`editor/index.jsx`·`format/index.jsx`,
+D11 로그와 동일 결론)이라 이번에 **이 레포에 없던 검증 레이어를 하나 도입했다** —
+`api/client.js`의 함수들을 `global.fetch` 직접 모킹으로 렌더 없이 단위 테스트했다(기존
+관례는 전부 `vi.mock('api/client', ...)`로 모듈 자체를 스텁하는 쪽이었다). GET 경로는
+`apiFetch`가 요청 중복 제거를 위해 `res.clone()`을 호출하므로 진짜 `Response` 객체로
+모킹해야 했다(POST/DELETE는 `.clone()` 불필요). 두 페이지 자체의 배선 확인은 기존
+B12·D11 선례와 같은 소스 스캔으로 처리했다.
+
+`api/client.footnoteWatermark.test.js` 8/8, `format/footnoteWatermarkTabs.test.js` 2/2,
+`editor/footnoteWatermarkSelect.test.js` 3/3 — 첫 시도에 전부 통과, 수정 루프 없음.
+`/testrun` 확인: 백엔드+프론트 합쳐 28/28 통과, 프론트 전체 스위트 140/140 회귀 없음,
+검증 계약 표-테스트 매칭 28건 전부 대응, 근거 인용 소실 없음.
+
+⚠️ **잔여 위험 — 브라우저 실측 미실시.** Phase 2 완료 기준의 "생성 화면에서 선택해 만든
+PDF에 실제로 반영됨(end-to-end 확인)"은 자동화로는 체인의 각 연결 고리만 개별
+검증했다(선택 상태→`startExtractV2` 인자: 29-28 소스 스캔 / 인자→요청 body: 29-22 단위
+테스트 / body→PDF 반영: 29-11~13 백엔드 단위 테스트) — 실제 화면에서 클릭해 PDF를
+받아 육안으로 확인하는 절차는 하지 않았다. Phase 1의 s3 스토리지 미검증과 같은 성격의
+잔여 위험이라 계획서에도 남겨 뒀다.
+
+브랜치 `feat/29-footnote-watermark-registration`에 커밋(`0dbad71`)·푸시 완료. **REQ-29
+전체 완료** — 계획서에 Phase가 이 둘뿐이었다. PR은 아직 미생성.
 
 ## 2026-09-10
 
