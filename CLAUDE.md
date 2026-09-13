@@ -32,6 +32,8 @@ pdf-extractor/
 │   │   │   ├── browse.py                   # 파일/페이지/문항 조회·편집·삭제 (665줄, 최대 라우터)
 │   │   │   ├── workbook.py                 # 문제집 CRUD
 │   │   │   ├── cover.py                    # 표지 이미지 관리
+│   │   │   ├── footnote.py                 # 각주 CRUD — 이름+텍스트 (REQ-29)
+│   │   │   ├── watermark.py                # 워터마크 CRUD — 이미지 (REQ-29, 표지와 같은 모양)
 │   │   │   └── notification.py             # 완료 알림 조회·읽음 커서 (REQ-F09 Phase 1)
 │   │   ├── services/
 │   │   │   ├── storage.py                  # 스토리지 팩토리 (local ↔ s3 토글)
@@ -63,7 +65,7 @@ pdf-extractor/
 │   │   │   ├── WorkCanvas.jsx              # 작업 화면 셸 — WorkCanvas/CardRow/PanelCard/CardResizeHandle (계약 #19)
 │   │   │   ├── PageHeader.jsx              # 페이지 헤더 + 브레드크럼
 │   │   │   ├── BookCard.jsx                # 책 은유 카드 (3개 목록 화면 공유)
-│   │   │   ├── StatCards.jsx               # 통계 카드 (GET /api/stats)
+│   │   │   ├── StatCards.jsx               # 문항분석 현황판 5타일+아코디언 (REQ-F12 — 파일 경로는 계약 #28로 유지)
 │   │   │   ├── PdfPreviewPanel.jsx         # PDF 뷰어 (가상화·좌표 변환 — 계약 #2·#6·#7)
 │   │   │   ├── QuestionAnalysisPanel.jsx   # 문항 분석 상세
 │   │   │   ├── QuestionListPanel.jsx       # 페이지별 문항 목록
@@ -148,7 +150,8 @@ FastAPI `BackgroundTasks`를 사용. 업로드 완료 → 문항 감지, 추출 
 ### Browse (`routers/browse.py`) — 982줄, 가장 큰 라우터
 | Method | Path | 설명 |
 |--------|------|------|
-| GET | `/api/stats` | 전체 통계 (통계 카드용). 목록이 페이지네이션돼 프론트가 합계를 못 낸다 |
+| GET | `/api/stats` | 전체 통계 — 현황판 5타일용(오탐/미탐지/수동/탐지율 캐시 합산, REQ-F12). 목록이 페이지네이션돼 프론트가 합계를 못 낸다 |
+| GET | `/api/stats/detail` | 타일 클릭 시 아코디언 상세 (`?field=` 4종 — 파일·페이지 목록, REQ-F12) |
 | GET | `/api/jobs` | 전체 작업 목록 (source/export 분리, 페이지네이션·검색) |
 | GET | `/api/jobs/{id}` | 작업 상세 |
 | PATCH | `/api/jobs/{id}` | 작업 메타 수정 (이름, 유형) |
@@ -183,6 +186,20 @@ FastAPI `BackgroundTasks`를 사용. 업로드 완료 → 문항 감지, 추출 
 | GET | `/api/covers/{id}/image` | 표지 이미지 서빙 |
 | DELETE | `/api/covers/{id}` | 표지 삭제 |
 
+### Footnote / Watermark (`routers/footnote.py` · `routers/watermark.py`) — REQ-29
+| Method | Path | 설명 |
+|--------|------|------|
+| POST | `/api/footnotes` | 각주 등록 (이름 + 텍스트 JSON) |
+| GET | `/api/footnotes` | 각주 목록 |
+| DELETE | `/api/footnotes/{id}` | 각주 삭제 |
+| POST | `/api/watermarks` | 워터마크 업로드 (JPEG/PNG, 10MB — 표지와 동일 제한) |
+| GET | `/api/watermarks` | 워터마크 목록 |
+| GET | `/api/watermarks/{id}/image` | 워터마크 이미지 서빙 |
+| DELETE | `/api/watermarks/{id}` | 워터마크 삭제 |
+
+> `extract-v2`가 `footnote_id`·`watermark_id`를 받아 **표지 삽입 이전**(grid PDF 자체)에 반영한다 —
+> 그래서 "표지 제외 전 페이지"가 성립한다. 워터마크 반투명 삽입은 **계약 #29**를 따른다.
+
 ## 데이터 모델 (schemas.py)
 
 **핵심 Enum**:
@@ -211,6 +228,8 @@ local_storage/
 ├── thumbnails/{job_id}/manual_{page}_{manual_id}.png
 ├── manual_questions/{job_id}.json
 ├── covers/{cover_id}/meta.json + image.{jpg|png}
+├── footnotes/{footnote_id}.json
+├── watermarks/{watermark_id}.json + {watermark_id}.{jpg|png}
 └── workbooks/{workbook_id}.json
 ```
 
@@ -286,7 +305,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 `REQ-{prefix}{seq}`의 prefix는 작업 성격을 나타낸다:
 
-| Prefix | 의미 | 점유 범위 (2026-09-03) |
+| Prefix | 의미 | 점유 범위 (2026-09-13) |
 |--------|------|-----------|
 | (숫자) | 핵심·v2·v3 기능 (기획 단위) | REQ-01~30 |
 | `B` | 버그 수정 (Bug) | REQ-B01~B12 |
@@ -316,8 +335,9 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-09-03 기준 각 prefix 다음 번호: `B13`, `C10`, `D12`, `F13`, `P06`, 숫자 `31`.
-(2026-09-03에 예약만 된 것: `D11`·`B12`·`F12`·`REQ-29`·`REQ-30` — PROGRESS "미착수 — 번호만 부여된 것" 표)
+2026-09-13 기준 각 prefix 다음 번호: `B13`, `C10`, `D12`, `F13`, `P06`, 숫자 `31`.
+(2026-09-03에 예약된 5개 중 `D11`·`B12`·`F12`·`REQ-29`는 소진·완료됐고, **아직 예약 상태인 것은 `REQ-30` 하나** —
+PROGRESS "미착수 — 번호만 부여된 것" 표. 번호는 완료돼도 재사용하지 않으므로 위 "다음 번호"는 그대로다)
 
 ## 진행 현황
 
@@ -325,26 +345,30 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 조회는 `/progress [오늘|어제|금주|전주|N일|REQ번호]`, 기록은 `/checkpoint`.
 
 - 남은 작업 순서·미래 작업(아직 REQ 번호 없음): `docs/TODO.md` (2026-08-28 확정, 구 `예정된작업.md`는 삭제)
-- 진행 중: **REQ-D07** 프론트 전면 리디자인 — Phase 1~4 완료(스펙 §4-2).
-  **REQ-D08(라이트/다크) 완료** · **REQ-F09(완료 알림) v1 완료**(Phase 6 브라우저 알림은 이연) ·
-  **REQ-F11(재감지 중 진입 차단) 완료** · **REQ-D09·F10(생성 이력 개편+검색, PR #7)·REQ-D10(문항 목록
-  바둑판, PR #8) 완료 2026-09-03** · **REQ-D11(메뉴 분석/생성/결과/템플릿 관리 + 경로 `/create`·`/results`·`/templates`,
-  리다이렉트 없음) 완료 2026-09-04**(PR #9 main 머지 `1fc5bac` — 재배포 시 옛 URL 깨짐은 결정) — 남은 것은
-  TODO 3단계 신규 항목 B12·F12·REQ-29·REQ-30, 그 뒤 REQ-27 로그인.
-  ⚠️ **dev 백엔드는 2026-08-27 `feat/P04-sse-push`(`p04-2a343a4`)로 배포됐고 실측 후 `desired 0`으로 내렸다**
-  (켜면 ~$23/월, 꺼 두면 ~$2/월). 켤 때는 `--desired-count 1`. **dev 프론트는 2026-08-28 `feat/B11-notification-baseline`으로 배포됐다** —
-  실체는 Pages가 아니라 **Workers `twilight-base-302d`**이고 **자동 배포는 없다**(push로 안 올라간다).
-  프론트를 바꾸면 위 "배포 (프론트엔드)" 두 줄을 손으로 돌려야 한다.
-  진행 중: **REQ-P04**(상시 폴링 → 서버 푸시, SSE) — Phase 0(인프라 실측 08-18: 오리진 무전송 125s에 edge가
-  끊음 → heartbeat 30s) · **Phase 1(백엔드 브로커+스트림)·Phase 2(프론트 EventSource 전환) 완료 2026-08-27**,
-  **Phase 0~3 완료 2026-08-27**(dev 실측 통과: 전송 0.3~1.3s, 숨김 탭 즉시, 폴링 0건). 브랜치
-  `feat/P04-sse-push`는 PR #2로 **main 머지 완료(2026-08-27, `d176596`)**. 파생 **REQ-P05**(알림 지연 — 발행 전 대기 8.1s 단축·피드 GET 병렬화) Phase 1~3 완료 2026-08-28, `feat/P05-notification-latency` PR #5 **main 머지 완료(2026-08-28, `6fba551`)**. 파생 **REQ-C09**(알림 경로 후속 4건 — 실패 문구·kind 필터·딤 케이스·`: connected` 선발송) Phase 1·2 완료 2026-08-28, `feat/C09-notification-followups` PR #4 **main 머지 완료(2026-08-28, `91a911a`)**. 파생 **REQ-B11**(새로고침 토스트 — 기준선을 빈 목록에서 잡던 버그) Phase 1~2 완료 2026-08-28(dev 프론트 Worker에 배포됨 — 새로고침 5회 토스트 0건 확인), `feat/B11-notification-baseline` PR #3로 **main 머지 완료(2026-08-28, `3d35d65`)**.
-  ⚠️ dev R2 버킷 CORS는 코드가 아니라 버킷 설정이다(wrangler OAuth로만 닿음, 08-27 dev 오리진 추가).
-  이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.
-  (상세: [F09 계획서](docs/plans/PLAN-F09-completion-notification.md) ·
-  [F11 계획서](docs/plans/PLAN-F11-analysis-detail-entry-guard.md) ·
-  [D07 스펙](docs/specs/20260725-REQ-D07-minimal-template-adoption.md) §4-1,
-  [D08 스펙](docs/specs/20260729-REQ-D08-dark-mode.md))
+- **현재 위치 (2026-09-13)**: TODO 3단계 신규 항목 5개 중 **D11·B12·F12·REQ-29 완료**,
+  남은 것은 **REQ-30**(템플릿 = 표지·각주·워터마크 조합 엔티티) 하나. 그 뒤 순서는
+  **테마 재정의**(번호 보류 — REQ-30 속성으로 흡수될 수 있어 그때 `/workplan`) → **REQ-27 로그인**
+  (+ D07 잔여 `auth-layout`·`account-popover` 슬롯, CORS 제한을 같이 닫는다) → REQ-28 공유.
+  **개별 REQ의 상태·완료일·PR 번호는 [`docs/PROGRESS.md`](docs/PROGRESS.md) 인덱스가 단일 출처다** —
+  여기에 옮겨 적지 않는다(옛 이력을 이 절에 쌓다가 실제와 반대로 읽히는 문단이 됐다).
+  🟡 남아 있는 것: **REQ-D07**(위 슬롯 연결만 미완 —
+  [스펙](docs/specs/20260725-REQ-D07-minimal-template-adoption.md) §4-1·§6).
+- ⚠️ **REQ-29(각주·워터마크)에 잔여 위험 2건** — ①**s3 스토리지 경로 미검증**(계약 #24 격리로
+  로컬 테스트는 항상 local 백엔드라 구문 검사만 했다) ②**브라우저 end-to-end 미실시**(선택 →
+  `startExtractV2` 인자 → 요청 body → PDF 반영을 고리별로만 검증). **둘 다 다음 dev 배포에서
+  처음 실제로 도는 경로다** — 배포하면 여기부터 확인할 것.
+
+### 배포 상태 (세션마다 필요한 사실)
+
+⚠️ **dev 백엔드는 2026-08-27 `feat/P04-sse-push`(`p04-2a343a4`)로 배포됐고 실측 후 `desired 0`으로 내렸다**
+(켜면 ~$23/월, 꺼 두면 ~$2/월). 켤 때는 `--desired-count 1`.
+⚠️ **dev 프론트는 2026-08-28 `feat/B11-notification-baseline` 빌드에 멈춰 있다** — 실체는 Pages가 아니라
+**Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
+"배포 (프론트엔드)" 두 줄을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이고
+(2026-08-28 배포 정책 — 변경은 모아서 한 번에), C09·D09·F10·D10·D11·B12·F12·REQ-29 프론트 변경이
+미반영 상태다. **"dev에서 안 보인다"를 버그로 읽지 말 것.**
+⚠️ dev R2 버킷 CORS는 코드가 아니라 버킷 설정이다(wrangler OAuth로만 닿음, 08-27 dev 오리진 추가).
+이 머신에 awscli·docker(colima)·AWS 자격증명·`wrangler login`이 구성돼 배포가 가능하다.
 
 ## 계약 (깨면 회귀하는 것들)
 
@@ -538,7 +562,10 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 ## 상시 이슈
 
 - 인증/인가 미구현 (CORS 전체 허용 상태)
-- 테스트는 REQ-F09 알림 경로 28건뿐(백엔드 17 · 프론트 11) — 그 외 영역은 여전히 0건.
+- 테스트는 **REQ 단위로 붙은 것만 있다** — 알림 경로(F09·B11·C09·P04·P05) · D09/F10 · D10 · D11 · B12 ·
+  F12 · REQ-29. 최근 실측은 2026-09-11 `/testrun`의 **백엔드 83 · 프론트 140**(회귀 없음)이다.
+  **문항 감지(`question_parser`)·PDF 생성 본체는 여전히 0건**이고, `work.jsx`·`editor/index.jsx`·
+  `format/index.jsx`는 **렌더 무대가 없어**(API mock 5~6개 필요) 소스 스캔·순수 함수 분리로만 검증한다.
   실행: `cd backend && pip install -r requirements-dev.txt && pytest` (계약 #24) ·
   `cd frontend && npm test` (vitest)
 - 페이지별 문항 API 개별 호출 성능 문제 → REQ-P01/REQ-P02에서 다룸
