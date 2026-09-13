@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-09-11
+> 최종 갱신: 2026-09-13
 
 ## 요구사항 인덱스
 
@@ -116,7 +116,7 @@
 | REQ-D11 | 메뉴 이름 변경(분석·생성·결과·템플릿 관리) + 경로 변경(`/create`·`/results`·`/templates`, 리다이렉트 없음) | [plan](plans/PLAN-D11-menu-rename.md) | 2026-09-04 | ✅ Phase 1·2 완료, 검증 계약 18/18. PR #9 **main 머지 완료(2026-09-04, `1fc5bac`)**, 브랜치 삭제됨. dev 프론트 재배포 시 옛 URL(`/editor`·`/history`·`/format`) 깨짐은 결정 사항 |
 | REQ-B12 | 목록을 거치지 않는 작업 화면 진입 — 문서 이름이 job-id로 뜸(+직접 진입 목록 복귀 재현) | [plan](plans/PLAN-B12-work-entry-name.md) | 2026-09-07 | ✅ Phase 1(케이스 7/7) + Phase 2(재현 시도 6회 전부 미재현, Phase 3 없이 종결). 브랜치 `feat/B12-work-entry-name` 푸시됨, PR은 미생성(다음에 오픈 예정) |
 | REQ-F12 | 문항분석 현황판 — 목록 화면 통계 5타일(분석중·미탐지·오탐·수동·탐지율, 기존 StatCards 대체) + 아코디언 상세 + 페이지 진입 스크롤 | [plan](plans/PLAN-F12-detection-stats-dashboard.md) | 2026-09-09 | ✅ **Phase 1~3 전부 완료**(케이스 40/40 · `/testrun` 확인 · 회귀 없음 백엔드 68/68·프론트 30파일 127/127). PR #11 **main 머지 완료(2026-09-09, `d1ad297`)**, 브랜치 삭제됨 |
-| REQ-29 | 각주·워터마크 등록(표지 CRUD와 같은 모양) + 생성 PDF 반영(표지 제외 전 페이지) | [plan](plans/PLAN-29-footnote-watermark-registration.md) | 2026-09-11 | ✅ **완료**(Phase 1+2, 케이스 28/28 · `/testrun` 확인 · 회귀 없음 140/140). 브랜치 `feat/29-footnote-watermark-registration` 푸시됨, PR은 미생성 |
+| REQ-29 | 각주·워터마크 등록(표지 CRUD와 같은 모양) + 생성 PDF 반영(표지 제외 전 페이지) | [plan](plans/PLAN-29-footnote-watermark-registration.md) | 2026-09-11 | ✅ **완료**(Phase 1+2, 케이스 28/28 · `/testrun` 확인 · 회귀 없음 140/140). PR #12 **main 머지 완료(2026-09-13, `e0da607`)**. 잔여 위험 2건(s3 스토리지 경로 미검증 · 브라우저 end-to-end 미실시)은 머지 후에도 그대로 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -211,6 +211,36 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-09-13
+
+### REQ-29 PR #12 main 머지 — 로드맵 3단계 "신규 항목"은 REQ-30 하나만 남음
+
+`feat/29-footnote-watermark-registration` → `main` PR #12(`e0da607`, merge commit). 로컬을
+fast-forward 하면서 CLAUDE.md **계약 #29**(PyMuPDF `insert_image`의 `mask`는 `Pixmap`이 아니라
+bytes-like + `stream=`과 짝)도 같이 들어왔다.
+
+2026-09-03에 번호를 부여한 신규 항목 5개 중 **D11·B12·F12·REQ-29 네 개가 닫혔다**(09-04 ~ 09-13).
+남은 것은 **REQ-30**(템플릿 = 표지·각주·워터마크 조합 엔티티) 하나이고, REQ-29가 그 선행이었으므로
+선행 조건은 해소됐다.
+
+⚠️ **머지가 잔여 위험을 지우지 않는다** — 09-11에 기록한 두 건이 그대로 살아 있다.
+① Phase 1의 **s3 스토리지 경로 미검증**(계약 #24 격리로 로컬 테스트는 항상 local 백엔드 → 구문
+검사만 했다) ② Phase 2의 **브라우저 end-to-end 미실시**(체인의 고리만 개별 검증: 선택 상태 →
+`startExtractV2` 인자 → 요청 body → PDF 반영). 둘 다 **다음 dev 배포 때 처음 실행되는 경로**라,
+배포 시 여기부터 확인할 것.
+
+### 문서 동기화 — `docs/TODO.md`가 B12·F12·REQ-29 셋 다 미완료로 남아 있었다
+
+세 REQ 모두 PROGRESS 인덱스는 ✅인데 TODO "신규 항목" 절은 `[ ]`(B12는 🟡 작성 중 표기)였다.
+**각 REQ의 완료 체크포인트가 PROGRESS 인덱스만 갱신하고 TODO 절을 건너뛴 것이 3회 반복된 결과**다 —
+TODO는 "순서표"라 완료 여부의 출처가 아니라는 문서 자체의 선언(머리말)이 있어서 놓치기 쉬웠지만,
+**로드맵에서 "다음에 뭘 하나"를 읽는 곳이 여기라 미완료로 보이면 끝난 일을 다시 집는다.**
+이번에 셋을 일괄 정정했다.
+
+같은 자리에서 **REQ-29 항목의 "REQ-30 선행" 표기도 정정**했다 — 2026-09-10에 PROGRESS 인덱스
+쪽 같은 오기를 고쳤는데 TODO 쪽 사본은 그대로 남아 있었다. 방향은 **REQ-29 → REQ-30**이다.
+배포 정책 각주의 "dev 프론트 미반영" 목록도 D11·B12·F12·REQ-29까지로 늘렸다(2026-09-13 기준).
 
 ## 2026-09-11
 
