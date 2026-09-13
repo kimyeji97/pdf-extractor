@@ -140,6 +140,14 @@
 | 29-23 | `startExtractV2()` | 둘 다 안 주면 body에 그 키 자체가 없다 | 회귀 | 위와 동일 | 2 | ✅ |
 | 29-24 | `format/index.jsx`(소스 스캔) | 각주 등록 배선(`createFootnote`/`listFootnotes` 사용)이 있다 | 정상 | PLAN § 결정 — "기존 \"템플릿 관리\" 화면(`pages/format`)에 탭 추가" | 2 | ✅ |
 | 29-25 | `format/index.jsx`(소스 스캔) | 워터마크 등록 배선(`uploadWatermark`/`listWatermarks` 사용)이 있다 | 정상 | 위와 동일 | 2 | ✅ |
-| 29-26 | `editor/index.jsx`(소스 스캔) | 각주 선택 배선(`listFootnotes` 호출 + 선택 상태)이 있다 | 정상 | PLAN § 범위 — "생성 화면에 `footnote_id`·`watermark_id` 선택 UI 추가(`cover_id` 선택과 같은 자리)" | 2 | ✅ |
-| 29-27 | `editor/index.jsx`(소스 스캔) | 워터마크 선택 배선(`listWatermarks` 호출 + 선택 상태)이 있다 | 정상 | 위와 동일 | 2 | ✅ |
-| 29-28 | `editor/index.jsx`(소스 스캔) | `startExtractV2` 호출에 선택한 각주·워터마크 id가 인자로 전달된다 | 정상 | 위와 동일 | 2 | ✅ |
+| 29-26 | `editor/index.jsx`(소스 스캔) | 각주 선택 배선(`listFootnotes` 호출 + 선택 상태)이 있다 | 정상 | PLAN § 범위 — "생성 화면에 `footnote_id`·`watermark_id` 선택 UI 추가(`cover_id` 선택과 같은 자리)" | 2 | 🗑 은퇴 |
+| 29-27 | `editor/index.jsx`(소스 스캔) | 워터마크 선택 배선(`listWatermarks` 호출 + 선택 상태)이 있다 | 정상 | 위와 동일 | 2 | 🗑 은퇴 |
+| 29-28 | `editor/index.jsx`(소스 스캔) | `startExtractV2` 호출에 선택한 각주·워터마크 id가 인자로 전달된다 | 정상 | 위와 동일 | 2 | 🗑 은퇴 |
+
+> 🗑 **29-26~28은 REQ-30으로 대체되어 은퇴했다(2026-09-13).** 세 케이스는
+> `selectedFootnoteId`·`selectedWatermarkId` 라는 **소스 문자열**에 묶인 소스 스캔이었는데,
+> REQ-30 Phase 2가 생성 화면의 개별 칩 3줄을 템플릿 1줄로 대체하면서 그 변수들이 사라졌다.
+> 구현 결함이 아니라 [PLAN-30 § 결정](PLAN-30-template-entity.md)이 착수 전에 정해 둔
+> **의도된 은퇴**이고, 같은 보장(선택 상태 → `startExtractV2` 인자 전달)은 REQ-30의
+> 30-36·30-37 이 승계한다. 테스트 파일(`editor/footnoteWatermarkSelect.test.js`)은
+> 삭제됐다(`5c48ee5`) — **이 행들을 보고 그 파일을 찾지 말 것.**
