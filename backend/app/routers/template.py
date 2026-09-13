@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.services import storage
+from app.services import pdf_service, storage
 
 router = APIRouter()
 
@@ -58,8 +58,69 @@ def is_empty(meta: dict) -> bool:
     return not any(meta.get(f) for f in SLOT_FIELDS)
 
 
+def _render_constants() -> dict:
+    """미리보기가 같은 그림을 그리는 데 필요한 렌더 상수 (REQ-F13).
+
+    ⚠️ **값을 여기에 다시 적지 않는다.** 단일 출처는 `pdf_service`이고 이 함수는 나를 뿐이다
+    (PLAN-F13 § 결정 "렌더 상수의 단일 출처"). 프론트에 복제하지 않는 이유와 같다 —
+    두 곳에 같은 값을 두면 한쪽만 고쳤을 때 조용히 어긋난다.
+    """
+    return {
+        "footnote_font_size":   pdf_service._FOOTNOTE_FONT_SIZE,
+        "footnote_margin":      pdf_service._FOOTNOTE_MARGIN,
+        "footnote_color":       pdf_service._FOOTNOTE_COLOR,
+        "watermark_size_ratio": pdf_service._WATERMARK_SIZE_RATIO,
+        "watermark_opacity":    pdf_service._WATERMARK_OPACITY,
+    }
+
+
+def _resolve_slots(meta: dict) -> dict:
+    """슬롯 id 를 **표시용 정보**로 푼다 (REQ-F13).
+
+    미리보기는 각주를 그리려면 텍스트가, 워터마크를 그리려면 이미지 URL 이 필요한데
+    REQ-30 응답은 id 뿐이었다. 세 목록을 다시 부르는 대신 여기서 싣는다.
+
+    ⚠️ **참조가 끊겨 있어도 죽지 않는다.** A′ 가 막지만 강제 삭제와의 경쟁 상태가 있고,
+       미리보기가 거기서 500 을 받으면 화면이 통째로 멈춘다(PLAN-F13 § Phase 1).
+       끊긴 슬롯은 비어 있는 것과 같게 `None` 으로 낸다 — 미리보기 입장에선 그릴 것이 없다는
+       점에서 동일하고, "무엇을 가리켰었는지"는 `needs_review` 칩이 이미 알린다.
+
+    이미지 URL 은 결정적이다(계약 #15) — 얻으려고 목록 API 를 더 부르지 않는다.
+    """
+    cover = footnote = watermark = None
+
+    if meta.get("cover_id"):
+        cover_meta = storage.get_cover_meta(meta["cover_id"])
+        if cover_meta:
+            cover = {
+                "name": cover_meta.get("name"),
+                "image_url": f"/api/covers/{meta['cover_id']}/image",
+            }
+
+    if meta.get("footnote_id"):
+        footnote_meta = storage.get_footnote_meta(meta["footnote_id"])
+        if footnote_meta:
+            footnote = {
+                "name": footnote_meta.get("name"),
+                "text": footnote_meta.get("text"),
+            }
+
+    if meta.get("watermark_id"):
+        watermark_meta = storage.get_watermark_meta(meta["watermark_id"])
+        if watermark_meta:
+            watermark = {
+                "name": watermark_meta.get("name"),
+                "image_url": f"/api/watermarks/{meta['watermark_id']}/image",
+            }
+
+    return {"cover": cover, "footnote": footnote, "watermark": watermark}
+
+
 def _public(meta: dict) -> dict:
-    """응답 봉투. `cover.py`의 기존 모양을 따른다."""
+    """응답 봉투. `cover.py`의 기존 모양을 따르고, REQ-F13이 표시용 정보·렌더 상수를 더했다.
+
+    id 필드는 **그대로 둔다** — 관리 화면의 수정 폼이 id 로 동작한다.
+    """
     return {
         "template_id": meta["template_id"],
         "name": meta["name"],
@@ -70,6 +131,8 @@ def _public(meta: dict) -> dict:
         # 만드는데 "원래 안 넣은 것"도 None이라 값만으로는 구별할 수 없다.
         "needs_review": bool(meta.get("needs_review")),
         "created_at": meta.get("created_at"),
+        **_resolve_slots(meta),
+        "render": _render_constants(),
     }
 
 

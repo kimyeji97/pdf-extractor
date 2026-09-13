@@ -486,9 +486,6 @@ export default function FormatPage() {
     } catch (e) { alert(e.message); }
   };
 
-  const assetName = (list, idField, id, fallback) =>
-    id ? (list.find((x) => x[idField] === id)?.name || "(삭제됨)") : fallback;
-
   const refreshing = tab === 0 ? coversLoading : tab === 1 ? footnotesLoading
     : tab === 2 ? watermarksLoading : templatesLoading;
   const refresh = tab === 0 ? fetchCovers : tab === 1 ? fetchFootnotes
@@ -628,9 +625,9 @@ export default function FormatPage() {
                 <TemplateCard
                   key={t.template_id}
                   template={t}
-                  coverName={assetName(covers, "cover_id", t.cover_id, "없음")}
-                  footnoteName={assetName(footnotes, "footnote_id", t.footnote_id, "없음")}
-                  watermarkName={assetName(watermarks, "watermark_id", t.watermark_id, "없음")}
+                  coverName={t.cover?.name || "없음"}
+                  footnoteName={t.footnote?.name || "없음"}
+                  watermarkName={t.watermark?.name || "없음"}
                   onEdit={openTemplateDialog}
                   onDelete={handleTemplateDelete}
                 />

@@ -674,6 +674,11 @@ export default function EditorPage() {
               layout={layout}
               previewWidth={340}
               onScaleChange={handleScaleChange}
+              // REQ-F13 — 고른 템플릿을 **객체 그대로** 넘긴다(서버 응답 항목). 표지·각주·
+              // 워터마크를 따로 넘기지 않는 이유는 WorkbookPreview 주석 참조.
+              // 목록에 없으면(삭제된 템플릿) null 이 되어 미리보기가 아무것도 안 그린다 —
+              // 화면에는 "삭제된 템플릿" 칩이 이미 떠 있다.
+              template={templates.find((t) => t.template_id === selectedTemplateId) || null}
             />
           </Box>
         </PanelCard>
