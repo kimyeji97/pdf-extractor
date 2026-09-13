@@ -39,6 +39,8 @@ import {
   getStatus,
   getWorkbook,
   listCovers,
+  listFootnotes,
+  listWatermarks,
 } from "api/client";
 import { useJobCompletion } from "hooks/useJobCompletion";
 
@@ -61,6 +63,11 @@ export default function EditorPage() {
   const [filenameError, setFilenameError] = useState("");
   const [covers, setCovers] = useState([]);
   const [selectedCoverId, setSelectedCoverId] = useState(null);
+  // REQ-29: 각주·워터마크 선택 — 표지와 같은 패턴(없음 기본, 미선택 시 요청에서 키 자체가 빠진다)
+  const [footnotes, setFootnotes] = useState([]);
+  const [selectedFootnoteId, setSelectedFootnoteId] = useState(null);
+  const [watermarks, setWatermarks] = useState([]);
+  const [selectedWatermarkId, setSelectedWatermarkId] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generateStatus, setGenerateStatus] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
@@ -112,12 +119,14 @@ export default function EditorPage() {
   });
   const resizingRef = useRef(null);
 
-  // REQ-20 복원 + 표지 목록 로드 — 서로 독립적이라 병렬 호출 (REQ-P02-06)
+  // REQ-20 복원 + 표지·각주·워터마크 목록 로드 — 서로 독립적이라 병렬 호출 (REQ-P02-06)
   useEffect(() => {
     Promise.all([
       initialWorkbookId ? getWorkbook(initialWorkbookId).catch(() => null) : Promise.resolve(null),
       listCovers().catch(() => null),
-    ]).then(([meta, coverData]) => {
+      listFootnotes().catch(() => null),
+      listWatermarks().catch(() => null),
+    ]).then(([meta, coverData, footnoteData, watermarkData]) => {
       if (meta) {
         if (meta.layout) setLayout(meta.layout);
         if (meta.selections?.length) {
@@ -153,6 +162,8 @@ export default function EditorPage() {
         }
       }
       setCovers(coverData?.covers || []);
+      setFootnotes(footnoteData?.footnotes || []);
+      setWatermarks(watermarkData?.watermarks || []);
     });
   }, [initialWorkbookId]);
 
@@ -289,6 +300,8 @@ export default function EditorPage() {
         layout,
         selectedCoverId,
         trimmed,
+        selectedFootnoteId,
+        selectedWatermarkId,
       );
       setExportJobId(newExportJobId);
     } catch (e) {
@@ -606,6 +619,149 @@ export default function EditorPage() {
                   />
                   <Typography variant="caption" sx={{ fontSize: 10, px: 0.5 }}>
                     {c.name}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {/* 각주 선택 (REQ-29) — 표지와 같은 자리, 텍스트뿐이라 썸네일 없이 이름만 */}
+          {footnotes.length > 0 && (
+            <Box
+              sx={{
+                px: 2,
+                py: 1,
+                borderBottom: 1,
+                borderColor: "divider",
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                flexShrink: 0,
+                overflowX: "auto",
+              }}
+            >
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                fontWeight={600}
+                sx={{ flexShrink: 0 }}
+              >
+                각주
+              </Typography>
+              <Box
+                onClick={() => setSelectedFootnoteId(null)}
+                sx={{
+                  cursor: "pointer",
+                  px: 1.5,
+                  py: 0.5,
+                  border: 2,
+                  borderColor: !selectedFootnoteId ? "primary.main" : "divider",
+                  borderRadius: 1,
+                  fontSize: 12,
+                  color: !selectedFootnoteId ? "primary.main" : "text.secondary",
+                  flexShrink: 0,
+                }}
+              >
+                없음
+              </Box>
+              {footnotes.map((f) => (
+                <Box
+                  key={f.footnote_id}
+                  onClick={() => setSelectedFootnoteId(f.footnote_id)}
+                  sx={{
+                    cursor: "pointer",
+                    px: 1.5,
+                    py: 0.5,
+                    border: 2,
+                    borderColor:
+                      selectedFootnoteId === f.footnote_id
+                        ? "primary.main"
+                        : "divider",
+                    borderRadius: 1,
+                    fontSize: 12,
+                    color:
+                      selectedFootnoteId === f.footnote_id
+                        ? "primary.main"
+                        : "text.secondary",
+                    flexShrink: 0,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {f.name}
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {/* 워터마크 선택 (REQ-29) — 표지와 완전히 같은 이미지 칩 패턴 */}
+          {watermarks.length > 0 && (
+            <Box
+              sx={{
+                px: 2,
+                py: 1,
+                borderBottom: 1,
+                borderColor: "divider",
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                flexShrink: 0,
+                overflowX: "auto",
+              }}
+            >
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                fontWeight={600}
+                sx={{ flexShrink: 0 }}
+              >
+                워터마크
+              </Typography>
+              <Box
+                onClick={() => setSelectedWatermarkId(null)}
+                sx={{
+                  cursor: "pointer",
+                  px: 1.5,
+                  py: 0.5,
+                  border: 2,
+                  borderColor: !selectedWatermarkId ? "primary.main" : "divider",
+                  borderRadius: 1,
+                  fontSize: 12,
+                  color: !selectedWatermarkId ? "primary.main" : "text.secondary",
+                  flexShrink: 0,
+                }}
+              >
+                없음
+              </Box>
+              {watermarks.map((w) => (
+                <Box
+                  key={w.watermark_id}
+                  onClick={() => setSelectedWatermarkId(w.watermark_id)}
+                  sx={{
+                    cursor: "pointer",
+                    border: 2,
+                    borderColor:
+                      selectedWatermarkId === w.watermark_id
+                        ? "primary.main"
+                        : "divider",
+                    borderRadius: 1,
+                    overflow: "hidden",
+                    flexShrink: 0,
+                    textAlign: "center",
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={`${API_ROOT}${w.thumbnail_url}`}
+                    alt={w.name}
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                  <Typography variant="caption" sx={{ fontSize: 10, px: 0.5 }}>
+                    {w.name}
                   </Typography>
                 </Box>
               ))}

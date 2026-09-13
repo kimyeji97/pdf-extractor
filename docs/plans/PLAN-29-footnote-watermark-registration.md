@@ -1,0 +1,145 @@
+# PLAN-29 · 각주·워터마크 등록 + 생성 PDF 반영
+
+> 출처: 현재 세션 대화(REQ 토큰 전체 이력 조회 — 이전 세션 언급 없음) · 작성: 2026-09-10 · 상태: ✅ 완료 (2026-09-11)
+
+## 배경
+
+문제집 생성 시 지금은 표지(이미지)만 미리 등록해 두고 생성 화면에서 골라 쓸 수 있다.
+사용자가 같은 방식으로 각주·워터마크도 등록해서 쓰고 싶다고 TODO에 남겼다(2026-09-03,
+"표지 등록하는 것 처럼 각주나 워터마크도 등록하면 좋을 듯"). 지금은 그 둘 다 지원하지
+않는다.
+
+이 계획서는 대화 기록이 아니라 이 세션에서 TODO 원문 + 기존 표지 CRUD 코드를 근거로
+사용자에게 직접 확인해 정리한 내용이다 — REQ-29에 대한 이전 논의가 세션 히스토리
+어디에도 없었다(48개 세션 전체 조회, 0건).
+
+## 범위
+
+**포함**
+- 백엔드: 각주 CRUD(`/api/footnotes`) — 이름 + 텍스트 등록·목록·삭제. 이미지가 아니라
+  텍스트를 저장한다는 점만 빼면 표지 CRUD(`cover.py`)와 같은 모양
+- 백엔드: 워터마크 CRUD(`/api/watermarks`) — 표지와 동일하게 이미지 업로드·목록·삭제
+- 백엔드: `ExtractV2Request`에 `footnote_id`·`watermark_id` 추가(둘 다 선택, `cover_id`와
+  같은 패턴 — 문제집 하나당 각각 최대 1개)
+- 백엔드: `pdf_service.py` 생성 파이프라인 — 표지를 제외한 모든 문항 페이지에 각주 텍스트
+  삽입 + 워터마크 이미지 반투명 오버레이
+- 프론트: 기존 "템플릿 관리" 화면(`pages/format`)에 표지·각주·워터마크 3개 탭(또는 섹션)
+  추가 — 각주는 이름+텍스트 입력 폼, 워터마크는 표지와 동일한 이미지 업로드 폼
+- 프론트: 생성 화면에 `footnote_id`·`watermark_id` 선택 UI 추가(`cover_id` 선택과 같은 자리)
+
+**제외**
+- REQ-30(표지·각주·워터마크를 하나의 "템플릿" 엔티티로 조합, 생성 화면에서 `cover_id` 대신
+  `template_id` 선택) — 이번엔 세 가지를 **개별로** 고르는 것까지만. 조합은 REQ-30
+- 각주에 이미지 포함 — 이번엔 텍스트만(사용자 확정)
+- 워터마크에 텍스트 옵션 — 이번엔 이미지만(사용자 확정)
+- 표지 페이지에 각주·워터마크 적용 — 적용 범위는 "표지 제외한 모든 문항 페이지"로
+  확정됨(사용자 확정). 표지는 독립된 통짜 페이지라는 기존 구조(`_prepend_cover_image`)와도
+  맞음
+- 각주·워터마크의 위치·정렬·폰트 크기·투명도 등 세부 스타일을 사용자가 고르게 하는 UI —
+  기본값(아래 결정 표)으로 고정, 사용자가 커스터마이즈하는 기능은 이번 범위 밖
+
+## 결정
+
+| 항목 | 결정 | 근거 | 기각한 안 |
+|------|------|------|-----------|
+| 각주 콘텐츠 형태 | 텍스트만 | 사용자 확정 | 이미지도 가능하게 |
+| 워터마크 형태 | 이미지 — 표지와 동일한 업로드 방식 | 사용자 확정. 기존 `cover.py` 업로드 코드(JPEG/PNG, 10MB 제한)를 거의 그대로 재사용 가능 | 텍스트 워터마크 / 이미지+텍스트 둘 다 |
+| 적용 범위 | 표지를 제외한 모든 문항 페이지 | 사용자 확정 | 표지 포함 전체 페이지 |
+| CRUD 화면 위치 | 기존 "템플릿 관리" 화면(`pages/format`)에 탭 추가 | 사용자 확정 — "D11이 이미 이름만 '표지 관리'→'템플릿 관리'로 바꿔 둔 화면에 실제 기능을 채우는 것"이라는 설명에 동의 | 별도 화면 신설 |
+| REQ-29/REQ-30 순서 | REQ-29는 선행 조건 없이 바로 착수. REQ-30이 REQ-29의 산출물(각주·워터마크)을 조합하는 쪽 | `docs/PROGRESS.md`:633 — "템플릿은 그 결과물을 조합하는 엔티티라 REQ-29 → REQ-30 순서가 문서상 확정적이다". 같은 문서 171행("REQ-29 선행")과도 일치. 로드맵 순서(F12 → REQ-29 → REQ-30)도 동일 | `PROGRESS.md`:170의 "REQ-30 선행" 표기 — 위 두 근거와 모순돼 단순 오기로 판단(`/checkpoint`에서 정정 제안) |
+| 각주 위치·정렬 | 페이지 하단, 좌측 정렬, 작은 글씨 | 사용자 확정 | 하단 중앙 정렬(저작권 문구 관례) |
+| 워터마크 배치 | 페이지 중앙, 크게, 낮은 투명도(문항 텍스트를 가리지 않는 정도) | 사용자 확정 | 하단 구석에 작게(로고처럼) |
+| 워터마크 업로드 제한 | 표지와 동일 — JPEG/PNG만, 최대 10MB | 사용자 확정. 기존 `cover.py`의 `_ALLOWED_TYPES`·`_MAX_SIZE` 그대로 재사용 | 워터마크 전용 제한(예: PNG만 — 투명도 지원 필수) |
+
+## 미결 질문
+
+(없음 — 착수 전 미결 전부 해소, 2026-09-10)
+
+## 작업 단계
+
+- [x] **Phase 1** — 백엔드: 각주·워터마크 CRUD + 생성 파이프라인 반영
+      `/api/footnotes`·`/api/watermarks` CRUD(표지 라우터와 같은 모양). `ExtractV2Request`에
+      `footnote_id`·`watermark_id` 추가. `pdf_service.py`가 표지를 제외한 모든 문항 페이지에
+      각주 텍스트(`TextWriter`+`fitz.Font("korea")`, 계약 #10)와 워터마크 이미지를 반영.
+      완료 기준: 각주·워터마크 등록·조회·삭제 API가 동작. `footnote_id`·`watermark_id`를
+      지정해 생성하면 결과 PDF의 표지를 제외한 모든 페이지에 반영됨(둘 다 미지정이면 기존과
+      동일하게 아무것도 안 붙음).
+
+- [x] **Phase 2** — 프론트: 템플릿 관리 탭 + 생성 화면 선택 UI
+      "템플릿 관리" 화면에 표지·각주·워터마크 3개 탭. 각주는 이름+텍스트 입력 폼, 워터마크는
+      표지와 동일한 이미지 업로드 폼. 생성 화면에 `footnote_id`·`watermark_id` 선택 UI를
+      `cover_id`와 같은 자리에 추가.
+      완료 기준: 템플릿 관리에서 각주·워터마크를 등록·목록 조회·삭제할 수 있음. 생성 화면에서
+      선택해 만든 PDF에 실제로 반영됨(Phase 1 API와 end-to-end 연동 확인).
+      ⚠️ **자동 테스트로 확인한 범위는 "체인이 끊기지 않았다"까지다** — `editor/index.jsx`·
+      `format/index.jsx`는 API mock이 여러 개 필요해 렌더 무대가 없어(D11 로그와 동일 결론)
+      실제 화면 클릭 → PDF 다운로드 → 육안 확인은 하지 않았다. 각 연결 고리는 개별 검증됨
+      (선택 상태 → `startExtractV2` 인자 전달: 29-28 소스 스캔 / 인자 → 요청 body: 29-22
+      단위 테스트 / body → PDF 반영: 29-11~13 백엔드 단위 테스트)이지만 브라우저 실측은
+      남은 위험이다(Phase 1의 s3 스토리지 미검증과 같은 성격의 잔여 위험).
+
+## 제약·함정
+
+- PDF 한글 텍스트는 `TextWriter` + `fitz.Font("korea")`를 써야 한다(계약 #10) — PyMuPDF
+  1.25.5엔 `Document.add_font`가 없어 helv로 폴백되면 각주의 한글이 점으로 깨진다. 기존 문항
+  라벨 렌더링이 이미 이 방식을 쓰고 있으니 그대로 재사용할 것.
+- 표지 삽입(`_prepend_cover_image`)은 원본 grid PDF **앞에 새 문서를 통째로 붙이는** 구조라
+  각주·워터마크 삽입 로직과 순서가 꼬이기 쉽다 — 표지는 그 삽입 이후에 별도로 존재하는
+  페이지이므로, 각주·워터마크는 표지 삽입 **이전**(grid 문서 자체)에 적용해야 "표지 제외"
+  범위가 자연스럽게 맞는다.
+- 워크북 메타 저장 시점(계약 #23, 표지와 동일 성질) — `footnote_id`·`watermark_id`는 생성
+  시점에 PDF 픽셀/텍스트로 박아 넣고 끝나는 값이라 표지처럼 별도 저장 주체 이슈가 없다.
+  재생성 개념도 없다(생성된 PDF는 고정 산출물).
+- `extract_questions_v2`는 이 레포에 직접 테스트한 선례가 없다 — 유일하게 건드리는 기존
+  테스트(`test_notification_hooks.py`)도 함수 전체를 monkeypatch로 갈아치울 뿐 내부 로직은
+  보지 않는다. `work.jsx`(PLAN-B12)와 같은 성격의 "검증 무대가 없는 함수"로 보고, 각주·
+  워터마크를 PDF에 그리는 로직은 독립 함수(`_apply_footnote`·`_apply_watermark`)로 빼서
+  거기서만 완전한 단위 테스트를 하고, `extract_questions_v2` 안의 배선은 소스 스캔으로만
+  확인한다(2026-09-10, `/testgen` 착수 중 결정).
+- PyMuPDF `Page.insert_image()`의 `mask` 인자는 `Pixmap`이 아니라 bytes-like(png 등)여야
+  하고, `pixmap=`이 아니라 `stream=`(원본 이미지 바이트)과 짝을 이뤄야 한다 — `mask`에
+  `Pixmap` 객체를 그대로 넘기면 `TypeError`, `pixmap=`과 같이 쓰면 `mask requires stream or
+  filename` `ValueError`가 난다(실측, PyMuPDF `utils.py` `insert_image` 소스로 확인).
+  워터마크 같은 반투명 이미지 삽입에서 재발할 함정이라 CLAUDE.md 계약 승격 제안(아래).
+
+## 검증 계약
+
+> 작성: 2026-09-10 · 계획서: 본 문서 (별도 스펙 없음) · 검증: `/testrun 29`
+> 테스트: `backend/tests/test_footnote_watermark_api.py`(29-01~10) ·
+> `backend/tests/test_pdf_service_overlay.py`(29-11~15) ·
+> `frontend/src/api/client.footnoteWatermark.test.js`(29-16~23, `global.fetch` 모킹 — 렌더 불필요) ·
+> `frontend/src/pages/format/footnoteWatermarkTabs.test.js`(29-24~25, 소스 스캔) ·
+> `frontend/src/pages/editor/footnoteWatermarkSelect.test.js`(29-26~28, 소스 스캔 —
+> `editor/index.jsx`·`format/index.jsx`는 렌더 무대가 없다, D11 로그 "편집·표지 화면은
+> 렌더 무대(API mock)가 없어"와 동일 결론)
+
+| ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
+|----|------|--------|:----:|------|:----:|:----:|
+| 29-01 | `POST /api/footnotes` | 이름+텍스트 등록 → 201, `footnote_id` 발급 | 정상 | PLAN § 범위 — "텍스트를 저장한다는 점만 빼면 표지 CRUD(`cover.py`)와 같은 모양" | 1 | ✅ |
+| 29-02 | `GET /api/footnotes` | 등록한 각주가 목록에 나타남 | 정상 | 위와 동일 | 1 | ✅ |
+| 29-03 | `DELETE /api/footnotes/{id}` | 삭제 후 목록에서 빠짐 | 정상 | 위와 동일 | 1 | ✅ |
+| 29-04 | `DELETE /api/footnotes/{id}` | 존재하지 않는 id → 404 | 예외 | 위와 동일(cover.py 기존 패턴) | 1 | ✅ |
+| 29-05 | `POST /api/watermarks` | 이미지 업로드 → 201, `watermark_id` 발급 | 정상 | PLAN § 범위 — "워터마크 CRUD(`/api/watermarks`) — 표지와 동일하게 이미지 업로드·목록·삭제" | 1 | ✅ |
+| 29-06 | `GET /api/watermarks` | 등록한 워터마크가 목록에 나타남 | 정상 | 위와 동일 | 1 | ✅ |
+| 29-07 | `GET /api/watermarks/{id}/image` | 이미지 바이트 반환 | 정상 | 위와 동일 | 1 | ✅ |
+| 29-08 | `DELETE /api/watermarks/{id}` | 삭제 후 목록에서 빠짐 | 정상 | 위와 동일 | 1 | ✅ |
+| 29-09 | `POST /api/watermarks` | 허용 안 된 형식(WEBP) 업로드 → 400 | 예외 | PLAN § 결정 — "표지와 동일 — JPEG/PNG만, 최대 10MB" | 1 | ✅ |
+| 29-10 | `POST /api/watermarks` | 10MB 초과 업로드 → 400 | 경계 | 위와 동일 | 1 | ✅ |
+| 29-11 | `_apply_footnote()` | 모든 페이지 하단·좌측에 각주 텍스트가 삽입됨 | 정상 | PLAN § 결정 — "페이지 하단, 좌측 정렬, 작은 글씨" | 1 | ✅ |
+| 29-12 | `_apply_watermark()` | 모든 페이지에 워터마크 이미지가 삽입됨 | 정상 | PLAN § 결정 — "페이지 중앙, 크게, 낮은 투명도(문항 텍스트를 가리지 않는 정도)" | 1 | ✅ |
+| 29-13 | `extract_questions_v2`(소스 스캔) | `footnote_id` 지정 시 `_apply_footnote` 호출 배선이 있다 | 정상 | PLAN § Phase 1 — "각주·워터마크 등록·조회·삭제 API가 동작." | 1 | ✅ |
+| 29-14 | `extract_questions_v2`(소스 스캔) | 둘 다 미지정이면 각주·워터마크 관련 호출이 조건문 밖에 있다(항상 실행 아님) | 회귀 | PLAN § Phase 1 — "동일하게 아무것도 안 붙음)." | 1 | ✅ |
+| 29-15 | `extract_questions_v2`(소스 스캔) | `_apply_footnote`/`_apply_watermark` 호출이 표지 삽입(`_prepend_cover_image`) 이전에 온다 | 회귀 | PLAN § 제약·함정 — "표지 삽입(`_prepend_cover_image`)은 원본 grid PDF **앞에 새 문서를 통째로 붙이는** 구조라" | 1 | ✅ |
+| 29-16 | `createFootnote()` | POST `/footnotes`에 이름·텍스트를 JSON body로 보낸다 | 정상 | PLAN § 범위 — "텍스트를 저장한다는 점만 빼면 표지 CRUD(`cover.py`)와 같은 모양" | 2 | ✅ |
+| 29-17 | `listFootnotes()` | GET `/footnotes`를 호출한다 | 정상 | 위와 동일 | 2 | ✅ |
+| 29-18 | `deleteFootnote()` | DELETE `/footnotes/{id}`를 호출한다 | 정상 | 위와 동일 | 2 | ✅ |
+| 29-19 | `uploadWatermark()` | POST `/watermarks`에 파일을 FormData로 보낸다 | 정상 | PLAN § 범위 — "워터마크 CRUD(`/api/watermarks`) — 표지와 동일하게 이미지 업로드·목록·삭제" | 2 | ✅ |
+| 29-20 | `listWatermarks()` | GET `/watermarks`를 호출한다 | 정상 | 위와 동일 | 2 | ✅ |
+| 29-21 | `deleteWatermark()` | DELETE `/watermarks/{id}`를 호출한다 | 정상 | 위와 동일 | 2 | ✅ |
+| 29-22 | `startExtractV2()` | `footnoteId`·`watermarkId`를 주면 body에 `footnote_id`·`watermark_id`로 실린다 | 정상 | PLAN § 범위 — "`ExtractV2Request`에 `footnote_id`·`watermark_id` 추가(둘 다 선택, `cover_id`와" | 2 | ✅ |
+| 29-23 | `startExtractV2()` | 둘 다 안 주면 body에 그 키 자체가 없다 | 회귀 | 위와 동일 | 2 | ✅ |
+| 29-24 | `format/index.jsx`(소스 스캔) | 각주 등록 배선(`createFootnote`/`listFootnotes` 사용)이 있다 | 정상 | PLAN § 결정 — "기존 \"템플릿 관리\" 화면(`pages/format`)에 탭 추가" | 2 | ✅ |
+| 29-25 | `format/index.jsx`(소스 스캔) | 워터마크 등록 배선(`uploadWatermark`/`listWatermarks` 사용)이 있다 | 정상 | 위와 동일 | 2 | ✅ |
+| 29-26 | `editor/index.jsx`(소스 스캔) | 각주 선택 배선(`listFootnotes` 호출 + 선택 상태)이 있다 | 정상 | PLAN § 범위 — "생성 화면에 `footnote_id`·`watermark_id` 선택 UI 추가(`cover_id` 선택과 같은 자리)" | 2 | ✅ |
+| 29-27 | `editor/index.jsx`(소스 스캔) | 워터마크 선택 배선(`listWatermarks` 호출 + 선택 상태)이 있다 | 정상 | 위와 동일 | 2 | ✅ |
+| 29-28 | `editor/index.jsx`(소스 스캔) | `startExtractV2` 호출에 선택한 각주·워터마크 id가 인자로 전달된다 | 정상 | 위와 동일 | 2 | ✅ |

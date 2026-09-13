@@ -124,7 +124,8 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
     layout = req.layout or "2단"
     cover_id = req.cover_id
     background_tasks.add_task(
-        _process_extraction_v2, req.selections, export_job_id, layout, cover_id, req.workbook_name
+        _process_extraction_v2, req.selections, export_job_id, layout, cover_id,
+        req.workbook_name, req.footnote_id, req.watermark_id,
     )
     return ExtractV2Response(job_id=export_job_id)
 
@@ -178,6 +179,8 @@ def _process_extraction_v2(
     layout: str = "2단",
     cover_id: str | None = None,
     workbook_name: str | None = None,
+    footnote_id: str | None = None,
+    watermark_id: str | None = None,
 ) -> None:
     export_status = storage.get_status(export_job_id)
     export_status.status = JobStatus.PROCESSING
@@ -193,6 +196,8 @@ def _process_extraction_v2(
                 tmpdir,
                 layout,
                 cover_id,
+                footnote_id,
+                watermark_id,
             ).result()
             export_status.status = JobStatus.DONE
             export_status.result_key = storage.result_key(export_job_id)
