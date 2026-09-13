@@ -38,15 +38,11 @@ import {
   startExtractV2,
   getStatus,
   getWorkbook,
-  listCovers,
-  listFootnotes,
-  listWatermarks,
+  listTemplates,
 } from "api/client";
+import { tintSx } from "theme/tint";
 import { useJobCompletion } from "hooks/useJobCompletion";
 
-const API_ROOT = (
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"
-).replace(/\/api$/, "");
 const LAYOUTS = ["세로 2단", "가로 2단", "4단", "6단"];
 
 export default function EditorPage() {
@@ -61,13 +57,11 @@ export default function EditorPage() {
   const todayStr = new Date().toISOString().slice(0, 10);
   const [filename, setFilename] = useState(`문제집_${todayStr}`);
   const [filenameError, setFilenameError] = useState("");
-  const [covers, setCovers] = useState([]);
-  const [selectedCoverId, setSelectedCoverId] = useState(null);
-  // REQ-29: 각주·워터마크 선택 — 표지와 같은 패턴(없음 기본, 미선택 시 요청에서 키 자체가 빠진다)
-  const [footnotes, setFootnotes] = useState([]);
-  const [selectedFootnoteId, setSelectedFootnoteId] = useState(null);
-  const [watermarks, setWatermarks] = useState([]);
-  const [selectedWatermarkId, setSelectedWatermarkId] = useState(null);
+  // REQ-30: 표지·각주·워터마크를 **따로** 고르던 칩 3줄을 템플릿 1줄로 대체했다.
+  // 서버의 `cover_id`·`footnote_id`·`watermark_id` 필드는 구 프론트 호환으로 남아 있지만
+  // 이 화면은 더 이상 보내지 않는다(계획서 § 결정 "생성 화면 선택 UI").
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generateStatus, setGenerateStatus] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
@@ -123,10 +117,8 @@ export default function EditorPage() {
   useEffect(() => {
     Promise.all([
       initialWorkbookId ? getWorkbook(initialWorkbookId).catch(() => null) : Promise.resolve(null),
-      listCovers().catch(() => null),
-      listFootnotes().catch(() => null),
-      listWatermarks().catch(() => null),
-    ]).then(([meta, coverData, footnoteData, watermarkData]) => {
+      listTemplates().catch(() => null),
+    ]).then(([meta, templateData]) => {
       if (meta) {
         if (meta.layout) setLayout(meta.layout);
         if (meta.selections?.length) {
@@ -161,9 +153,11 @@ export default function EditorPage() {
           );
         }
       }
-      setCovers(coverData?.covers || []);
-      setFootnotes(footnoteData?.footnotes || []);
-      setWatermarks(watermarkData?.watermarks || []);
+      setTemplates(templateData?.templates || []);
+      // REQ-30: 이력 → 편집 복원 시 템플릿도 되살린다. 안 하면 사용자가 아무것도 안 바꿨는데
+      // 재생성 결과가 달라진다(계약 #22·#23과 같은 모양). 그 사이 템플릿이 삭제됐다면
+      // id 만 남고 목록에는 없는데, 그 상태를 화면이 "삭제된 템플릿"으로 드러낸다.
+      if (meta?.template_id) setSelectedTemplateId(meta.template_id);
     });
   }, [initialWorkbookId]);
 
@@ -295,13 +289,16 @@ export default function EditorPage() {
         workbookName: b.workbookName || undefined,
         sourceFilename: b.sourceFilename || undefined,
       }));
+      // REQ-30: 표지·각주·워터마크는 템플릿이 서버에서 풀린다 — 여기서는 안 보낸다.
+      // 자리(3·5·6번째 인자)는 구 프론트 호환으로 남아 있는 표면이라 null 로 채운다.
       const { job_id: newExportJobId } = await startExtractV2(
         selections,
         layout,
-        selectedCoverId,
+        null,
         trimmed,
-        selectedFootnoteId,
-        selectedWatermarkId,
+        null,
+        null,
+        selectedTemplateId,
       );
       setExportJobId(newExportJobId);
     } catch (e) {
@@ -550,8 +547,10 @@ export default function EditorPage() {
             </Alert>
           )}
 
-          {/* 표지 선택 */}
-          {covers.length > 0 && (
+          {/* ── 템플릿 선택 (REQ-30) ──────────────────────────
+              종전에는 표지·각주·워터마크 칩 행이 **3줄** 쌓여 있었다. 템플릿 하나를 고르면
+              셋이 함께 따라오므로 1줄로 접었다(계획서 § 결정 "생성 화면 선택 UI"). */}
+          {(templates.length > 0 || selectedTemplateId) && (
             <Box
               sx={{
                 px: 2,
@@ -571,200 +570,88 @@ export default function EditorPage() {
                 fontWeight={600}
                 sx={{ flexShrink: 0 }}
               >
-                표지
+                템플릿
               </Typography>
               <Box
-                onClick={() => setSelectedCoverId(null)}
+                onClick={() => setSelectedTemplateId(null)}
                 sx={{
                   cursor: "pointer",
                   px: 1.5,
                   py: 0.5,
                   border: 2,
-                  borderColor: !selectedCoverId ? "primary.main" : "divider",
+                  borderColor: !selectedTemplateId ? "primary.main" : "divider",
                   borderRadius: 1,
                   fontSize: 12,
-                  color: !selectedCoverId ? "primary.main" : "text.secondary",
+                  color: !selectedTemplateId ? "primary.main" : "text.secondary",
                   flexShrink: 0,
                 }}
               >
                 없음
               </Box>
-              {covers.map((c) => (
+              {templates.map((t) => (
                 <Box
-                  key={c.cover_id}
-                  onClick={() => setSelectedCoverId(c.cover_id)}
-                  sx={{
-                    cursor: "pointer",
-                    border: 2,
-                    borderColor:
-                      selectedCoverId === c.cover_id
-                        ? "primary.main"
-                        : "divider",
-                    borderRadius: 1,
-                    overflow: "hidden",
-                    flexShrink: 0,
-                    textAlign: "center",
-                  }}
-                >
-                  <Box
-                    component="img"
-                    src={`${API_ROOT}${c.thumbnail_url}`}
-                    alt={c.name}
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                  />
-                  <Typography variant="caption" sx={{ fontSize: 10, px: 0.5 }}>
-                    {c.name}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          )}
-
-          {/* 각주 선택 (REQ-29) — 표지와 같은 자리, 텍스트뿐이라 썸네일 없이 이름만 */}
-          {footnotes.length > 0 && (
-            <Box
-              sx={{
-                px: 2,
-                py: 1,
-                borderBottom: 1,
-                borderColor: "divider",
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                flexShrink: 0,
-                overflowX: "auto",
-              }}
-            >
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                fontWeight={600}
-                sx={{ flexShrink: 0 }}
-              >
-                각주
-              </Typography>
-              <Box
-                onClick={() => setSelectedFootnoteId(null)}
-                sx={{
-                  cursor: "pointer",
-                  px: 1.5,
-                  py: 0.5,
-                  border: 2,
-                  borderColor: !selectedFootnoteId ? "primary.main" : "divider",
-                  borderRadius: 1,
-                  fontSize: 12,
-                  color: !selectedFootnoteId ? "primary.main" : "text.secondary",
-                  flexShrink: 0,
-                }}
-              >
-                없음
-              </Box>
-              {footnotes.map((f) => (
-                <Box
-                  key={f.footnote_id}
-                  onClick={() => setSelectedFootnoteId(f.footnote_id)}
+                  key={t.template_id}
+                  onClick={() => setSelectedTemplateId(t.template_id)}
                   sx={{
                     cursor: "pointer",
                     px: 1.5,
                     py: 0.5,
                     border: 2,
                     borderColor:
-                      selectedFootnoteId === f.footnote_id
+                      selectedTemplateId === t.template_id
                         ? "primary.main"
                         : "divider",
                     borderRadius: 1,
                     fontSize: 12,
                     color:
-                      selectedFootnoteId === f.footnote_id
+                      selectedTemplateId === t.template_id
                         ? "primary.main"
                         : "text.secondary",
                     flexShrink: 0,
-                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.75,
                   }}
                 >
-                  {f.name}
+                  {t.name}
+                  {/* 강제 삭제로 구성이 바뀐 템플릿. 색은 계약 #20 때문에 tintSx 로 낸다 —
+                      `warning.lighter` 는 라이트/다크 공유값이라 다크에서 파스텔 블록이 박힌다. */}
+                  {t.needs_review && (
+                    <Box
+                      component="span"
+                      sx={(theme) => ({
+                        ...tintSx("warning")(theme),
+                        px: 0.5,
+                        borderRadius: 0.5,
+                        fontSize: 10,
+                        fontWeight: 600,
+                      })}
+                    >
+                      구성 변경됨 · 확인 필요
+                    </Box>
+                  )}
                 </Box>
               ))}
-            </Box>
-          )}
-
-          {/* 워터마크 선택 (REQ-29) — 표지와 완전히 같은 이미지 칩 패턴 */}
-          {watermarks.length > 0 && (
-            <Box
-              sx={{
-                px: 2,
-                py: 1,
-                borderBottom: 1,
-                borderColor: "divider",
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                flexShrink: 0,
-                overflowX: "auto",
-              }}
-            >
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                fontWeight={600}
-                sx={{ flexShrink: 0 }}
-              >
-                워터마크
-              </Typography>
-              <Box
-                onClick={() => setSelectedWatermarkId(null)}
-                sx={{
-                  cursor: "pointer",
-                  px: 1.5,
-                  py: 0.5,
-                  border: 2,
-                  borderColor: !selectedWatermarkId ? "primary.main" : "divider",
-                  borderRadius: 1,
-                  fontSize: 12,
-                  color: !selectedWatermarkId ? "primary.main" : "text.secondary",
-                  flexShrink: 0,
-                }}
-              >
-                없음
-              </Box>
-              {watermarks.map((w) => (
-                <Box
-                  key={w.watermark_id}
-                  onClick={() => setSelectedWatermarkId(w.watermark_id)}
-                  sx={{
-                    cursor: "pointer",
-                    border: 2,
-                    borderColor:
-                      selectedWatermarkId === w.watermark_id
-                        ? "primary.main"
-                        : "divider",
-                    borderRadius: 1,
-                    overflow: "hidden",
-                    flexShrink: 0,
-                    textAlign: "center",
-                  }}
-                >
+              {/* 복원한 템플릿이 그 사이 삭제된 경우. 생성 버튼을 누르면 서버가 400 으로
+                  막지만(E), 누르기 전에 여기서 먼저 보인다. */}
+              {selectedTemplateId &&
+                !templates.some((t) => t.template_id === selectedTemplateId) && (
                   <Box
-                    component="img"
-                    src={`${API_ROOT}${w.thumbnail_url}`}
-                    alt={w.name}
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                  />
-                  <Typography variant="caption" sx={{ fontSize: 10, px: 0.5 }}>
-                    {w.name}
-                  </Typography>
-                </Box>
-              ))}
+                    onClick={() => setSelectedTemplateId(null)}
+                    sx={(theme) => ({
+                      ...tintSx("error")(theme),
+                      cursor: "pointer",
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: 1,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    })}
+                  >
+                    삭제된 템플릿 · 다시 선택해 주세요
+                  </Box>
+                )}
             </Box>
           )}
 

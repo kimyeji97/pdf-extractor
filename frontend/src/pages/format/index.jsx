@@ -1,9 +1,12 @@
 /**
  * 템플릿 관리 페이지 (REQ-D06 표지 관리 → REQ-D11 이름 변경 → REQ-29 각주·워터마크 탭 추가)
  *
- * 탭 3개: 표지 · 각주 · 워터마크. 표지·워터마크는 같은 모양(1패널 목록형 + 업로드 모달)이고,
- * 각주만 이미지 대신 이름+텍스트 입력 폼이다(REQ-29 § 결정 "각주 콘텐츠 형태").
- * REQ-30(템플릿 조합)이 이 셋을 묶는 UI를 이 화면 위에 추가할 예정 — 지금은 개별 등록까지만.
+ * 탭 4개: 표지 · 각주 · 워터마크 · 템플릿. 표지·워터마크는 같은 모양(1패널 목록형 + 업로드
+ * 모달)이고, 각주만 이미지 대신 이름+텍스트 입력 폼이다(REQ-29 § 결정 "각주 콘텐츠 형태").
+ * 템플릿(REQ-30)은 앞의 셋을 **참조로** 묶는 조합이다(ADR-0004) — 값을 복사하지 않는다.
+ *
+ * ⚠️ 자산 삭제는 템플릿이 참조 중이면 409 로 막힌다(A′). 그때 서버가 주는 템플릿 이름을
+ *    보여주고, 사용자가 동의하면 `force` 로 다시 부른다 — cascade 를 **알고 고르는** 형태다.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import Box from "@mui/material/Box";
@@ -25,10 +28,12 @@ import { Icon } from "@iconify/react";
 
 import PageHeader from "components/PageHeader";
 import BookCard, { BOOK_CARD_W } from "components/BookCard";
+import { tintSx } from "theme/tint";
 import {
   listCovers, uploadCover, deleteCover,
   listFootnotes, createFootnote, deleteFootnote,
   listWatermarks, uploadWatermark, deleteWatermark,
+  listTemplates, createTemplate, updateTemplate, deleteTemplate,
 } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
@@ -126,8 +131,80 @@ function FootnoteCard({ footnote, onDelete }) {
   );
 }
 
+/**
+ * 템플릿 카드 (REQ-30)
+ *
+ * 구성 3줄(표지·각주·워터마크)을 이름으로 보여준다. `needs_review` 면 **"구성 변경됨"** 칩을
+ * 붙인다 — 강제 삭제로 슬롯이 비워졌다는 뜻이고, 사용자가 한 번 열어 확인(수정)하면 내려간다.
+ *
+ * ⚠️ 칩 색은 `warning.lighter` 가 아니라 `tintSx('warning')` 다. 팔레트의 `*.lighter` 는
+ *    라이트/다크가 **공유**하는 값이라 다크에서 어두운 화면에 파스텔 블록이 박힌다(계약 #20).
+ *    `tintSx` 는 **함수를 반환**하므로 sx 를 함수 형태로 받아 호출해야 한다 — 객체 sx 에
+ *    스프레드하면 아무것도 안 들어가고 에러도 안 난다.
+ */
+function TemplateCard({ template, coverName, footnoteName, watermarkName, onEdit, onDelete }) {
+  const rows = [
+    ["표지", coverName],
+    ["각주", footnoteName],
+    ["워터마크", watermarkName],
+  ];
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        width: BOOK_CARD_W, height: COVER_H, flexShrink: 0,
+        p: 1.5, display: "flex", flexDirection: "column", gap: 0.5,
+        borderRadius: 2, boxShadow: (theme) => theme.customShadows?.card,
+        position: "relative", cursor: "pointer",
+      }}
+      onClick={() => onEdit(template)}
+    >
+      <Tooltip title="삭제">
+        <IconButton
+          size="small"
+          onClick={(e) => { e.stopPropagation(); onDelete(template.template_id); }}
+          sx={{
+            position: "absolute", top: 6, right: 6,
+            bgcolor: "background.paper", color: "error.main",
+            opacity: 0.92, "&:hover": { opacity: 1 },
+          }}
+        >
+          <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />
+        </IconButton>
+      </Tooltip>
+      <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ pr: 3 }}>
+        {template.name || "이름 없음"}
+      </Typography>
+      {template.needs_review && (
+        <Box
+          sx={(theme) => ({
+            ...tintSx("warning")(theme),
+            alignSelf: "flex-start",
+            px: 0.75, py: 0.25, borderRadius: 1,
+            fontSize: 11, fontWeight: 600,
+          })}
+        >
+          구성 변경됨 · 확인 필요
+        </Box>
+      )}
+      <Box sx={{ mt: 0.5, display: "flex", flexDirection: "column", gap: 0.25 }}>
+        {rows.map(([label, value]) => (
+          <Box key={label} sx={{ display: "flex", gap: 1 }}>
+            <Typography variant="caption" color="text.disabled" sx={{ width: 52, flexShrink: 0 }}>
+              {label}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {value}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    </Paper>
+  );
+}
+
 export default function FormatPage() {
-  const [tab, setTab] = useState(0);   // 0=표지 · 1=각주 · 2=워터마크
+  const [tab, setTab] = useState(0);   // 0=표지 · 1=각주 · 2=워터마크 · 3=템플릿 (REQ-30)
 
   // ── 표지 ──────────────────────────────────────────────
   const [covers, setCovers]         = useState([]);
@@ -189,7 +266,14 @@ export default function FormatPage() {
     try {
       await deleteCover(coverId);
       setCovers((prev) => prev.filter((c) => c.cover_id !== coverId));
-    } catch (e) { alert(e.message); }
+    } catch (e) {
+      if (!(await confirmForceDelete(e))) return;
+      try {
+        await deleteCover(coverId, { force: true });
+        setCovers((prev) => prev.filter((c) => c.cover_id !== coverId));
+        await fetchTemplates();
+      } catch (e2) { alert(e2.message); }
+    }
   };
 
   // ── 각주 (REQ-29) ─────────────────────────────────────
@@ -234,7 +318,14 @@ export default function FormatPage() {
     try {
       await deleteFootnote(footnoteId);
       setFootnotes((prev) => prev.filter((f) => f.footnote_id !== footnoteId));
-    } catch (e) { alert(e.message); }
+    } catch (e) {
+      if (!(await confirmForceDelete(e))) return;
+      try {
+        await deleteFootnote(footnoteId, { force: true });
+        setFootnotes((prev) => prev.filter((f) => f.footnote_id !== footnoteId));
+        await fetchTemplates();
+      } catch (e2) { alert(e2.message); }
+    }
   };
 
   // ── 워터마크 (REQ-29) — 표지와 완전히 동일한 업로드 방식 ──
@@ -297,11 +388,111 @@ export default function FormatPage() {
     try {
       await deleteWatermark(watermarkId);
       setWatermarks((prev) => prev.filter((w) => w.watermark_id !== watermarkId));
+    } catch (e) {
+      if (!(await confirmForceDelete(e))) return;
+      try {
+        await deleteWatermark(watermarkId, { force: true });
+        setWatermarks((prev) => prev.filter((w) => w.watermark_id !== watermarkId));
+        await fetchTemplates();
+      } catch (e2) { alert(e2.message); }
+    }
+  };
+
+  // ── 템플릿 (REQ-30) — 앞의 셋을 참조로 묶는 조합 ──────────
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError]     = useState("");
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateSaving, setTemplateSaving]     = useState(false);
+  const [templateSaveError, setTemplateSaveError] = useState("");
+  const [editingTemplate, setEditingTemplate]   = useState(null);   // null 이면 신규
+  const [templateName, setTemplateName]         = useState("");
+  const [templateCoverId, setTemplateCoverId]         = useState("");
+  const [templateFootnoteId, setTemplateFootnoteId]   = useState("");
+  const [templateWatermarkId, setTemplateWatermarkId] = useState("");
+
+  const fetchTemplates = useCallback(async () => {
+    setTemplatesLoading(true); setTemplatesError("");
+    try {
+      const data = await listTemplates();
+      setTemplates(data.templates || []);
+    } catch (e) { setTemplatesError(e.message); }
+    finally     { setTemplatesLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+
+  /**
+   * 자산 삭제가 409 로 막혔을 때의 강제 삭제 확인 (A′).
+   *
+   * 409 가 아니면 그냥 알리고 끝낸다 — 강제 삭제로 넘길 일이 아니다.
+   * 409 면 서버가 준 문구(사용 중인 템플릿 이름)를 **그대로** 보여준다.
+   */
+  const confirmForceDelete = async (error) => {
+    if (error?.status !== 409) { alert(error.message); return false; }
+    return confirm(
+      `${error.message}\n\n` +
+      "그래도 삭제하면 해당 템플릿에서 이 항목이 빠지고 '구성 변경됨'으로 표시됩니다.\n삭제할까요?"
+    );
+  };
+
+  const openTemplateDialog = (template = null) => {
+    setTemplateSaveError("");
+    setEditingTemplate(template);
+    setTemplateName(template?.name || "");
+    setTemplateCoverId(template?.cover_id || "");
+    setTemplateFootnoteId(template?.footnote_id || "");
+    setTemplateWatermarkId(template?.watermark_id || "");
+    setTemplateDialogOpen(true);
+  };
+  const closeTemplateDialog = () => { if (!templateSaving) setTemplateDialogOpen(false); };
+
+  const handleTemplateSave = async () => {
+    if (!templateName.trim() || templateSaving) return;
+    // 빈 템플릿은 "템플릿 없음"과 결과가 같아 서버가 400 으로 막는다. 누르기 전에 알린다.
+    if (!templateCoverId && !templateFootnoteId && !templateWatermarkId) {
+      setTemplateSaveError("표지·각주·워터마크 중 최소 하나는 선택해야 합니다."); return;
+    }
+    setTemplateSaving(true); setTemplateSaveError("");
+    try {
+      if (editingTemplate) {
+        // PATCH 는 **실은 키만** 바꾼다. 슬롯을 비우려면 null 을 명시해야 하므로
+        // 빈 문자열을 null 로 바꿔 네 필드를 모두 싣는다.
+        await updateTemplate(editingTemplate.template_id, {
+          name: templateName.trim(),
+          cover_id: templateCoverId || null,
+          footnote_id: templateFootnoteId || null,
+          watermark_id: templateWatermarkId || null,
+        });
+      } else {
+        await createTemplate(
+          templateName.trim(),
+          templateCoverId || null,
+          templateFootnoteId || null,
+          templateWatermarkId || null,
+        );
+      }
+      setTemplateDialogOpen(false);
+      await fetchTemplates();
+    } catch (e) { setTemplateSaveError(e.message); }
+    finally     { setTemplateSaving(false); }
+  };
+
+  const handleTemplateDelete = async (templateId) => {
+    if (!confirm("이 템플릿을 삭제하시겠습니까?")) return;
+    try {
+      await deleteTemplate(templateId);
+      setTemplates((prev) => prev.filter((t) => t.template_id !== templateId));
     } catch (e) { alert(e.message); }
   };
 
-  const refreshing = tab === 0 ? coversLoading : tab === 1 ? footnotesLoading : watermarksLoading;
-  const refresh = tab === 0 ? fetchCovers : tab === 1 ? fetchFootnotes : fetchWatermarks;
+  const assetName = (list, idField, id, fallback) =>
+    id ? (list.find((x) => x[idField] === id)?.name || "(삭제됨)") : fallback;
+
+  const refreshing = tab === 0 ? coversLoading : tab === 1 ? footnotesLoading
+    : tab === 2 ? watermarksLoading : templatesLoading;
+  const refresh = tab === 0 ? fetchCovers : tab === 1 ? fetchFootnotes
+    : tab === 2 ? fetchWatermarks : fetchTemplates;
 
   return (
     <Box sx={{
@@ -329,6 +520,7 @@ export default function FormatPage() {
         <Tab label="표지" sx={{ minHeight: 36 }} />
         <Tab label="각주" sx={{ minHeight: 36 }} />
         <Tab label="워터마크" sx={{ minHeight: 36 }} />
+        <Tab label="템플릿" sx={{ minHeight: 36 }} />
       </Tabs>
 
       {tab === 0 && coversError && (
@@ -339,6 +531,9 @@ export default function FormatPage() {
       )}
       {tab === 2 && watermarksError && (
         <Alert severity="error" sx={{ flexShrink: 0 }} onClose={() => setWatermarksError("")}>{watermarksError}</Alert>
+      )}
+      {tab === 3 && templatesError && (
+        <Alert severity="error" sx={{ flexShrink: 0 }} onClose={() => setTemplatesError("")}>{templatesError}</Alert>
       )}
 
       {/* ── 메인: 카드 래핑 그리드 (세로 스크롤) ─────────── */}
@@ -415,6 +610,35 @@ export default function FormatPage() {
             {!watermarksLoading && watermarks.length === 0 && (
               <Box sx={{ display: "flex", alignItems: "center", pl: 2, color: "text.disabled" }}>
                 <Typography variant="body2" color="text.disabled">업로드된 워터마크가 없습니다.</Typography>
+              </Box>
+            )}
+          </>
+        )}
+
+        {tab === 3 && (
+          <>
+            <Typography variant="caption" color="text.secondary" sx={{ width: 1, mb: -0.5 }}>
+              표지·각주·워터마크를 조합해 템플릿으로 저장합니다. 문제집 생성 화면에서 이 템플릿 하나만 고르면 됩니다.
+            </Typography>
+            <UploadCard label="템플릿 추가" onClick={() => openTemplateDialog(null)} />
+            {templatesLoading ? (
+              <Box sx={{ display: "flex", alignItems: "center", pl: 2 }}><CircularProgress size={24} /></Box>
+            ) : (
+              templates.map((t) => (
+                <TemplateCard
+                  key={t.template_id}
+                  template={t}
+                  coverName={assetName(covers, "cover_id", t.cover_id, "없음")}
+                  footnoteName={assetName(footnotes, "footnote_id", t.footnote_id, "없음")}
+                  watermarkName={assetName(watermarks, "watermark_id", t.watermark_id, "없음")}
+                  onEdit={openTemplateDialog}
+                  onDelete={handleTemplateDelete}
+                />
+              ))
+            )}
+            {!templatesLoading && templates.length === 0 && (
+              <Box sx={{ display: "flex", alignItems: "center", pl: 2, color: "text.disabled" }}>
+                <Typography variant="body2" color="text.disabled">등록된 템플릿이 없습니다.</Typography>
               </Box>
             )}
           </>
@@ -547,6 +771,53 @@ export default function FormatPage() {
             startIcon={watermarkUploading ? <CircularProgress size={14} color="inherit" /> : <Icon icon="material-symbols:cloud-upload-outline-rounded" />}
           >
             {watermarkUploading ? "업로드 중..." : "업로드"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── 템플릿 추가·수정 모달 (REQ-30) ─────────────── */}
+      <Dialog open={templateDialogOpen} onClose={closeTemplateDialog} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ pb: 1 }}>
+          {editingTemplate ? "템플릿 수정" : "템플릿 추가"}
+        </DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+          {templateSaveError && <Alert severity="error">{templateSaveError}</Alert>}
+          <TextField
+            size="small" fullWidth autoFocus label="템플릿 이름"
+            value={templateName} onChange={(e) => setTemplateName(e.target.value)} disabled={templateSaving}
+          />
+          <TextField
+            select SelectProps={{ native: true }} size="small" fullWidth label="표지"
+            InputLabelProps={{ shrink: true }}
+            value={templateCoverId} onChange={(e) => setTemplateCoverId(e.target.value)} disabled={templateSaving}
+          >
+            <option value="">없음</option>
+            {covers.map((c) => <option key={c.cover_id} value={c.cover_id}>{c.name}</option>)}
+          </TextField>
+          <TextField
+            select SelectProps={{ native: true }} size="small" fullWidth label="각주"
+            InputLabelProps={{ shrink: true }}
+            value={templateFootnoteId} onChange={(e) => setTemplateFootnoteId(e.target.value)} disabled={templateSaving}
+          >
+            <option value="">없음</option>
+            {footnotes.map((f) => <option key={f.footnote_id} value={f.footnote_id}>{f.name}</option>)}
+          </TextField>
+          <TextField
+            select SelectProps={{ native: true }} size="small" fullWidth label="워터마크"
+            InputLabelProps={{ shrink: true }}
+            value={templateWatermarkId} onChange={(e) => setTemplateWatermarkId(e.target.value)} disabled={templateSaving}
+          >
+            <option value="">없음</option>
+            {watermarks.map((w) => <option key={w.watermark_id} value={w.watermark_id}>{w.name}</option>)}
+          </TextField>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={closeTemplateDialog} disabled={templateSaving} color="inherit">취소</Button>
+          <Button
+            variant="contained" onClick={handleTemplateSave} disabled={!templateName.trim() || templateSaving}
+            startIcon={templateSaving ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            {templateSaving ? "저장 중..." : "저장"}
           </Button>
         </DialogActions>
       </Dialog>
