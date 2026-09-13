@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.routers.template import guard_asset_delete
 from app.services import storage
 
 router = APIRouter()
@@ -50,9 +51,13 @@ def list_footnotes():
 
 
 @router.delete("/footnotes/{footnote_id}")
-def delete_footnote(footnote_id: str):
-    """각주를 삭제한다."""
+def delete_footnote(footnote_id: str, force: bool = False):
+    """각주를 삭제한다.
+
+    REQ-30: 템플릿이 참조 중이면 기본은 409 로 차단한다 (표지와 동일).
+    """
     if storage.get_footnote_meta(footnote_id) is None:
         raise HTTPException(status_code=404, detail="각주를 찾을 수 없습니다.")
+    guard_asset_delete("footnote_id", footnote_id, force, "각주")
     storage.delete_footnote(footnote_id)
     return {"message": "삭제되었습니다."}

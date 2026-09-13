@@ -278,7 +278,7 @@ export async function refreshJobQuestions(jobId) {
  */
 export async function startExtractV2(
   selections, layout = "2단", coverId = null, workbookName = null,
-  footnoteId = null, watermarkId = null,
+  footnoteId = null, watermarkId = null, templateId = null,
 ) {
   const body = {
     layout,
@@ -286,6 +286,9 @@ export async function startExtractV2(
     // REQ-29: 표지와 같은 패턴 — 값이 있을 때만 키를 싣는다.
     ...(footnoteId ? { footnote_id: footnoteId } : {}),
     ...(watermarkId ? { watermark_id: watermarkId } : {}),
+    // REQ-30: 템플릿. 값이 있을 때만 키를 싣는다 — 서버가 **존재 여부**로 위 3필드와
+    // 어느 쪽을 쓸지 가르기 때문이다(계약 #23과 같은 결).
+    ...(templateId ? { template_id: templateId } : {}),
     // REQ-B10: 생성될 문제집 이름. **이 필드가 실려 있으면 백엔드가 완료 시 메타를 저장한다**
     // (없으면 저장하지 않는다). 즉 이걸 보내면서 createWorkbookMeta 도 호출하면 이력에 2건이 뜬다.
     ...(workbookName ? { workbook_name: workbookName } : {}),
@@ -534,12 +537,33 @@ export async function listCovers() {
 }
 
 /**
- * DELETE /api/covers/{coverId}
+ * 자산 삭제 공통 처리 (REQ-30)
+ *
+ * 템플릿이 참조 중이면 서버가 **409 + 사용 중인 템플릿 이름**을 준다. 그 문구를 화면이
+ * 그대로 보여줘야 사용자가 무엇이 막고 있는지 알 수 있으므로, 뭉뚱그린 메시지로 덮지 않고
+ * `detail` 을 그대로 싣는다. `status` 도 함께 실어 화면이 409(강제 삭제 확인)와 그 외
+ * 실패를 구별할 수 있게 한다.
+ *
+ * body 있는 DELETE 는 프록시·클라이언트 호환이 들쭉날쭉해서 **쿼리 파라미터**를 쓴다.
  */
-export async function deleteCover(coverId) {
-  const res = await apiFetch(`${BASE_URL}/covers/${coverId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("표지 삭제 실패");
+async function deleteAsset(path, { force = false } = {}, fallbackMessage) {
+  const url = force ? `${BASE_URL}${path}?force=true` : `${BASE_URL}${path}`;
+  const res = await apiFetch(url, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const error = new Error(err.detail || fallbackMessage);
+    error.status = res.status;
+    throw error;
+  }
   return res.json();
+}
+
+/**
+ * DELETE /api/covers/{coverId}
+ * `{ force: true }` 를 주면 참조 중인 템플릿의 표지 슬롯을 비우고 삭제한다 (REQ-30).
+ */
+export async function deleteCover(coverId, options = {}) {
+  return deleteAsset(`/covers/${coverId}`, options, "표지 삭제 실패");
 }
 
 /**
@@ -572,10 +596,8 @@ export async function listFootnotes() {
 /**
  * DELETE /api/footnotes/{footnoteId}
  */
-export async function deleteFootnote(footnoteId) {
-  const res = await apiFetch(`${BASE_URL}/footnotes/${footnoteId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("각주 삭제 실패");
-  return res.json();
+export async function deleteFootnote(footnoteId, options = {}) {
+  return deleteAsset(`/footnotes/${footnoteId}`, options, "각주 삭제 실패");
 }
 
 /**
@@ -607,8 +629,68 @@ export async function listWatermarks() {
 /**
  * DELETE /api/watermarks/{watermarkId}
  */
-export async function deleteWatermark(watermarkId) {
-  const res = await apiFetch(`${BASE_URL}/watermarks/${watermarkId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("워터마크 삭제 실패");
+export async function deleteWatermark(watermarkId, options = {}) {
+  return deleteAsset(`/watermarks/${watermarkId}`, options, "워터마크 삭제 실패");
+}
+
+// ── 템플릿 API (REQ-30) ───────────────────────────────────
+//
+// 템플릿은 표지·각주·워터마크의 **참조** 조합이다 (ADR-0004).
+
+/**
+ * POST /api/templates
+ */
+export async function createTemplate(name, coverId = null, footnoteId = null, watermarkId = null) {
+  const res = await apiFetch(`${BASE_URL}/templates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      cover_id: coverId,
+      footnote_id: footnoteId,
+      watermark_id: watermarkId,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "템플릿 등록 실패");
+  }
+  return res.json();
+}
+
+/**
+ * GET /api/templates
+ */
+export async function listTemplates() {
+  const res = await apiFetch(`${BASE_URL}/templates`);
+  if (!res.ok) throw new Error("템플릿 목록 조회 실패");
+  return res.json(); // { templates: [...] }
+}
+
+/**
+ * PATCH /api/templates/{templateId}
+ *
+ * 부분 갱신이다 — `patch` 에 **실은 키만** 바뀐다. 슬롯을 비우려면 `null` 을 명시적으로
+ * 실어야 하고, 아예 안 실으면 그 슬롯은 그대로 남는다.
+ */
+export async function updateTemplate(templateId, patch) {
+  const res = await apiFetch(`${BASE_URL}/templates/${templateId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "템플릿 수정 실패");
+  }
+  return res.json();
+}
+
+/**
+ * DELETE /api/templates/{templateId}
+ */
+export async function deleteTemplate(templateId) {
+  const res = await apiFetch(`${BASE_URL}/templates/${templateId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("템플릿 삭제 실패");
   return res.json();
 }

@@ -528,3 +528,42 @@ def original_key(job_id: str) -> str:
 
 def result_key(job_id: str) -> str:
     return f"results/{job_id}/result.pdf"
+
+
+# ── 템플릿 (templates, REQ-30) — 표지·각주·워터마크 조합의 **참조**만 담는다 ──
+#
+# 값을 복사하지 않고 id 3개만 가리킨다 (ADR-0004). 그래서 이미지 짝이 없고
+# JSON 하나로 끝난다 — `covers`·`watermarks` 와 달리 `{id}.json` 만 존재한다.
+
+def list_templates() -> list:
+    """저장된 템플릿 메타데이터 전체를 created_at 내림차순으로 반환."""
+    templates_dir = _BASE / "templates"
+    if not templates_dir.exists():
+        return []
+    templates = []
+    for path in templates_dir.glob("*.json"):
+        try:
+            templates.append(json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    templates.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+    return templates
+
+
+def get_template_meta(template_id: str) -> Optional[dict]:
+    path = _BASE / "templates" / f"{template_id}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_template(template_id: str, meta: dict) -> None:
+    """템플릿 메타데이터(이름 + 참조 id 3개 + needs_review)를 저장한다."""
+    _ensure(_BASE / "templates" / f"{template_id}.json").write_text(
+        json.dumps(meta, ensure_ascii=False, default=str), encoding="utf-8"
+    )
+
+
+def delete_template(template_id: str) -> None:
+    path = _BASE / "templates" / f"{template_id}.json"
+    path.unlink(missing_ok=True)

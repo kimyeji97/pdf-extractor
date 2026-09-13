@@ -132,6 +132,13 @@ class ExtractV2Request(BaseModel):
     # REQ-29: 저장된 footnote_id·watermark_id 지정 시 표지를 제외한 모든 문항 페이지에 반영
     footnote_id: Optional[str] = Field(default=None, description="각주 footnote_id (선택)")
     watermark_id: Optional[str] = Field(default=None, description="워터마크 watermark_id (선택)")
+    # REQ-30: 템플릿(표지·각주·워터마크 조합의 참조). 주면 위 3필드 대신 이것이 이긴다.
+    #
+    # ⚠️ **기본값을 채우지 말 것.** 계약 #23과 같은 결로 값이 아니라 **존재 여부**가
+    #   동작을 가른다 — 위 3필드는 구 프론트 호환으로 남아 있고(배포가 백엔드 먼저·
+    #   프론트 나중으로 갈라지는 기간이 실제로 있었다, REQ-B10 실측 3일), 어느 쪽을
+    #   쓸지는 이 필드가 실려 왔는지로 정해진다.
+    template_id: Optional[str] = Field(default=None, description="템플릿 template_id (선택, 3필드보다 우선)")
     # REQ-B10: **생성될** 문제집 이름. WorkbookMeta 의 filename·name 을 둘 다 이 값으로 채운다
     # (프론트가 종전부터 두 필드에 같은 값을 보내 왔다).
     #
@@ -201,6 +208,10 @@ class WorkbookMeta(BaseModel):
     question_count: int
     filename: Optional[str] = None        # 사용자 입력 파일명 (REQ-C01)
     name: Optional[str] = None            # 문제집 이름 (이력 표시용)
+    # REQ-30: 생성에 쓴 템플릿. **이력 → 편집 복원 시 템플릿을 되살리는 근거다** —
+    # 없으면 복원 화면에서 템플릿이 조용히 "없음"이 되고, 사용자가 아무것도 안 바꿨는데
+    # 재생성 결과가 달라진다(계약 #22·#23과 같은 모양).
+    template_id: Optional[str] = None
 
 
 class WorkbookSummary(BaseModel):

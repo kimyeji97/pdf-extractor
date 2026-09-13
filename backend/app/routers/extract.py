@@ -16,6 +16,7 @@ from app.models.schemas import (
     SelectionItem, ExtractV2Request, ExtractV2Response,
     WorkbookMeta, WorkbookSelectionItem,
 )
+from app.routers.template import is_empty
 from app.services import storage, pdf_service, notification_service
 
 router = APIRouter()
@@ -104,6 +105,47 @@ def _process_extraction(job_id: str, status_file: JobStatusFile) -> None:
 
 # ── v2 추출 요청 ─────────────────────────────────────────────
 
+def _resolve_assets(req: ExtractV2Request) -> tuple[str | None, str | None, str | None]:
+    """요청의 표지·각주·워터마크를 **요청 시점에** 확정하고 참조가 살아 있는지 검증한다.
+
+    두 가지를 여기서 한다 — 둘 다 백그라운드가 아니라 **이 동기 핸들러**에서 해야 한다.
+
+    ① **resolve** — `template_id`가 있으면 그 템플릿의 슬롯 3개로 푼다. 여기서 확정하므로
+       이후 템플릿을 고쳐도 **진행 중인 생성엔 영향이 없다**(계획서 § 결정 "참조 해석 시점").
+       `template_id`가 없으면 직접 id를 그대로 쓴다 — 구 프론트 호환 경로다.
+
+    ② **검증(E)** — 끊어진 참조면 400. `template_id` 경로만이 아니라 **직접 id 경로에도**
+       적용한다: "표지를 골랐는데 표지 없이 나온 PDF"가 실패보다 나쁘기 때문이다 —
+       사용자는 다운로드해 열기 전까지 모른다(계획서 § 결정 "E의 적용 범위").
+
+    ⚠️ 백그라운드에 들어간 뒤에는 알릴 방법이 알림뿐이고 이미 PDF가 만들어진 뒤라
+       되돌리기 번거롭다. 그래서 **진입 전에** 거절하고, export job 도 만들지 않는다.
+    """
+    if req.template_id:
+        template = storage.get_template_meta(req.template_id)
+        if template is None:
+            raise HTTPException(status_code=400, detail="템플릿을 찾을 수 없습니다.")
+        if is_empty(template):
+            raise HTTPException(
+                status_code=400,
+                detail="이 템플릿은 구성이 비어 있습니다. 템플릿 관리에서 구성을 확인해 주세요.",
+            )
+        cover_id = template.get("cover_id")
+        footnote_id = template.get("footnote_id")
+        watermark_id = template.get("watermark_id")
+    else:
+        cover_id, footnote_id, watermark_id = req.cover_id, req.footnote_id, req.watermark_id
+
+    if cover_id and storage.get_cover_meta(cover_id) is None:
+        raise HTTPException(status_code=400, detail="표지를 찾을 수 없습니다. 삭제되었을 수 있습니다.")
+    if footnote_id and storage.get_footnote_meta(footnote_id) is None:
+        raise HTTPException(status_code=400, detail="각주를 찾을 수 없습니다. 삭제되었을 수 있습니다.")
+    if watermark_id and storage.get_watermark_meta(watermark_id) is None:
+        raise HTTPException(status_code=400, detail="워터마크를 찾을 수 없습니다. 삭제되었을 수 있습니다.")
+
+    return cover_id, footnote_id, watermark_id
+
+
 @router.post("/extract-v2", response_model=ExtractV2Response)
 def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
     """
@@ -111,6 +153,10 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
     새 export_job_id를 생성하여 PENDING 상태로 저장 후 백그라운드 태스크 시작.
     req.layout 으로 그리드 레이아웃 지정 가능 (REQ-18).
     """
+    # ⚠️ **job 생성보다 먼저 검증한다.** 거절인데 job 만 남으면 결과 목록에 영원히
+    #    PENDING 인 유령이 쌓인다 (계획서 Phase 1 완료 기준).
+    cover_id, footnote_id, watermark_id = _resolve_assets(req)
+
     export_job_id = str(uuid.uuid4())
 
     export_status = JobStatusFile(
@@ -122,10 +168,9 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
 
     # layout 파라미터를 백그라운드 태스크로 전달 (기본값 "2단")
     layout = req.layout or "2단"
-    cover_id = req.cover_id
     background_tasks.add_task(
         _process_extraction_v2, req.selections, export_job_id, layout, cover_id,
-        req.workbook_name, req.footnote_id, req.watermark_id,
+        req.workbook_name, footnote_id, watermark_id, req.template_id,
     )
     return ExtractV2Response(job_id=export_job_id)
 
@@ -135,6 +180,7 @@ def _save_workbook_meta(
     export_job_id: str,
     layout: str,
     workbook_name: str,
+    template_id: str | None = None,
 ) -> None:
     """
     생성 **성공** 직후 문제집 메타를 저장한다 (REQ-B10).
@@ -169,6 +215,8 @@ def _save_workbook_meta(
         # 프론트가 종전부터 두 필드에 같은 값을 보내 왔다. 서버도 그대로 따른다.
         filename=workbook_name,
         name=workbook_name,
+        # REQ-30: 이력 → 편집 복원 시 템플릿을 되살리는 근거.
+        template_id=template_id,
     )
     storage.save_workbook(meta.workbook_id, meta.model_dump(mode="json"))
 
@@ -181,6 +229,7 @@ def _process_extraction_v2(
     workbook_name: str | None = None,
     footnote_id: str | None = None,
     watermark_id: str | None = None,
+    template_id: str | None = None,
 ) -> None:
     export_status = storage.get_status(export_job_id)
     export_status.status = JobStatus.PROCESSING
@@ -210,7 +259,9 @@ def _process_extraction_v2(
             # 같은 문제집이 이력에 2건 뜨고, 그중 하나는 이름이 없다.
             if workbook_name:
                 try:
-                    _save_workbook_meta(selections, export_job_id, layout, workbook_name)
+                    _save_workbook_meta(
+                        selections, export_job_id, layout, workbook_name, template_id
+                    )
                 except Exception as e:
                     # 메타 저장 실패가 "PDF 생성 실패"로 둔갑하면 안 된다 — PDF는 이미 만들어졌다.
                     # 상태는 DONE으로 두고 사유만 남긴다.
