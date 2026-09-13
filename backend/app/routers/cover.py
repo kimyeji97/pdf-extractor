@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
 
+from app.routers.template import guard_asset_delete
 from app.services import storage
 
 router = APIRouter()
@@ -83,9 +84,14 @@ def get_cover_image(cover_id: str):
 
 
 @router.delete("/covers/{cover_id}")
-def delete_cover(cover_id: str):
-    """표지를 삭제한다."""
+def delete_cover(cover_id: str, force: bool = False):
+    """표지를 삭제한다.
+
+    REQ-30: 템플릿이 참조 중이면 기본은 409 로 차단하고, `?force=true` 면 그 템플릿들의
+    표지 슬롯을 비우고 삭제한다 (계획서 § 결정 "자산 삭제 시").
+    """
     if storage.get_cover_meta(cover_id) is None:
         raise HTTPException(status_code=404, detail="표지를 찾을 수 없습니다.")
+    guard_asset_delete("cover_id", cover_id, force, "표지")
     storage.delete_cover(cover_id)
     return {"message": "삭제되었습니다."}

@@ -389,6 +389,7 @@ def upload_file(local_path: str, key: str) -> None:
 COVERS_PREFIX = "covers"
 FOOTNOTES_PREFIX = "footnotes"
 WATERMARKS_PREFIX = "watermarks"
+TEMPLATES_PREFIX = "templates"
 
 
 def list_covers() -> list:
@@ -617,3 +618,38 @@ def original_key(job_id: str) -> str:
 
 def result_key(job_id: str) -> str:
     return _key(RESULTS_PREFIX, job_id, "result.pdf")
+
+
+# ── 템플릿 (templates, REQ-30) — 표지·각주·워터마크 조합의 **참조**만 담는다 ──
+#
+# 값을 복사하지 않고 id 3개만 가리킨다 (ADR-0004). 그래서 이미지 짝이 없고
+# JSON 하나로 끝난다 — `covers`·`watermarks` 와 달리 `{id}.json` 만 존재한다.
+
+def list_templates() -> list:
+    prefix = _key(TEMPLATES_PREFIX) + "/"
+    paginator = r2.get_paginator("list_objects_v2")
+    keys = []
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".json"):
+                keys.append(obj["Key"])
+    templates = []
+    for k in keys:
+        try:
+            templates.append(_get_json(k))
+        except Exception:
+            continue
+    templates.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+    return templates
+
+
+def get_template_meta(template_id: str) -> Optional[dict]:
+    return _get_json_or_none(_key(TEMPLATES_PREFIX, f"{template_id}.json"))
+
+
+def save_template(template_id: str, meta: dict) -> None:
+    _put_json(_key(TEMPLATES_PREFIX, f"{template_id}.json"), meta)
+
+
+def delete_template(template_id: str) -> None:
+    _delete(_key(TEMPLATES_PREFIX, f"{template_id}.json"))

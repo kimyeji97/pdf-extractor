@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
 
+from app.routers.template import guard_asset_delete
 from app.services import storage
 
 router = APIRouter()
@@ -85,9 +86,10 @@ def get_watermark_image(watermark_id: str):
 
 
 @router.delete("/watermarks/{watermark_id}")
-def delete_watermark(watermark_id: str):
+def delete_watermark(watermark_id: str, force: bool = False):
     """워터마크를 삭제한다."""
     if storage.get_watermark_meta(watermark_id) is None:
         raise HTTPException(status_code=404, detail="워터마크를 찾을 수 없습니다.")
+    guard_asset_delete("watermark_id", watermark_id, force, "워터마크")
     storage.delete_watermark(watermark_id)
     return {"message": "삭제되었습니다."}
