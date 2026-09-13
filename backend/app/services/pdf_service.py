@@ -569,7 +569,28 @@ def _prepend_cover_image(
     cover_doc.close()
 
 
-_WATERMARK_OPACITY = 0.15   # 낮은 투명도 — 정확한 수치는 결정된 스펙이 아니라 합리적 기본값
+# ── 각주·워터마크 렌더 상수 (REQ-29 도입, REQ-F13에서 모듈 상수로 승격) ──────
+#
+# ⚠️ **이 다섯 값이 단일 출처다.** 미리보기(`WorkbookPreview`)가 같은 그림을 그려야 하는데,
+#    프론트에 복제하면 한쪽만 고쳤을 때 **조용히 어긋난다**(계약 #12·#13·#14가 전부 그 계열의
+#    기록이다). 그래서 복제하지 않고 `GET /api/templates` 응답에 실어 보낸다(PLAN-F13 § 결정
+#    "렌더 상수의 단일 출처"). 값을 바꾸려면 **여기만** 고치면 된다.
+#
+# ⚠️ 값 자체는 아직 **결정된 스펙이 아니다** — REQ-29 구현 때 고른 합리적 기본값이고,
+#    미리보기가 생긴 뒤 눈으로 보고 확정하기로 했다(PLAN-F13 § 미결 질문).
+_FOOTNOTE_FONT_SIZE = 8.0
+_FOOTNOTE_MARGIN = 12.0
+# 색은 **hex 문자열**로 둔다 — 이 값이 API 를 타고 미리보기(CSS)까지 가기 때문이다.
+# PyMuPDF 는 0~1 실수 튜플을 받으므로 그릴 때만 변환한다. `#666666` == (0.4, 0.4, 0.4).
+_FOOTNOTE_COLOR = "#666666"
+_WATERMARK_SIZE_RATIO = 0.6
+_WATERMARK_OPACITY = 0.15
+
+
+def _hex_to_rgb01(value: str) -> tuple[float, float, float]:
+    """`#rrggbb` → PyMuPDF 가 쓰는 0~1 실수 튜플."""
+    h = value.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
 
 
 def _apply_footnote(pdf_path: str, text: str) -> None:
@@ -581,18 +602,16 @@ def _apply_footnote(pdf_path: str, text: str) -> None:
     """
     doc = fitz.open(pdf_path)
     font = _get_label_font()
-    fontsize = 8.0
-    margin = 12.0
 
     for page in doc:
         tw = fitz.TextWriter(page.rect)
         tw.append(
-            fitz.Point(margin, page.rect.height - margin),
+            fitz.Point(_FOOTNOTE_MARGIN, page.rect.height - _FOOTNOTE_MARGIN),
             text,
             font=font,
-            fontsize=fontsize,
+            fontsize=_FOOTNOTE_FONT_SIZE,
         )
-        tw.write_text(page, color=(0.4, 0.4, 0.4))
+        tw.write_text(page, color=_hex_to_rgb01(_FOOTNOTE_COLOR))
 
     tmp_path = pdf_path + ".tmp"
     doc.save(tmp_path, garbage=4, deflate=True)
@@ -619,7 +638,7 @@ def _apply_watermark(pdf_path: str, image_bytes: bytes) -> None:
     doc = fitz.open(pdf_path)
     for page in doc:
         pw, ph = page.rect.width, page.rect.height
-        size = min(pw, ph) * 0.6
+        size = min(pw, ph) * _WATERMARK_SIZE_RATIO
         rect = fitz.Rect(
             (pw - size) / 2, (ph - size) / 2,
             (pw + size) / 2, (ph + size) / 2,
