@@ -624,13 +624,29 @@ def _apply_watermark(pdf_path: str, image_bytes: bytes) -> None:
     워터마크 이미지를 모든 페이지 중앙에 반투명하게 삽입한다 (REQ-29).
 
     `insert_image` 자체엔 opacity 인자가 없어, 원본 이미지에 알파 채널이 없어도 낮은
-    투명도를 강제하려면 단색 회색조 픽스맵을 알파 마스크로 따로 넘겨야 한다.
+    투명도를 강제하려면 회색조 픽스맵을 알파 마스크로 따로 넘겨야 한다.
+
+    ⚠️ **`mask` 는 원본 알파를 곱하는 게 아니라 통째로 대체한다.** 그래서 균일한 회색
+    마스크를 넘기면 **투명해야 할 배경까지 15% 불투명**이 되고, 그 자리의 RGB 는 보통
+    (0,0,0) 이라 **연회색 사각 박스**로 보인다(실측: 종이 255 위에 217). 원본 알파가
+    있으면 거기에 투명도를 **곱해서** 마스크를 만들어야 한다.
     """
     src_pix = fitz.Pixmap(image_bytes)
+
     if src_pix.alpha:
-        src_pix = fitz.Pixmap(src_pix, 0)
-    mask_pix = fitz.Pixmap(fitz.csGRAY, src_pix.irect, False)
-    mask_pix.set_rect(mask_pix.irect, (int(255 * _WATERMARK_OPACITY),))
+        # 원본 알파 × 투명도 — 투명한 자리는 0 으로 남아 배경이 비친다.
+        n = src_pix.n                       # 알파를 포함한 채널 수
+        samples = src_pix.samples
+        alpha = bytes(
+            int(samples[i] * _WATERMARK_OPACITY)
+            for i in range(n - 1, len(samples), n)
+        )
+        mask_pix = fitz.Pixmap(fitz.csGRAY, src_pix.width, src_pix.height, alpha, False)
+    else:
+        # 알파가 없는 원본(JPEG 등)은 전면을 균일하게 낮춘다 — 이 경우엔 덮을 알파가 없다.
+        mask_pix = fitz.Pixmap(fitz.csGRAY, src_pix.irect, False)
+        mask_pix.set_rect(mask_pix.irect, (int(255 * _WATERMARK_OPACITY),))
+
     # insert_image의 mask 인자는 Pixmap이 아니라 bytes-like(png/등)여야 하고,
     # pixmap이 아니라 stream(원본 바이트)과 짝을 이뤄야 한다(PyMuPDF utils.insert_image).
     mask_bytes = mask_pix.tobytes("png")
