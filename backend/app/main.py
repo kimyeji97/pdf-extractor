@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from app.routers import upload, extract, browse, workbook, cover, notification, footnote, watermark, template
+from app.routers import upload, extract, browse, workbook, cover, notification, footnote, watermark, template, auth
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,6 +57,7 @@ app.include_router(footnote.router, prefix="/api", tags=["footnote"])
 app.include_router(watermark.router, prefix="/api", tags=["watermark"])
 app.include_router(template.router, prefix="/api", tags=["template"])
 app.include_router(notification.router, prefix="/api", tags=["notification"])
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 
 
 @app.get("/health")

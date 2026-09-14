@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # ── 공통 ─────────────────────────────────────────────
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
 
+    # ── 인증 (REQ-27, ADR-0005) ────────────────────────────
+    # JWT 서명 키. 운영 배포 시 반드시 .env/Secrets Manager로 재정의할 것 —
+    # 기본값은 로컬 개발용이고 절대 이 값으로 배포하지 않는다.
+    JWT_SECRET_KEY: str = "dev-insecure-secret-change-me"
+
     class Config:
         env_file = ".env"
         extra = "ignore"
