@@ -90,7 +90,9 @@ def test_F09_06_전체문항_조회_반복해도_알림이_늘지_않는다(
         # 캐시를 비워 매번 지연 감지 경로를 강제한다 — 캐시가 살아 있으면
         # 2회차부터 감지가 아예 안 돌아 "안 늘었다"가 공짜로 참이 된다.
         storage.clear_boundaries_cache("job-view-all")
-        list_all_questions("job-view-all")
+        # 라우터 함수를 직접 호출하므로 FastAPI Depends가 해석되지 않는다 —
+        # REQ-27 Phase 2로 추가된 current_user를 직접 채워 준다.
+        list_all_questions("job-view-all", current_user={"user_id": "test-admin", "role": "admin"})
 
     assert notif_files() == []
 
@@ -107,7 +109,7 @@ def test_F09_07_페이지문항_조회_반복해도_알림이_늘지_않는다(
 
     for _ in range(3):
         storage.clear_boundaries_cache("job-view-page")
-        list_questions("job-view-page", 0)
+        list_questions("job-view-page", 0, current_user={"user_id": "test-admin", "role": "admin"})
 
     assert notif_files() == []
 
@@ -188,6 +190,6 @@ def test_F09_16_조회경로_지연감지_실패는_알리지_않는다(
     stub_detection(raises=RuntimeError("조회 중 감지 실패"))
 
     with pytest.raises(RuntimeError):
-        list_all_questions("job-view-fail")
+        list_all_questions("job-view-fail", current_user={"user_id": "test-admin", "role": "admin"})
 
     assert notif_files() == []

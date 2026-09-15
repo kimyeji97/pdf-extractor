@@ -45,86 +45,86 @@ def _png_bytes() -> bytes:
     return data
 
 
-def _make_cover(client, name: str = "표지A") -> str:
-    return client.post(
+def _make_cover(authed_client, name: str = "표지A") -> str:
+    return authed_client.post(
         "/api/covers",
         files={"file": ("c.png", _png_bytes(), "image/png")},
         data={"name": name},
     ).json()["cover_id"]
 
 
-def _make_footnote(client, name: str = "각주A", text: str = "무단 배포를 금합니다.") -> str:
-    return client.post("/api/footnotes", json={"name": name, "text": text}).json()["footnote_id"]
+def _make_footnote(authed_client, name: str = "각주A", text: str = "무단 배포를 금합니다.") -> str:
+    return authed_client.post("/api/footnotes", json={"name": name, "text": text}).json()["footnote_id"]
 
 
-def _make_watermark(client, name: str = "워터마크A") -> str:
-    return client.post(
+def _make_watermark(authed_client, name: str = "워터마크A") -> str:
+    return authed_client.post(
         "/api/watermarks",
         files={"file": ("w.png", _png_bytes(), "image/png")},
         data={"name": name},
     ).json()["watermark_id"]
 
 
-def _first_template(client) -> dict:
-    return client.get("/api/templates").json()["templates"][0]
+def _first_template(authed_client) -> dict:
+    return authed_client.get("/api/templates").json()["templates"][0]
 
 
 # ── 표시용 정보 ───────────────────────────────────────────
 
-def test_F13_01_응답에_각주_텍스트가_실린다(client):
+def test_F13_01_응답에_각주_텍스트가_실린다(authed_client):
     """근거: PLAN § Phase 1 — "자산 **이름**, 각주 **텍스트**, 표지·워터마크 **이미지 URL**을 함께 싣는다" """
-    client.post("/api/templates", json={
+    authed_client.post("/api/templates", json={
         "name": "기본형",
-        "footnote_id": _make_footnote(client, text="무단 배포를 금합니다."),
+        "footnote_id": _make_footnote(authed_client, text="무단 배포를 금합니다."),
     })
 
-    assert _first_template(client)["footnote"]["text"] == "무단 배포를 금합니다."
+    assert _first_template(authed_client)["footnote"]["text"] == "무단 배포를 금합니다."
 
 
-def test_F13_02_응답에_표지_이미지_URL이_실린다(client):
+def test_F13_02_응답에_표지_이미지_URL이_실린다(authed_client):
     """근거: PLAN § Phase 1 — "자산 **이름**, 각주 **텍스트**, 표지·워터마크 **이미지 URL**을 함께 싣는다"
 
     URL 은 결정적이다(계약 #15와 같은 결) — 얻으려고 목록 API 를 더 부르지 않는다.
     """
-    cover_id = _make_cover(client)
-    client.post("/api/templates", json={"name": "기본형", "cover_id": cover_id})
+    cover_id = _make_cover(authed_client)
+    authed_client.post("/api/templates", json={"name": "기본형", "cover_id": cover_id})
 
-    assert _first_template(client)["cover"]["image_url"] == f"/api/covers/{cover_id}/image"
+    assert _first_template(authed_client)["cover"]["image_url"] == f"/api/covers/{cover_id}/image"
 
 
-def test_F13_03_응답에_워터마크_이미지_URL이_실린다(client):
+def test_F13_03_응답에_워터마크_이미지_URL이_실린다(authed_client):
     """근거: PLAN § Phase 1 — "자산 **이름**, 각주 **텍스트**, 표지·워터마크 **이미지 URL**을 함께 싣는다" """
-    watermark_id = _make_watermark(client)
-    client.post("/api/templates", json={"name": "기본형", "watermark_id": watermark_id})
+    watermark_id = _make_watermark(authed_client)
+    authed_client.post("/api/templates", json={"name": "기본형", "watermark_id": watermark_id})
 
-    assert _first_template(client)["watermark"]["image_url"] == f"/api/watermarks/{watermark_id}/image"
+    assert _first_template(authed_client)["watermark"]["image_url"] == f"/api/watermarks/{watermark_id}/image"
 
 
-def test_F13_04_응답에_자산_이름이_실린다(client):
+def test_F13_04_응답에_자산_이름이_실린다(authed_client):
     """근거: PLAN § Phase 1 — "자산 **이름**, 각주 **텍스트**, 표지·워터마크 **이미지 URL**을 함께 싣는다"
 
     관리 화면의 `assetName()` — 세 목록을 뒤져 이름을 찾던 중복 — 이 이 필드로 사라진다.
     """
-    client.post("/api/templates", json={
-        "name": "기본형", "cover_id": _make_cover(client, "시험지표준표지"),
+    authed_client.post("/api/templates", json={
+        "name": "기본형", "cover_id": _make_cover(authed_client, "시험지표준표지"),
     })
 
-    assert _first_template(client)["cover"]["name"] == "시험지표준표지"
+    assert _first_template(authed_client)["cover"]["name"] == "시험지표준표지"
 
 
-def test_F13_07_슬롯이_빈_템플릿은_그_자리가_null(client):
+def test_F13_07_슬롯이_빈_템플릿은_그_자리가_null(authed_client):
     """근거: PLAN § Phase 1 — "자산 **이름**, 각주 **텍스트**, 표지·워터마크 **이미지 URL**을 함께 싣는다"
 
     빈 슬롯은 REQ-30의 정상 상태다(표지만 든 템플릿 등). 미리보기가 "없음"으로 읽을 수
     있어야 하므로 키를 빼지 않고 `None` 을 싣는다.
     """
-    client.post("/api/templates", json={"name": "표지만", "cover_id": _make_cover(client)})
+    authed_client.post("/api/templates", json={"name": "표지만", "cover_id": _make_cover(authed_client)})
 
-    template = _first_template(client)
+    template = _first_template(authed_client)
     assert template["footnote"] is None
 
 
-def test_F13_08_dangling_슬롯이어도_500으로_죽지_않는다(client):
+def test_F13_08_dangling_슬롯이어도_500으로_죽지_않는다(authed_client):
     """근거: PLAN § Phase 1 — "미리보기가 거기서 죽으면 안 된다"
 
     A′ 가 막지만 강제 삭제와의 경쟁 상태가 있다. 끊어진 참조를 직접 만들어 확인한다 —
@@ -133,25 +133,25 @@ def test_F13_08_dangling_슬롯이어도_500으로_죽지_않는다(client):
     """
     from app.services import storage
 
-    cover_id = _make_cover(client)
-    created = client.post("/api/templates", json={"name": "기본형", "cover_id": cover_id}).json()
-    client.delete(f"/api/covers/{cover_id}?force=true")
+    cover_id = _make_cover(authed_client)
+    created = authed_client.post("/api/templates", json={"name": "기본형", "cover_id": cover_id}).json()
+    authed_client.delete(f"/api/covers/{cover_id}?force=true")
     meta = storage.get_template_meta(created["template_id"])
     meta["cover_id"] = cover_id           # 끊어진 참조 복원
     storage.save_template(created["template_id"], meta)
 
-    res = client.get("/api/templates")
+    res = authed_client.get("/api/templates")
 
     assert res.status_code == 200
 
 
 # ── 렌더 상수 ─────────────────────────────────────────────
 
-def test_F13_05_렌더_상수_4종이_응답에_실린다(client):
+def test_F13_05_렌더_상수_4종이_응답에_실린다(authed_client):
     """근거: PLAN § Phase 1 — "렌더 상수 4종이 `pdf_service`의 값과 같다." """
-    client.post("/api/templates", json={"name": "기본형", "cover_id": _make_cover(client)})
+    authed_client.post("/api/templates", json={"name": "기본형", "cover_id": _make_cover(authed_client)})
 
-    render = _first_template(client)["render"]
+    render = _first_template(authed_client)["render"]
 
     assert set(render) >= {
         "footnote_font_size", "footnote_margin", "footnote_color",
@@ -159,7 +159,7 @@ def test_F13_05_렌더_상수_4종이_응답에_실린다(client):
     }
 
 
-def test_F13_06_렌더_상수가_pdf_service의_값과_같다(client):
+def test_F13_06_렌더_상수가_pdf_service의_값과_같다(authed_client):
     """근거: PLAN § Phase 1 — "**`pdf_service`가 단일 출처**이고"
 
     값을 라우터에 다시 적으면 여기가 빨개진다. **숫자를 박지 않는 것이 핵심** —
@@ -175,9 +175,9 @@ def test_F13_06_렌더_상수가_pdf_service의_값과_같다(client):
     """
     from app.services import pdf_service
 
-    client.post("/api/templates", json={"name": "기본형", "cover_id": _make_cover(client)})
+    authed_client.post("/api/templates", json={"name": "기본형", "cover_id": _make_cover(authed_client)})
 
-    render = _first_template(client)["render"]
+    render = _first_template(authed_client)["render"]
 
     assert render == {
         "footnote_font_size":   pdf_service._FOOTNOTE_FONT_SIZE,

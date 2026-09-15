@@ -87,6 +87,8 @@ class JobStatusFile(BaseModel):
     false_positive_count: Optional[int] = None
     manual_count: Optional[int] = None
     undetected_page_count: Optional[int] = None
+    # ── 소유권 (REQ-27 Phase 2) ─────────────────────────
+    owner_id: Optional[str] = None
 
 
 # ── v2 추출 요청 ──────────────────────────────────────────

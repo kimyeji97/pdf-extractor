@@ -17,10 +17,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.services import pdf_service, storage
+from app.services import auth_service, pdf_service, storage
 
 router = APIRouter()
 
@@ -137,8 +137,10 @@ def _public(meta: dict) -> dict:
 
 
 @router.post("/templates", status_code=201)
-def create_template(body: TemplateCreate):
-    """템플릿을 등록한다."""
+def create_template(
+    body: TemplateCreate, current_user: dict = Depends(auth_service.get_current_user)
+):
+    """템플릿을 등록한다. 등록한 사용자 본인 소유로 귀속된다(REQ-27 Phase 2)."""
     template_id = str(uuid.uuid4())
 
     meta = {
@@ -149,6 +151,7 @@ def create_template(body: TemplateCreate):
         "watermark_id": body.watermark_id,
         "needs_review": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "owner_id": current_user["user_id"],
     }
 
     if is_empty(meta):
@@ -162,17 +165,25 @@ def create_template(body: TemplateCreate):
 
 
 @router.get("/templates")
-def list_templates():
-    """등록된 템플릿 목록을 반환한다."""
-    return {"templates": [_public(t) for t in storage.list_templates()]}
+def list_templates(current_user: dict = Depends(auth_service.get_current_user)):
+    """등록된 템플릿 목록을 반환한다. `user`는 본인 소유만, `admin`은 전체(REQ-27 Phase 2)."""
+    templates = storage.list_templates()
+    if current_user["role"] != "admin":
+        templates = [t for t in templates if t.get("owner_id") == current_user["user_id"]]
+    return {"templates": [_public(t) for t in templates]}
 
 
 @router.patch("/templates/{template_id}")
-def update_template(template_id: str, body: TemplateUpdate):
+def update_template(
+    template_id: str,
+    body: TemplateUpdate,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """템플릿을 수정한다 (부분 갱신)."""
     meta = storage.get_template_meta(template_id)
     if meta is None:
         raise HTTPException(status_code=404, detail="템플릿을 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, meta.get("owner_id"))
 
     patch = body.model_dump(exclude_unset=True)
     if "name" in patch and patch["name"] is not None:
@@ -193,10 +204,14 @@ def update_template(template_id: str, body: TemplateUpdate):
 
 
 @router.delete("/templates/{template_id}")
-def delete_template(template_id: str):
+def delete_template(
+    template_id: str, current_user: dict = Depends(auth_service.get_current_user)
+):
     """템플릿을 삭제한다."""
-    if storage.get_template_meta(template_id) is None:
+    meta = storage.get_template_meta(template_id)
+    if meta is None:
         raise HTTPException(status_code=404, detail="템플릿을 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, meta.get("owner_id"))
     storage.delete_template(template_id)
     return {"message": "삭제되었습니다."}
 

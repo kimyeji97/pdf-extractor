@@ -13,10 +13,11 @@ Endpoints:
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
 
 from app.routers.template import guard_asset_delete
+from app.services import auth_service
 from app.services import storage
 
 router = APIRouter()
@@ -29,8 +30,9 @@ _MAX_SIZE = 10 * 1024 * 1024   # 10 MB
 async def upload_cover(
     file: UploadFile = File(...),
     name: str = Form(""),
+    current_user: dict = Depends(auth_service.get_current_user),
 ):
-    """표지 이미지를 업로드한다."""
+    """표지 이미지를 업로드한다. 업로드한 사용자 본인 소유로 귀속된다(REQ-27 Phase 2)."""
     if file.content_type not in _ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="JPEG 또는 PNG 이미지만 업로드할 수 있습니다.")
 
@@ -46,6 +48,7 @@ async def upload_cover(
         "name": name.strip() or (file.filename or "표지"),
         "ext": ext,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "owner_id": current_user["user_id"],
     }
 
     storage.save_cover(cover_id, meta, data, ext)
@@ -59,9 +62,11 @@ async def upload_cover(
 
 
 @router.get("/covers")
-def list_covers():
-    """업로드된 표지 목록을 반환한다."""
+def list_covers(current_user: dict = Depends(auth_service.get_current_user)):
+    """업로드된 표지 목록을 반환한다. `user`는 본인 소유만, `admin`은 전체(REQ-27 Phase 2)."""
     covers = storage.list_covers()
+    if current_user["role"] != "admin":
+        covers = [c for c in covers if c.get("owner_id") == current_user["user_id"]]
     return {
         "covers": [
             {
@@ -74,8 +79,13 @@ def list_covers():
 
 
 @router.get("/covers/{cover_id}/image")
-def get_cover_image(cover_id: str):
+def get_cover_image(cover_id: str, current_user: dict = Depends(auth_service.get_current_user)):
     """표지 이미지를 반환한다 (img src 직접 사용 가능)."""
+    meta = storage.get_cover_meta(cover_id)
+    if meta is None:
+        raise HTTPException(status_code=404, detail="표지를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, meta.get("owner_id"))
+
     result = storage.get_cover_image(cover_id)
     if result is None:
         raise HTTPException(status_code=404, detail="표지를 찾을 수 없습니다.")
@@ -84,14 +94,18 @@ def get_cover_image(cover_id: str):
 
 
 @router.delete("/covers/{cover_id}")
-def delete_cover(cover_id: str, force: bool = False):
+def delete_cover(
+    cover_id: str, force: bool = False, current_user: dict = Depends(auth_service.get_current_user)
+):
     """표지를 삭제한다.
 
     REQ-30: 템플릿이 참조 중이면 기본은 409 로 차단하고, `?force=true` 면 그 템플릿들의
     표지 슬롯을 비우고 삭제한다 (계획서 § 결정 "자산 삭제 시").
     """
-    if storage.get_cover_meta(cover_id) is None:
+    meta = storage.get_cover_meta(cover_id)
+    if meta is None:
         raise HTTPException(status_code=404, detail="표지를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, meta.get("owner_id"))
     guard_asset_delete("cover_id", cover_id, force, "표지")
     storage.delete_cover(cover_id)
     return {"message": "삭제되었습니다."}

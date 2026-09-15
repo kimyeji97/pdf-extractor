@@ -33,20 +33,20 @@ def _png_bytes() -> bytes:
     return data
 
 
-def _make_cover(client, name: str = "표지A") -> str:
-    return client.post(
+def _make_cover(authed_client, name: str = "표지A") -> str:
+    return authed_client.post(
         "/api/covers",
         files={"file": ("c.png", _png_bytes(), "image/png")},
         data={"name": name},
     ).json()["cover_id"]
 
 
-def _make_footnote(client, name: str = "각주A") -> str:
-    return client.post("/api/footnotes", json={"name": name, "text": "본문"}).json()["footnote_id"]
+def _make_footnote(authed_client, name: str = "각주A") -> str:
+    return authed_client.post("/api/footnotes", json={"name": name, "text": "본문"}).json()["footnote_id"]
 
 
-def _make_watermark(client, name: str = "워터마크A") -> str:
-    return client.post(
+def _make_watermark(authed_client, name: str = "워터마크A") -> str:
+    return authed_client.post(
         "/api/watermarks",
         files={"file": ("w.png", _png_bytes(), "image/png")},
         data={"name": name},
@@ -82,32 +82,32 @@ def captured_extract(monkeypatch, inline_extract_pool):
 
 # ── 배선 — template_id 가 세 자산으로 풀린다 ───────────────
 
-def test_30_09_template_id만_주면_템플릿의_세_id가_전달된다(client, captured_extract):
+def test_30_09_template_id만_주면_템플릿의_세_id가_전달된다(authed_client, captured_extract):
     """근거: PLAN § Phase 1 — "반영된 PDF가 나온다." """
-    cover_id = _make_cover(client)
-    footnote_id = _make_footnote(client)
-    watermark_id = _make_watermark(client)
-    template = client.post("/api/templates", json={
+    cover_id = _make_cover(authed_client)
+    footnote_id = _make_footnote(authed_client)
+    watermark_id = _make_watermark(authed_client)
+    template = authed_client.post("/api/templates", json={
         "name": "풀세트", "cover_id": cover_id,
         "footnote_id": footnote_id, "watermark_id": watermark_id,
     }).json()
 
-    client.post("/api/extract-v2", json={
+    authed_client.post("/api/extract-v2", json={
         "selections": _selections(), "template_id": template["template_id"],
     })
 
     assert captured_extract["assets"] == (cover_id, footnote_id, watermark_id)
 
 
-def test_30_10_template_id와_직접_id가_함께_오면_template_id가_이긴다(client, captured_extract):
+def test_30_10_template_id와_직접_id가_함께_오면_template_id가_이긴다(authed_client, captured_extract):
     """근거: PLAN § 결정 — "둘 다 오면 `template_id` 우선" """
-    template_cover = _make_cover(client, "템플릿표지")
-    direct_cover = _make_cover(client, "직접표지")
-    template = client.post("/api/templates", json={
+    template_cover = _make_cover(authed_client, "템플릿표지")
+    direct_cover = _make_cover(authed_client, "직접표지")
+    template = authed_client.post("/api/templates", json={
         "name": "기본형", "cover_id": template_cover,
     }).json()
 
-    client.post("/api/extract-v2", json={
+    authed_client.post("/api/extract-v2", json={
         "selections": _selections(),
         "template_id": template["template_id"],
         "cover_id": direct_cover,
@@ -116,22 +116,22 @@ def test_30_10_template_id와_직접_id가_함께_오면_template_id가_이긴�
     assert captured_extract["assets"][0] == template_cover
 
 
-def test_30_11_template_id가_없으면_직접_id가_그대로_전달된다(client, captured_extract):
+def test_30_11_template_id가_없으면_직접_id가_그대로_전달된다(authed_client, captured_extract):
     """근거: PLAN § 결정 — "**`template_id` 추가, 기존 3필드 유지.**"
 
     구 프론트 호환 경로다. 배포가 백엔드 먼저·프론트 나중으로 갈라지는 기간(REQ-B10 실측
     3일)에 이 경로가 죽으면 그동안 표지가 전부 빠진 PDF가 나온다.
     """
-    cover_id = _make_cover(client)
+    cover_id = _make_cover(authed_client)
 
-    client.post("/api/extract-v2", json={
+    authed_client.post("/api/extract-v2", json={
         "selections": _selections(), "cover_id": cover_id,
     })
 
     assert captured_extract["assets"][0] == cover_id
 
 
-def test_30_12_ExtractV2Request의_template_id_기본값은_None(client):
+def test_30_12_ExtractV2Request의_template_id_기본값은_None(authed_client):
     """근거: PLAN § 제약 — "`template_id`에 기본값을" (계약 #23)
 
     값이 아니라 **존재 여부**가 동작을 가르므로 기본값을 채우면 안 된다.
@@ -143,18 +143,18 @@ def test_30_12_ExtractV2Request의_template_id_기본값은_None(client):
     assert req.template_id is None
 
 
-def test_30_13_생성_성공시_WorkbookMeta에_template_id가_저장된다(client, captured_extract):
+def test_30_13_생성_성공시_WorkbookMeta에_template_id가_저장된다(authed_client, captured_extract):
     """근거: PLAN § 결정 — "**범위에 넣는다**"
 
     이력 복원 시 템플릿이 조용히 "없음"이 되는 것을 막는 필드다(계약 #22·#23과 같은 모양).
     """
     from app.services import storage
 
-    template = client.post("/api/templates", json={
-        "name": "기본형", "cover_id": _make_cover(client),
+    template = authed_client.post("/api/templates", json={
+        "name": "기본형", "cover_id": _make_cover(authed_client),
     }).json()
 
-    res = client.post("/api/extract-v2", json={
+    res = authed_client.post("/api/extract-v2", json={
         "selections": _selections(),
         "template_id": template["template_id"],
         "workbook_name": "테스트 문제집",
@@ -170,26 +170,26 @@ def test_30_13_생성_성공시_WorkbookMeta에_template_id가_저장된다(clie
 
 # ── E — 요청 시점 400 ─────────────────────────────────────
 
-def test_30_14_없는_template_id로_생성_요청하면_400(client):
+def test_30_14_없는_template_id로_생성_요청하면_400(authed_client):
     """근거: PLAN § 결정 — "**E — 요청 시점 400.** 참조가 끊겼으면 백그라운드 진입 전에 거절" """
-    res = client.post("/api/extract-v2", json={
+    res = authed_client.post("/api/extract-v2", json={
         "selections": _selections(), "template_id": "no-such-template",
     })
 
     assert res.status_code == 400
 
 
-def test_30_15_템플릿이_가리키는_표지가_삭제됐으면_400(client):
+def test_30_15_템플릿이_가리키는_표지가_삭제됐으면_400(authed_client):
     """근거: PLAN § 결정 — "**E — 요청 시점 400.** 참조가 끊겼으면 백그라운드 진입 전에 거절"
 
     A′ 가 차단하므로 정상 경로로는 생기기 어렵지만, 강제 삭제와 생성이 겹치는 경쟁
     상태에서 발생한다 — E 는 그 나머지를 잡는 두 번째 그물이다.
     """
-    cover_id = _make_cover(client)
-    template = client.post("/api/templates", json={
+    cover_id = _make_cover(authed_client)
+    template = authed_client.post("/api/templates", json={
         "name": "기본형", "cover_id": cover_id,
     }).json()
-    client.delete(f"/api/covers/{cover_id}?force=true")
+    authed_client.delete(f"/api/covers/{cover_id}?force=true")
     # 강제 삭제는 슬롯을 비우므로, 끊어진 참조 상태를 직접 만든다.
     from app.services import storage
 
@@ -197,46 +197,46 @@ def test_30_15_템플릿이_가리키는_표지가_삭제됐으면_400(client):
     meta["cover_id"] = cover_id
     storage.save_template(template["template_id"], meta)
 
-    res = client.post("/api/extract-v2", json={
+    res = authed_client.post("/api/extract-v2", json={
         "selections": _selections(), "template_id": template["template_id"],
     })
 
     assert res.status_code == 400
 
 
-def test_30_16_직접_cover_id가_삭제된_것이면_400(client):
+def test_30_16_직접_cover_id가_삭제된_것이면_400(authed_client):
     """근거: PLAN § 결정 — "**직접 id 경로에도 적용한다**"
 
     "표지를 골랐는데 표지 없이 나온 PDF" 가 실패보다 나쁘다 — 사용자는 다운로드해
     열기 전까지 모른다.
     """
-    cover_id = _make_cover(client)
-    client.delete(f"/api/covers/{cover_id}")
+    cover_id = _make_cover(authed_client)
+    authed_client.delete(f"/api/covers/{cover_id}")
 
-    res = client.post("/api/extract-v2", json={
+    res = authed_client.post("/api/extract-v2", json={
         "selections": _selections(), "cover_id": cover_id,
     })
 
     assert res.status_code == 400
 
 
-def test_30_17_빈_템플릿을_가리키는_생성_요청은_400(client):
+def test_30_17_빈_템플릿을_가리키는_생성_요청은_400(authed_client):
     """근거: PLAN § Phase 1 — "슬롯을 모두 비우는 POST·PATCH와 빈 템플릿을 가리키는 생성 요청은 400으로 거절되지만," """
-    cover_id = _make_cover(client)
-    template = client.post("/api/templates", json={
+    cover_id = _make_cover(authed_client)
+    template = authed_client.post("/api/templates", json={
         "name": "표지전용", "cover_id": cover_id,
     }).json()
     # 강제 삭제로 마지막 슬롯이 비워진 템플릿 — 저장소에는 남아 있다(30-24).
-    client.delete(f"/api/covers/{cover_id}?force=true")
+    authed_client.delete(f"/api/covers/{cover_id}?force=true")
 
-    res = client.post("/api/extract-v2", json={
+    res = authed_client.post("/api/extract-v2", json={
         "selections": _selections(), "template_id": template["template_id"],
     })
 
     assert res.status_code == 400
 
 
-def test_30_18_400이면_export_job이_생성되지_않는다(client):
+def test_30_18_400이면_export_job이_생성되지_않는다(authed_client):
     """근거: PLAN § Phase 1 — "(`template_id`·직접 id 양쪽) **400으로 거절되고 export job이 생성되지 않는다.**"
 
     거절인데 job 만 남으면 결과 목록에 영원히 PENDING 인 유령이 쌓인다.
@@ -249,7 +249,7 @@ def test_30_18_400이면_export_job이_생성되지_않는다(client):
 
     before = _export_count()
 
-    client.post("/api/extract-v2", json={
+    authed_client.post("/api/extract-v2", json={
         "selections": _selections(), "template_id": "no-such-template",
     })
 

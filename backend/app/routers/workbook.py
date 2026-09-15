@@ -20,12 +20,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from app.models.schemas import (
     WorkbookMeta, WorkbookSelectionItem, WorkbookSummary, WorkbookListResponse,
 )
+from app.services import auth_service
 from app.services import storage
 
 router = APIRouter()
@@ -36,12 +37,17 @@ def list_workbooks(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     name: Optional[str] = Query(None, description="문제집 이름 또는 파일명 부분 일치"),
+    current_user: dict = Depends(auth_service.get_current_user),
 ):
     """
     생성된 문제집 이력을 created_at 내림차순으로 페이지 단위 반환한다 (REQ-21 / REQ-P03-03).
     목록 화면은 selections를 쓰지 않으므로 WorkbookSummary(=selections 제외)로 응답한다.
+
+    `user` 역할은 본인 소유 문제집만 본다. `admin`은 전체를 본다(REQ-27 Phase 2).
     """
     raw_list = storage.list_workbooks()
+    if current_user["role"] != "admin":
+        raw_list = [w for w in raw_list if w.get("owner_id") == current_user["user_id"]]
 
     summaries = []
     for w in raw_list:
@@ -64,7 +70,9 @@ def list_workbooks(
 
 
 @router.delete("/workbooks/{workbook_id}", status_code=204)
-def delete_workbook(workbook_id: str):
+def delete_workbook(
+    workbook_id: str, current_user: dict = Depends(auth_service.get_current_user)
+):
     """
     문제집과 연관된 저장물을 전부 삭제한다 (REQ-C08).
 
@@ -74,6 +82,7 @@ def delete_workbook(workbook_id: str):
     data = storage.get_workbook(workbook_id)
     if data is None:
         raise HTTPException(status_code=404, detail=f"문제집 {workbook_id}를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, data.get("owner_id"))
 
     result_job_id = data.get("result_job_id")
     if result_job_id:
@@ -84,7 +93,7 @@ def delete_workbook(workbook_id: str):
 
 
 @router.get("/workbooks/{workbook_id}", response_model=WorkbookMeta)
-def get_workbook(workbook_id: str):
+def get_workbook(workbook_id: str, current_user: dict = Depends(auth_service.get_current_user)):
     """
     문제집 메타데이터 단건 반환 (REQ-20).
     WorkbookEditorView의 "기존 문제집 불러오기"에서 selections, layout 복원에 사용.
@@ -92,6 +101,7 @@ def get_workbook(workbook_id: str):
     data = storage.get_workbook(workbook_id)
     if data is None:
         raise HTTPException(status_code=404, detail=f"문제집 {workbook_id}를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, data.get("owner_id"))
     data["selections"] = [WorkbookSelectionItem(**s) for s in data.get("selections", [])]
     return WorkbookMeta(**data)
 
@@ -112,13 +122,18 @@ class WorkbookCreateRequest(BaseModel):
 
 
 @router.post("/workbooks", response_model=WorkbookMeta, status_code=201)
-def create_workbook(body: WorkbookCreateRequest):
+def create_workbook(
+    body: WorkbookCreateRequest, current_user: dict = Depends(auth_service.get_current_user)
+):
     """
     문제집 메타데이터를 저장한다.
     extract-v2 DONE 확인 후 프론트엔드가 호출한다.
 
     저장 경로: local_storage/workbooks/{workbook_id}.json
     이력 목록(GET /api/workbooks)과 편집 복원(GET /api/workbooks/{id})에서 재사용된다.
+
+    새로 만드는 문제집은 로그인한 사용자 본인 소유로 귀속된다(REQ-27 Phase 2 결정
+    "신규 가입자의 데이터 소유권").
     """
     workbook_id = body.workbook_id or str(uuid.uuid4())
     created_at  = body.created_at  or datetime.now(timezone.utc)
@@ -133,5 +148,7 @@ def create_workbook(body: WorkbookCreateRequest):
         filename=body.filename,
         name=body.name,
     )
-    storage.save_workbook(workbook_id, meta.model_dump(mode="json"))
+    data = meta.model_dump(mode="json")
+    data["owner_id"] = current_user["user_id"]
+    storage.save_workbook(workbook_id, data)
     return meta

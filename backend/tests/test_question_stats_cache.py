@@ -94,7 +94,7 @@ def test_F12_01_최초감지_완료시_total_pages_저장(make_job, stub_multi_p
     assert storage.get_status("job-01").total_pages == 5
 
 
-def test_F12_02_문항_삭제해도_total_pages_유지(client, make_job, stub_multi_page_detection, fake_pdf):
+def test_F12_02_문항_삭제해도_total_pages_유지(authed_client, make_job, stub_multi_page_detection, fake_pdf):
     """근거: PLAN § 작업 단계 Phase 1 — "`total_pages`는 감지 완료 시 1회 정해지면 문항 편집으로 바뀌지 않는다" """
     from app.routers.upload import _trigger_boundary_detection
     from app.services import storage
@@ -103,7 +103,7 @@ def test_F12_02_문항_삭제해도_total_pages_유지(client, make_job, stub_mu
     stub_multi_page_detection(boundaries=[_boundary(0, 1), _boundary(0, 2)], page_count=4)
     _trigger_boundary_detection("job-02")
 
-    res = client.delete("/api/jobs/job-02/pages/0/questions/1")
+    res = authed_client.delete("/api/jobs/job-02/pages/0/questions/1")
 
     assert res.status_code == 204
     assert storage.get_status("job-02").total_pages == 4
@@ -131,7 +131,7 @@ def test_F12_03_최초감지_완료시_오탐개수_저장(make_job, stub_multi_
     assert storage.get_status("job-03").false_positive_count == 2
 
 
-def test_F12_04_오탐_문항_삭제시_오탐개수_감소(client, make_job):
+def test_F12_04_오탐_문항_삭제시_오탐개수_감소(authed_client, make_job):
     """근거: PLAN § 제약·함정 — "오탐 캐시는 감지 완료·문항 삭제·재감지 시점에만 갱신하면 되고" """
     from app.services import storage
 
@@ -142,14 +142,14 @@ def test_F12_04_오탐_문항_삭제시_오탐개수_감소(client, make_job):
         _boundary(0, 3, is_false_positive=False),
     ])
 
-    res = client.delete("/api/jobs/job-04/pages/0/questions/1")
+    res = authed_client.delete("/api/jobs/job-04/pages/0/questions/1")
 
     assert res.status_code == 204
     assert storage.get_status("job-04").false_positive_count == 1
 
 
 def test_F12_05_수동문항_추가는_오탐개수_불변(
-    client, make_job, stub_multi_page_detection, fake_pdf
+    authed_client, make_job, stub_multi_page_detection, fake_pdf
 ):
     """근거: PLAN § 제약·함정 — "수동 문항 추가/삭제는 오탐 수에 영향 없다." """
     from app.routers.upload import _trigger_boundary_detection
@@ -163,7 +163,7 @@ def test_F12_05_수동문항_추가는_오탐개수_불변(
     _trigger_boundary_detection("job-05")
     before = storage.get_status("job-05").false_positive_count
 
-    res = client.post("/api/jobs/job-05/pages/1/questions/manual", json=MANUAL_BODY)
+    res = authed_client.post("/api/jobs/job-05/pages/1/questions/manual", json=MANUAL_BODY)
 
     assert res.status_code == 201
     assert storage.get_status("job-05").false_positive_count == before == 1
@@ -171,33 +171,33 @@ def test_F12_05_수동문항_추가는_오탐개수_불변(
 
 # ── manual_count ──────────────────────────────────────────
 
-def test_F12_06_수동문항_추가시_manual_count_증가(client, make_job):
+def test_F12_06_수동문항_추가시_manual_count_증가(authed_client, make_job):
     """근거: PLAN § 작업 단계 Phase 1 — "`add_manual_question`·" """
     from app.services import storage
 
     make_job("job-06")
     storage.save_manual_questions("job-06", [_manual(0, "m1")])
 
-    res = client.post("/api/jobs/job-06/pages/0/questions/manual", json=MANUAL_BODY)
+    res = authed_client.post("/api/jobs/job-06/pages/0/questions/manual", json=MANUAL_BODY)
 
     assert res.status_code == 201
     assert storage.get_status("job-06").manual_count == 2
 
 
-def test_F12_07_수동문항_삭제시_manual_count_감소(client, make_job):
+def test_F12_07_수동문항_삭제시_manual_count_감소(authed_client, make_job):
     """근거: PLAN § 작업 단계 Phase 1 — "`delete_manual_question`·" """
     from app.services import storage
 
     make_job("job-07")
     storage.save_manual_questions("job-07", [_manual(0, "m1"), _manual(0, "m2")])
 
-    res = client.delete("/api/jobs/job-07/pages/0/questions/manual/m1")
+    res = authed_client.delete("/api/jobs/job-07/pages/0/questions/manual/m1")
 
     assert res.status_code == 204
     assert storage.get_status("job-07").manual_count == 1
 
 
-def test_F12_08_벌크삭제시_manual_count_일괄_감소(client, make_job):
+def test_F12_08_벌크삭제시_manual_count_일괄_감소(authed_client, make_job):
     """근거: PLAN § 작업 단계 Phase 1 — "bulk-delete 지점마다" """
     from app.services import storage
 
@@ -206,7 +206,7 @@ def test_F12_08_벌크삭제시_manual_count_일괄_감소(client, make_job):
         "job-08", [_manual(0, "m1"), _manual(0, "m2"), _manual(0, "m3")]
     )
 
-    res = client.post(
+    res = authed_client.post(
         "/api/jobs/job-08/pages/0/questions/bulk-delete",
         json={"question_nums": [], "manual_ids": ["m1", "m2"]},
     )
@@ -234,7 +234,7 @@ def test_F12_09_문항0개_페이지가_있으면_미탐지수_반영(
 
 
 def test_F12_10_미탐지_페이지에_수동문항_추가시_미탐지수_감소(
-    client, make_job, stub_multi_page_detection, fake_pdf
+    authed_client, make_job, stub_multi_page_detection, fake_pdf
 ):
     """근거: PLAN § 결정 — "자동 + 수동 합쳐 문항이 0개인 페이지 수" """
     from app.routers.upload import _trigger_boundary_detection
@@ -244,14 +244,14 @@ def test_F12_10_미탐지_페이지에_수동문항_추가시_미탐지수_감�
     stub_multi_page_detection(boundaries=[_boundary(0, 1)], page_count=3)
     _trigger_boundary_detection("job-10")
 
-    res = client.post("/api/jobs/job-10/pages/1/questions/manual", json=MANUAL_BODY)
+    res = authed_client.post("/api/jobs/job-10/pages/1/questions/manual", json=MANUAL_BODY)
 
     assert res.status_code == 201
     assert storage.get_status("job-10").undetected_page_count == 1
 
 
 def test_F12_11_페이지의_마지막_문항_삭제시_미탐지수_증가(
-    client, make_job, stub_multi_page_detection, fake_pdf
+    authed_client, make_job, stub_multi_page_detection, fake_pdf
 ):
     """근거: PLAN § 결정 — "자동 + 수동 합쳐 문항이 0개인 페이지 수" """
     from app.routers.upload import _trigger_boundary_detection
@@ -263,7 +263,7 @@ def test_F12_11_페이지의_마지막_문항_삭제시_미탐지수_증가(
     )
     _trigger_boundary_detection("job-11")
 
-    res = client.delete("/api/jobs/job-11/pages/1/questions/1")
+    res = authed_client.delete("/api/jobs/job-11/pages/1/questions/1")
 
     assert res.status_code == 204
     assert storage.get_status("job-11").undetected_page_count == 1

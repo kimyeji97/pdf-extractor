@@ -25,7 +25,7 @@ import uuid
 from pathlib import Path
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import List, Optional
@@ -34,6 +34,7 @@ from app.models.schemas import (
     BoundariesStatus, JobStatus, JobType, StatsDetailField,
     ManualQuestion, ManualQuestionCreate, QuestionTitleUpdate, RegionCoord,
 )
+from app.services import auth_service
 from app.services import storage
 from app.services import thumbnail_service
 from app.services import prewarm_service
@@ -42,6 +43,19 @@ from app.services import question_stats_service
 from app.utils.question_parser import detect_question_boundaries, QuestionBoundary
 
 router = APIRouter()
+
+
+def _get_owned_job(job_id: str, current_user: dict):
+    """job을 조회하고 소유권을 확인한다 (REQ-27 Phase 2).
+
+    없으면 404, 있어도 본인 소유가 아니고 admin도 아니면 404(존재를 숨긴다 —
+    검증 계약이 403/404 중 404로 고정).
+    """
+    job = storage.get_status(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, job.owner_id)
+    return job
 
 
 # ── 파일 목록 ─────────────────────────────────────────────
@@ -201,14 +215,19 @@ def list_jobs(
     limit: int = Query(20, ge=1, le=100),
     name: Optional[str] = Query(None, description="문제집 이름 또는 파일명 부분 일치"),
     types: Optional[str] = Query(None, description="문제집 유형 부분 일치"),
+    current_user: dict = Depends(auth_service.get_current_user),
 ):
     """
     업로드된 PDF 파일 목록을 최신 순으로 반환 (REQ-P03-03).
 
     검색(name/types)은 서버에서 적용한 뒤 페이지를 자른다.
     프론트가 페이지 단위로만 받으므로 클라이언트 필터로는 뒷 페이지를 찾을 수 없기 때문.
+
+    `user` 역할은 본인 소유 job만 본다. `admin`은 전체를 본다(REQ-27 Phase 2).
     """
     job_files = [j for j in storage.list_jobs() if j.job_type == job_type]
+    if current_user["role"] != "admin":
+        job_files = [j for j in job_files if j.owner_id == current_user["user_id"]]
 
     name_lower = (name or "").strip().lower()
     types_lower = (types or "").strip().lower()
@@ -246,11 +265,9 @@ def list_jobs(
 
 
 @router.get("/jobs/{job_id}", response_model=JobSummary)
-def get_job(job_id: str):
+def get_job(job_id: str, current_user: dict = Depends(auth_service.get_current_user)):
     """단일 job의 상태 정보 반환 (boundaries_status 포함 — 재감지 폴링용)"""
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    job = _get_owned_job(job_id, current_user)
 
     # 원본 PDF 뷰어 URL (REQ-F07) — 소스 job만 원본 PDF를 가진다
     original_pdf_url = None
@@ -277,7 +294,7 @@ def get_job(job_id: str):
 
 
 @router.delete("/jobs/{job_id}", status_code=204)
-def delete_job(job_id: str):
+def delete_job(job_id: str, current_user: dict = Depends(auth_service.get_current_user)):
     """
     job과 연관된 저장물을 전부 삭제한다.
 
@@ -285,9 +302,7 @@ def delete_job(job_id: str):
     되돌릴 수 없다. 이 job의 문항을 담고 있던 문제집은 남지만, 참조가 끊겨
     편집 화면에서 해당 문항 썸네일이 표시되지 않는다(문제집 자체는 열린다).
     """
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    _get_owned_job(job_id, current_user)
 
     storage.delete_job(job_id)
     return Response(status_code=204)
@@ -301,11 +316,11 @@ class JobMetaUpdate(BaseModel):
 
 
 @router.patch("/jobs/{job_id}", response_model=JobSummary)
-def update_job_meta(job_id: str, body: JobMetaUpdate):
+def update_job_meta(
+    job_id: str, body: JobMetaUpdate, current_user: dict = Depends(auth_service.get_current_user)
+):
     """job의 문제집 이름/유형 메타데이터를 수정한다."""
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    job = _get_owned_job(job_id, current_user)
     if body.workbook_name is not None:
         job.workbook_name = body.workbook_name or None
     if body.workbook_types is not None:
@@ -333,7 +348,11 @@ class RefreshResponse(BaseModel):
 
 
 @router.post("/jobs/{job_id}/refresh", response_model=RefreshResponse)
-def refresh_job_questions(job_id: str, background_tasks: BackgroundTasks):
+def refresh_job_questions(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     전체 문서 재감지 요청 (비동기).
 
@@ -347,9 +366,7 @@ def refresh_job_questions(job_id: str, background_tasks: BackgroundTasks):
       - GET /api/jobs/{job_id} 를 폴링하여 DONE/FAILED 확인
       - DONE 이 되면 해당 페이지 문항 목록 다시 로드
     """
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    job = _get_owned_job(job_id, current_user)
 
     # 이미 처리 중이면 중복 요청 방지
     if job.boundaries_status == BoundariesStatus.PROCESSING:
@@ -495,11 +512,9 @@ def _get_or_build_page_info(job_id: str) -> list:
 
 
 @router.get("/jobs/{job_id}/pages", response_model=PageListResponse)
-def list_pages(job_id: str):
+def list_pages(job_id: str, current_user: dict = Depends(auth_service.get_current_user)):
     """선택된 PDF의 전체 페이지 목록과 썸네일 URL 반환"""
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    job = _get_owned_job(job_id, current_user)
 
     page_infos = _get_or_build_page_info(job_id)
 
@@ -534,11 +549,14 @@ def _pdf_key_of(job) -> str:
 
 
 @router.get("/jobs/{job_id}/pages/{page_num}/thumbnail")
-def get_thumbnail(job_id: str, page_num: int, dpi: int = Query(default=96, ge=72, le=300)):
+def get_thumbnail(
+    job_id: str,
+    page_num: int,
+    dpi: int = Query(default=96, ge=72, le=300),
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """썸네일 PNG 반환 — 캐시 우선, 없으면 생성 후 캐시 저장"""
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    job = _get_owned_job(job_id, current_user)
 
     # 캐시 확인
     cached = storage.get_thumbnail_cache(job_id, page_num)
@@ -605,14 +623,12 @@ class AllQuestionsResponse(BaseModel):
 
 
 @router.get("/jobs/{job_id}/questions", response_model=AllQuestionsResponse)
-def list_all_questions(job_id: str):
+def list_all_questions(job_id: str, current_user: dict = Depends(auth_service.get_current_user)):
     """
     전체 페이지의 문항을 한 번에 반환한다 (REQ-P01).
     boundaries 캐시·수동 문항·상태 파일을 각 1회만 읽어 N+1 문제를 해결한다.
     """
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    job = _get_owned_job(job_id, current_user)
 
     if job.boundaries_status == BoundariesStatus.PROCESSING:
         return AllQuestionsResponse(job_id=job_id, total_count=0, pages=[])
@@ -700,15 +716,15 @@ def list_all_questions(job_id: str):
 
 
 @router.get("/jobs/{job_id}/pages/{page_num}/questions", response_model=QuestionListResponse)
-def list_questions(job_id: str, page_num: int):
+def list_questions(
+    job_id: str, page_num: int, current_user: dict = Depends(auth_service.get_current_user)
+):
     """
     지정 페이지의 문항 목록과 bbox 반환.
     자동 감지 문항과 수동 추가 문항을 병합하여 반환한다 (REQ-13).
     경계 캐시가 있으면 재사용, 없으면 detect_question_boundaries 실행 후 캐시 저장.
     """
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    job = _get_owned_job(job_id, current_user)
 
     # 재감지 중이면 캐시 사용 금지 (오래된 데이터 반환 방지)
     if job.boundaries_status == BoundariesStatus.PROCESSING:
@@ -788,11 +804,18 @@ def list_questions(job_id: str, page_num: int):
 # ── 자동 문항 타이틀 수정 (REQ-12) ───────────────────────────
 
 @router.patch("/jobs/{job_id}/pages/{page_num}/questions/{question_num}")
-def update_question_title(job_id: str, page_num: int, question_num: int, body: QuestionTitleUpdate):
+def update_question_title(
+    job_id: str,
+    page_num: int,
+    question_num: int,
+    body: QuestionTitleUpdate,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     자동 감지 문항의 타이틀을 수정한다.
     변경사항은 boundaries/{job_id}.json 캐시에 직접 반영되어 서버에 영속 저장된다.
     """
+    _get_owned_job(job_id, current_user)
     cached = storage.get_boundaries_cache(job_id)
     if cached is None:
         raise HTTPException(status_code=404, detail="경계 캐시가 없습니다. 먼저 문항 목록을 조회해 주세요.")
@@ -815,12 +838,18 @@ def update_question_title(job_id: str, page_num: int, question_num: int, body: Q
 # ── 자동 문항 삭제 (REQ-14) ──────────────────────────────────
 
 @router.delete("/jobs/{job_id}/pages/{page_num}/questions/{question_num}", status_code=204)
-def delete_question(job_id: str, page_num: int, question_num: int):
+def delete_question(
+    job_id: str,
+    page_num: int,
+    question_num: int,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     자동 감지 문항을 삭제한다.
     boundaries 캐시에서 제거하고 questions_per_page, total_question_count를 재계산한다.
     문항 썸네일 캐시도 함께 삭제한다.
     """
+    _get_owned_job(job_id, current_user)
     cached = storage.get_boundaries_cache(job_id)
     if cached is None:
         raise HTTPException(status_code=404, detail="경계 캐시가 없습니다.")
@@ -861,7 +890,12 @@ def delete_question(job_id: str, page_num: int, question_num: int):
 # ── 수동 문항 추가 (REQ-13) ──────────────────────────────────
 
 @router.post("/jobs/{job_id}/pages/{page_num}/questions/manual", status_code=201)
-def add_manual_question(job_id: str, page_num: int, body: ManualQuestionCreate):
+def add_manual_question(
+    job_id: str,
+    page_num: int,
+    body: ManualQuestionCreate,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     수동 드래그로 지정한 영역을 문항으로 추가한다.
     새로고침 후에도 복원되도록 manual_questions/{job_id}.json에 영속 저장한다.
@@ -872,9 +906,7 @@ def add_manual_question(job_id: str, page_num: int, body: ManualQuestionCreate):
       3. 해당 영역 크롭 PNG 생성 → 썸네일 캐시 저장
       4. ManualQuestion 응답 반환
     """
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    job = _get_owned_job(job_id, current_user)
 
     manual_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -936,8 +968,15 @@ def add_manual_question(job_id: str, page_num: int, body: ManualQuestionCreate):
 # ── 수동 문항 타이틀 수정 (REQ-12) ───────────────────────────
 
 @router.patch("/jobs/{job_id}/pages/{page_num}/questions/manual/{manual_id}")
-def update_manual_question_title(job_id: str, page_num: int, manual_id: str, body: QuestionTitleUpdate):
+def update_manual_question_title(
+    job_id: str,
+    page_num: int,
+    manual_id: str,
+    body: QuestionTitleUpdate,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """수동 추가 문항의 타이틀을 수정한다. manual_questions/{job_id}.json에 저장."""
+    _get_owned_job(job_id, current_user)
     manual_list = storage.get_manual_questions(job_id)
     updated = False
     for m in manual_list:
@@ -956,8 +995,14 @@ def update_manual_question_title(job_id: str, page_num: int, manual_id: str, bod
 # ── 수동 문항 삭제 (REQ-14) ──────────────────────────────────
 
 @router.delete("/jobs/{job_id}/pages/{page_num}/questions/manual/{manual_id}", status_code=204)
-def delete_manual_question(job_id: str, page_num: int, manual_id: str):
+def delete_manual_question(
+    job_id: str,
+    page_num: int,
+    manual_id: str,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """수동 추가 문항을 삭제한다. 썸네일 캐시도 함께 삭제."""
+    _get_owned_job(job_id, current_user)
     manual_list = storage.get_manual_questions(job_id)
     original_count = len(manual_list)
     manual_list = [m for m in manual_list if m.get("manual_id") != manual_id]
@@ -989,7 +1034,12 @@ class BulkDeleteRequest(BaseModel):
 
 
 @router.post("/jobs/{job_id}/pages/{page_num}/questions/bulk-delete")
-def bulk_delete_questions(job_id: str, page_num: int, body: BulkDeleteRequest):
+def bulk_delete_questions(
+    job_id: str,
+    page_num: int,
+    body: BulkDeleteRequest,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     선택된 자동/수동 문항을 한 번에 삭제한다 (REQ-B06).
 
@@ -1002,6 +1052,7 @@ def bulk_delete_questions(job_id: str, page_num: int, body: BulkDeleteRequest):
     - 수동 문항: manual_questions 목록에서 manual_id∈manual_ids 일괄 제거.
     - 관련 썸네일 캐시도 함께 삭제(존재하지 않으면 무시).
     """
+    _get_owned_job(job_id, current_user)
     deleted_auto = 0
     deleted_manual = 0
 
@@ -1069,15 +1120,18 @@ def bulk_delete_questions(job_id: str, page_num: int, body: BulkDeleteRequest):
 # ── 문항 썸네일 ────────────────────────────────────────────
 
 @router.get("/jobs/{job_id}/pages/{page_num}/questions/{question_num}/thumbnail")
-def get_question_thumbnail_endpoint(job_id: str, page_num: int, question_num: int):
+def get_question_thumbnail_endpoint(
+    job_id: str,
+    page_num: int,
+    question_num: int,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     문항 크롭 썸네일 PNG 반환.
     캐시 키: thumbnails/{job_id}/q_{page_num}_{question_num}.png
     경계 캐시가 없으면 404 반환 — 먼저 문항 목록 엔드포인트를 호출해야 한다.
     """
-    job = storage.get_status(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+    job = _get_owned_job(job_id, current_user)
 
     # 문항 썸네일 캐시 확인
     cached_thumb = storage.get_question_thumbnail_cache(job_id, page_num, question_num)
@@ -1124,11 +1178,17 @@ def get_question_thumbnail_endpoint(job_id: str, page_num: int, question_num: in
 # ── 수동 문항 썸네일 ──────────────────────────────────────────
 
 @router.get("/jobs/{job_id}/pages/{page_num}/questions/manual/{manual_id}/thumbnail")
-def get_manual_question_thumbnail(job_id: str, page_num: int, manual_id: str):
+def get_manual_question_thumbnail(
+    job_id: str,
+    page_num: int,
+    manual_id: str,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     수동 추가 문항의 크롭 썸네일 PNG 반환.
     캐시에 있으면 반환, 없으면 region 좌표로 재생성한다.
     """
+    _get_owned_job(job_id, current_user)
     # 캐시 확인
     cached_thumb = storage.get_manual_thumbnail_cache(job_id, page_num, manual_id)
     if cached_thumb is not None:
