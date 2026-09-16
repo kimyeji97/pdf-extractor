@@ -1,6 +1,6 @@
 # PLAN-27 · 로그인/회원가입 (인증 + CORS 제한 + D07 잔여 슬롯)
 
-> 출처: 2026-09-14 세션(AskUserQuestion 4건 + 미결 7건 확정 라운드 2건) + 과거 세션 전수 검색(REQ-27 관련 언급 9건, 실질 논의는 이번이 처음) · 작성: 2026-09-14 · 상태: 🟡 진행 — Phase 2 완료, 미결 0건
+> 출처: 2026-09-14 세션(AskUserQuestion 4건 + 미결 7건 확정 라운드 2건) + 과거 세션 전수 검색(REQ-27 관련 언급 9건, 실질 논의는 이번이 처음) · 작성: 2026-09-14 · 상태: 🟡 진행 — Phase 3 완료, 미결 0건
 
 ## 배경
 
@@ -55,7 +55,7 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
       완료 기준: 신규 이메일로 가입 → 로그인 → access(1시간)/refresh(7일) 토큰 발급까지 API로 확인됨. `role`(admin/user) 필드가 사용자 모델에 있고 회원가입 기본값은 `user`.
 - [x] **Phase 2** — 기존 API 보호 + 소유권(`owner_id`) 도입 + 기존 데이터 관리자 계정 이관 — ✅ 2026-09-15, 케이스 30/30 (`/testrun` 2026-09-16 확인), 회귀 없음(백엔드 전체 163/163)
       완료 기준: 인증 없이 기존 job/workbook/cover/footnote/watermark/template API 호출 시 401. `user` 역할은 본인 소유 데이터만 조회되고 타인 소유물 접근 시 403/404(→404로 고정, 위 Phase 2 메모 참조). `admin` 역할은 전체 조회 가능. 마이그레이션 스크립트 실행 후 기존 데이터(6종 전부) 각 메타에 `owner_id`(관리자 계정)가 채워짐.
-- [ ] **Phase 3** — CORS 제한
+- [x] **Phase 3** — CORS 제한 — ✅ 2026-09-16, 케이스 4/4 (`/testrun` 확인), 회귀 없음(백엔드 전체 167/167)
       완료 기준: dev 프론트 도메인·`localhost:5173` 외 origin에서 API 호출 시 CORS로 차단됨.
 - [ ] **Phase 4** — 프론트 로그인/회원가입 화면 + 토큰 저장·갱신 + 인증 가드
       완료 기준: `auth-layout`이 라우터에 연결되고, 미인증 접근 시 로그인 화면으로 리다이렉트되며, `localStorage` 토큰으로 로그인 후 보호된 화면이 정상 동작하고 access 만료 시 자동 갱신됨. (선행: Phase 1·2 완료)
@@ -79,6 +79,11 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 > `app.services.migration_service.backfill_owner_id(admin_user_id: str) -> dict`로 고정
 > (계획서는 "스크립트 실행"이라고만 명시, 콜러블 시그니처는 미지정 — CLI는 이를 감싸는
 > 얇은 래퍼로 구현될 것을 전제한다).
+>
+> **Phase 3(2026-09-16 추가)** — 대상 엔드포인트는 `GET /health`로 고정(인증·스토리지
+> 격리와 무관하게 CORS 미들웨어 자체만 검증). Starlette `CORSMiddleware` 소스 확인 —
+> 허용 안 된 origin의 preflight(OPTIONS)는 `400 "Disallowed CORS origin"`, 단순 GET은
+> 200으로 통과하되 `Access-Control-Allow-Origin` 헤더가 붙지 않는다(둘 다 케이스로 분리).
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
 |----|------|--------|:----:|------|:----:|:----:|
@@ -98,6 +103,10 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 | 27-24~29 | DELETE /api/{...}/{id} | 타인 소유물 삭제 시도 시 404 (엔티티별 6건) | 예외 | PLAN § Phase 2 완료 기준 — "타인 소유물 접근 시 403/404" + § 제약·함정 — "모든 엔티티에 필수로 넣을 것" | 2 | ✅ |
 | 27-30~35 | 상동 (목록 조회) | `admin` 역할은 전체 계정 데이터를 조회할 수 있다 (엔티티별 6건) | 정상 | PLAN § Phase 2 완료 기준 — "`admin` 역할은 전체 조회 가능" | 2 | ✅ |
 | 27-36~41 | `migration_service.backfill_owner_id()` | 마이그레이션 실행 후 기존 데이터(엔티티별 6건) 메타에 `owner_id`(관리자 계정)가 채워짐 | 회귀/불변식 | PLAN § Phase 2 완료 기준 — "마이그레이션 스크립트 실행 후 기존 데이터(6종 전부) 각 메타에 `owner_id`가 채워짐" | 2 | ✅ |
+| 27-42 | GET /health | dev 프론트 도메인(`https://dailystudy-workbook-dev.yejicraft-cf.com`) 요청은 `Access-Control-Allow-Origin`에 그 origin이 그대로 반영된다 | 정상 | PLAN § 결정 — "CORS 허용 도메인 \| dev 프론트 도메인 + 로컬 개발(`localhost:5173`) 포함" | 3 | ✅ |
+| 27-43 | GET /health | `http://localhost:5173` 요청도 동일하게 허용된다 | 정상 | PLAN § 결정 — "CORS 허용 도메인 \| dev 프론트 도메인 + 로컬 개발(`localhost:5173`) 포함" | 3 | ✅ |
+| 27-44 | OPTIONS /health (preflight) | 허용 목록에 없는 origin의 preflight 요청은 400으로 차단된다 | 예외 | PLAN § Phase 3 완료 기준 — "dev 프론트 도메인·`localhost:5173` 외 origin에서 API 호출 시 CORS로 차단됨" | 3 | ✅ |
+| 27-45 | GET /health | 허용되지 않은 origin의 단순 요청 응답에는 `Access-Control-Allow-Origin` 헤더가 없다 | 예외 | PLAN § Phase 3 완료 기준 — "dev 프론트 도메인·`localhost:5173` 외 origin에서 API 호출 시 CORS로 차단됨" | 3 | ✅ |
 
 ## 제약·함정
 

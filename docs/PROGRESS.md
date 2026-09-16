@@ -119,7 +119,7 @@
 | REQ-29 | 각주·워터마크 등록(표지 CRUD와 같은 모양) + 생성 PDF 반영(표지 제외 전 페이지) | [plan](plans/PLAN-29-footnote-watermark-registration.md) | 2026-09-11 | ✅ **완료**(Phase 1+2, 케이스 28/28 · `/testrun` 확인 · 회귀 없음 140/140). PR #12 **main 머지 완료(2026-09-13, `e0da607`)**. 잔여 위험 2건(s3 스토리지 경로 미검증 · 브라우저 end-to-end 미실시)은 머지 후에도 그대로 |
 | REQ-30 | 템플릿 — 표지·각주·워터마크 조합 엔티티(**참조**, ADR-0004) + 생성 화면에서 `cover_id` 대신 `template_id` 선택 | [plan](plans/PLAN-30-template-entity.md) · [ADR](adr/0004-template-reference-not-snapshot.md) | 2026-09-13 | ✅ **Phase 1·2 완료**(케이스 41/41 · `/testrun` 확인 · 회귀 없음 백엔드 111·프론트 150). PR #13 **main 머지 완료(2026-09-13, `e1e4a7f`)**, 브랜치 삭제됨. 잔여 위험 2건(s3 경로 미검증 · 브라우저 e2e 미실시)은 머지 후에도 남는다 |
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
-| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | — | 🟡 **Phase 2 완료**(기존 API 보호+`owner_id` 소유권+기존 데이터 이관, 케이스 30/30 · `/testrun` 확인 · 회귀 없음 백엔드 전체 163/163). 브랜치 `feat/27-login-registration` 푸시됨, main 미머지. 남은 것은 Phase 3(CORS)·Phase 4·5(프론트) |
+| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | — | 🟡 **Phase 3 완료**(CORS 제한 — dev 프론트 도메인+`localhost:5173`만 허용, 케이스 4/4 · `/testrun` 확인 · 회귀 없음 백엔드 전체 167/167). 브랜치 `feat/27-login-registration` 푸시됨, main 미머지. 남은 것은 Phase 4·5(프론트 로그인/회원가입 화면 + `account-popover`) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -251,6 +251,36 @@ Phase 2 이전의 "누구나 접근 가능" 동작을 그대로 재현한다. **
 
 브랜치 `feat/27-login-registration`에 커밋(`8d22f89`)·푸시 완료. **main 미머지.** 남은 것은
 Phase 3(CORS 제한)·Phase 4·5(프론트 화면).
+
+**계약 승격** — 위 "예상 못 한 파급"을 CLAUDE.md 계약 **#30**으로 올렸다(`5850697`,
+사용자 승인) — 기존 라우터에 인증을 얹으면 무인증 호출 테스트가 전부 401로 깨진다는 규칙.
+
+## 2026-09-16
+
+### REQ-27 Phase 3 완료 — CORS 제한 (`/testrun` 4/4)
+
+**착수 전 게이트에 걸림** — `/implement 27 3` 호출 시 계획서 완료 기준은 있었지만
+`## 검증 계약` 표에 Phase 3 케이스가 0건이었다(`/testgen`을 아직 안 거침). 판정 불가
+Phase로 보고하고 `/testgen 27`을 먼저 돌려 27-42~45 케이스를 계획서에 채운 뒤 구현했다 —
+"완료 기준은 있는데 실행 가능한 케이스가 없다"가 실제로 걸린 사례.
+
+`CORSMiddleware.allow_origins`를 `"*"`에서 `settings.CORS_ALLOWED_ORIGINS`(신규 설정,
+기본값 = PLAN § 결정에 고정된 dev 프론트 도메인 `https://dailystudy-workbook-dev.yejicraft-cf.com` +
+`http://localhost:5173`)로 교체했다. 대상 검증은 `GET /health`로 고정 — 인증·스토리지
+격리와 무관하게 CORS 미들웨어 자체만 보기 위함(계획서 Phase 3 메모).
+
+Starlette `CORSMiddleware` 소스로 확인한 동작을 검증 계약에 그대로 반영했다: 허용 안 된
+origin의 preflight(OPTIONS)는 `400 "Disallowed CORS origin"`으로 차단되고, 단순 GET은
+200으로 통과하되 `Access-Control-Allow-Origin` 헤더가 안 붙는다(브라우저가 못 읽어 사실상
+차단). 구현이 스펙과 어긋난 곳 없이 첫 시도에 4/4 녹색 — 수정 루프 0회.
+
+`/testrun` 확인: 27-42~45 4/4 통과, REQ-27 전체 45/45(27-01~45), 전체 백엔드 스위트
+167/167 회귀 없음, 검증 계약 표-테스트 매칭 전부 대응(누락·손추가 없음), 근거 인용 2건
+전부 원문에서 재확인(근거 소실 없음).
+
+브랜치 `feat/27-login-registration`에 커밋(`509e9df`)·푸시 완료. **main 미머지.** 남은
+것은 Phase 4(프론트 로그인/회원가입 화면 + 토큰 저장·갱신 + 인증 가드)·Phase 5
+(`account-popover` 실데이터 연결, Phase 4 선행).
 
 ## 2026-09-14
 
