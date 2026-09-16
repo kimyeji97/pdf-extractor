@@ -1,6 +1,6 @@
 # PLAN-27 · 로그인/회원가입 (인증 + CORS 제한 + D07 잔여 슬롯)
 
-> 출처: 2026-09-14 세션(AskUserQuestion 4건 + 미결 7건 확정 라운드 2건) + 과거 세션 전수 검색(REQ-27 관련 언급 9건, 실질 논의는 이번이 처음) · 작성: 2026-09-14 · 상태: 🟡 진행 — Phase 1 완료, 미결 0건
+> 출처: 2026-09-14 세션(AskUserQuestion 4건 + 미결 7건 확정 라운드 2건) + 과거 세션 전수 검색(REQ-27 관련 언급 9건, 실질 논의는 이번이 처음) · 작성: 2026-09-14 · 상태: 🟡 진행 — Phase 2 완료, 미결 0건
 
 ## 배경
 
@@ -53,8 +53,8 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 
 - [x] **Phase 1** — 사용자 모델 + 회원가입/로그인/토큰 발급(백엔드) — ✅ 2026-09-14, 케이스 11/11
       완료 기준: 신규 이메일로 가입 → 로그인 → access(1시간)/refresh(7일) 토큰 발급까지 API로 확인됨. `role`(admin/user) 필드가 사용자 모델에 있고 회원가입 기본값은 `user`.
-- [ ] **Phase 2** — 기존 API 보호 + 소유권(`owner_id`) 도입 + 기존 데이터 관리자 계정 이관
-      완료 기준: 인증 없이 기존 job/workbook/cover/footnote/watermark/template API 호출 시 401. `user` 역할은 본인 소유 데이터만 조회되고 타인 소유물 접근 시 403/404. `admin` 역할은 전체 조회 가능. 마이그레이션 스크립트 실행 후 기존 데이터(6종 전부) 각 메타에 `owner_id`(관리자 계정)가 채워짐.
+- [x] **Phase 2** — 기존 API 보호 + 소유권(`owner_id`) 도입 + 기존 데이터 관리자 계정 이관 — ✅ 2026-09-15, 케이스 30/30 (`/testrun` 2026-09-16 확인), 회귀 없음(백엔드 전체 163/163)
+      완료 기준: 인증 없이 기존 job/workbook/cover/footnote/watermark/template API 호출 시 401. `user` 역할은 본인 소유 데이터만 조회되고 타인 소유물 접근 시 403/404(→404로 고정, 위 Phase 2 메모 참조). `admin` 역할은 전체 조회 가능. 마이그레이션 스크립트 실행 후 기존 데이터(6종 전부) 각 메타에 `owner_id`(관리자 계정)가 채워짐.
 - [ ] **Phase 3** — CORS 제한
       완료 기준: dev 프론트 도메인·`localhost:5173` 외 origin에서 API 호출 시 CORS로 차단됨.
 - [ ] **Phase 4** — 프론트 로그인/회원가입 화면 + 토큰 저장·갱신 + 인증 가드
@@ -72,6 +72,13 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 > `POST /api/auth/login` → 200 `{access_token, refresh_token, token_type}` ·
 > `POST /api/auth/refresh` → 200 `{access_token, refresh_token}`.
 > 사용자 저장 경로는 `users/{user_id}.json`(표지·각주·워터마크와 같은 파일 기반 패턴)으로 고정.
+>
+> **Phase 2(2026-09-15 추가)** — 완료 기준이 안 정한 것들:
+> 타인 소유물 접근 시 상태 코드는 **404**로 고정(계획서가 "403/404" 병기 — 존재 자체를 숨기는
+> 쪽으로 결정). 마이그레이션 진입점은
+> `app.services.migration_service.backfill_owner_id(admin_user_id: str) -> dict`로 고정
+> (계획서는 "스크립트 실행"이라고만 명시, 콜러블 시그니처는 미지정 — CLI는 이를 감싸는
+> 얇은 래퍼로 구현될 것을 전제한다).
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
 |----|------|--------|:----:|------|:----:|:----:|
@@ -86,6 +93,11 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 | 27-09 | POST /api/auth/login | 틀린 비밀번호로 로그인 시 401 | 예외 | 근거 문서 없음 — 검증 계약이 관례로 고정 | 1 | ✅ |
 | 27-10 | POST /api/auth/refresh | 유효한 refresh_token으로 갱신 시 새 access_token과 새 refresh_token을 받는다(rolling) | 정상 | PLAN § 결정 — "rolling refresh(갱신 때마다 refresh도 재발급해 만료 연장)" | 1 | ✅ |
 | 27-11 | POST /api/auth/refresh | 위조되거나 만료된 refresh_token으로 갱신 시 401 | 예외 | 근거 문서 없음 — 검증 계약이 관례로 고정 | 1 | ✅ |
+| 27-12~17 | GET /api/{jobs\|workbooks\|covers\|footnotes\|watermarks\|templates} | 인증 없이 호출 시 401 (엔티티별 6건) | 예외 | PLAN § Phase 2 완료 기준 — "인증 없이 기존 job/workbook/cover/footnote/watermark/template API 호출 시 401" | 2 | ✅ |
+| 27-18~23 | 상동 (목록 조회) | `user` 역할은 본인 소유 데이터만 목록에 노출된다 (엔티티별 6건) | 불변식 | PLAN § Phase 2 완료 기준 — "`user` 역할은 본인 소유 데이터만 조회" | 2 | ✅ |
+| 27-24~29 | DELETE /api/{...}/{id} | 타인 소유물 삭제 시도 시 404 (엔티티별 6건) | 예외 | PLAN § Phase 2 완료 기준 — "타인 소유물 접근 시 403/404" + § 제약·함정 — "모든 엔티티에 필수로 넣을 것" | 2 | ✅ |
+| 27-30~35 | 상동 (목록 조회) | `admin` 역할은 전체 계정 데이터를 조회할 수 있다 (엔티티별 6건) | 정상 | PLAN § Phase 2 완료 기준 — "`admin` 역할은 전체 조회 가능" | 2 | ✅ |
+| 27-36~41 | `migration_service.backfill_owner_id()` | 마이그레이션 실행 후 기존 데이터(엔티티별 6건) 메타에 `owner_id`(관리자 계정)가 채워짐 | 회귀/불변식 | PLAN § Phase 2 완료 기준 — "마이그레이션 스크립트 실행 후 기존 데이터(6종 전부) 각 메타에 `owner_id`가 채워짐" | 2 | ✅ |
 
 ## 제약·함정
 

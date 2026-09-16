@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-09-14
+> 최종 갱신: 2026-09-16
 
 ## 요구사항 인덱스
 
@@ -119,7 +119,7 @@
 | REQ-29 | 각주·워터마크 등록(표지 CRUD와 같은 모양) + 생성 PDF 반영(표지 제외 전 페이지) | [plan](plans/PLAN-29-footnote-watermark-registration.md) | 2026-09-11 | ✅ **완료**(Phase 1+2, 케이스 28/28 · `/testrun` 확인 · 회귀 없음 140/140). PR #12 **main 머지 완료(2026-09-13, `e0da607`)**. 잔여 위험 2건(s3 스토리지 경로 미검증 · 브라우저 end-to-end 미실시)은 머지 후에도 그대로 |
 | REQ-30 | 템플릿 — 표지·각주·워터마크 조합 엔티티(**참조**, ADR-0004) + 생성 화면에서 `cover_id` 대신 `template_id` 선택 | [plan](plans/PLAN-30-template-entity.md) · [ADR](adr/0004-template-reference-not-snapshot.md) | 2026-09-13 | ✅ **Phase 1·2 완료**(케이스 41/41 · `/testrun` 확인 · 회귀 없음 백엔드 111·프론트 150). PR #13 **main 머지 완료(2026-09-13, `e1e4a7f`)**, 브랜치 삭제됨. 잔여 위험 2건(s3 경로 미검증 · 브라우저 e2e 미실시)은 머지 후에도 남는다 |
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
-| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | — | 🟡 **Phase 1 완료**(사용자 모델+가입/로그인/토큰 발급, 케이스 11/11 · `/testrun` 확인 · 회귀 없음 133/133). 브랜치 `feat/27-login-registration` 푸시됨, main 미머지. 남은 것은 Phase 2(보호 라우트+소유권+기존 데이터 이관)·Phase 3(CORS)·Phase 4·5(프론트) |
+| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | — | 🟡 **Phase 2 완료**(기존 API 보호+`owner_id` 소유권+기존 데이터 이관, 케이스 30/30 · `/testrun` 확인 · 회귀 없음 백엔드 전체 163/163). 브랜치 `feat/27-login-registration` 푸시됨, main 미머지. 남은 것은 Phase 3(CORS)·Phase 4·5(프론트) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -227,6 +227,30 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-09-15
+
+### REQ-27 Phase 2 완료 — 기존 API 보호 + 소유권(`owner_id`) 도입 + 기존 데이터 이관 (`/testrun` 30/30, 2026-09-16 확인)
+
+job·workbook·cover·footnote·watermark·template 6개 라우터 전체에 `get_current_user` 인증을
+걸고 `owner_id` 메타데이터 필드(계획서 결정 — 경로 분리 대신 필드 방식)로 소유권을 분리했다.
+계획서가 "403/404 병기"로 열어 둔 상태 코드는 **404로 고정**했다 — 존재 자체를 숨기는 쪽.
+마이그레이션 진입점도 `app.services.migration_service.backfill_owner_id(admin_user_id: str) -> dict`
+로 시그니처를 새로 고정했다(계획서는 "스크립트 실행"이라고만 명시).
+
+**착수 시 예상 못 한 파급 — 기존 REQ-29·30·F09·F12·F13 테스트가 인증 헤더 없이 이 API들을
+부르고 있어서 전부 401로 깨졌다.** `conftest.py`에 admin으로 로그인하는 `authed_client`
+픽스처를 추가하고 해당 테스트들을 이걸 쓰도록 갱신해 해결했다 — admin은 소유권 필터를 안 받아
+Phase 2 이전의 "누구나 접근 가능" 동작을 그대로 재현한다. **인증을 기존 라우터에 얹는 작업은
+그 라우터를 호출하는 모든 기존 테스트에 인증 픽스처가 필요하다는 뜻**이라, 다음에 라우터를
+비슷하게 보호할 일이 있으면 이 파급을 먼저 계산해야 한다.
+
+`/testrun`(2026-09-16) 확인: 27-12~41 30/30 통과, 전체 백엔드 스위트 163/163 회귀 없음,
+검증 계약 표-테스트 매칭 30건 전부 대응(누락·손추가 없음), 근거 인용 4건 전부 원문에서
+재확인(근거 소실 없음).
+
+브랜치 `feat/27-login-registration`에 커밋(`8d22f89`)·푸시 완료. **main 미머지.** 남은 것은
+Phase 3(CORS 제한)·Phase 4·5(프론트 화면).
 
 ## 2026-09-14
 
