@@ -1,6 +1,6 @@
 # PLAN-27 · 로그인/회원가입 (인증 + CORS 제한 + D07 잔여 슬롯)
 
-> 출처: 2026-09-14 세션(AskUserQuestion 4건 + 미결 7건 확정 라운드 2건) + 과거 세션 전수 검색(REQ-27 관련 언급 9건, 실질 논의는 이번이 처음) · 작성: 2026-09-14 · 상태: 🟡 진행 — Phase 4 완료, 미결 0건
+> 출처: 2026-09-14 세션(AskUserQuestion 4건 + 미결 7건 확정 라운드 2건) + 과거 세션 전수 검색(REQ-27 관련 언급 9건, 실질 논의는 이번이 처음) · 작성: 2026-09-14 · 상태: 🟡 진행 — **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인), 미결 0건. 브랜치 `feat/27-login-registration` 푸시됨, **PR 미생성·main 미머지**
 
 ## 배경
 
@@ -75,7 +75,7 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
       들고 `localStorage` 토큰으로 보호된 4개 화면(analysis·editor·format·history)이 정상 동작하고,
       `apiFetch`가 401 응답에 refresh 1회 재시도로 access를 자동 갱신함. (선행: Phase 1·2 완료.
       위 "정정" 메모대로 `auth-layout` 슬롯 연결이 아니라 신규 구현이다)
-- [ ] **Phase 5** — `account-popover` 실 데이터 연결
+- [x] **Phase 5** — `account-popover` 실 데이터 연결 — ✅ 2026-09-18, 케이스 5/5 (`/testrun` 확인), 회귀 없음(백엔드 전체 167/167 · 프론트 전체 185/185)
       완료 기준: 헤더의 프로필 메뉴에 실제 로그인 사용자 정보(이메일 등)가 표시되고 로그아웃이 동작함. (선행: Phase 4 완료)
 
 ## 검증 계약
@@ -111,6 +111,17 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 > 쓰지 않는다 — 아무 데도 안 쓰이는 미사용 템플릿 코드라(grep 0건) `auth-layout`과 같은 함정을
 > 또 만들 수 있어 raw `localStorage` 호출을 그대로 쓴다. `logout()` 동작과 로그인/회원가입 에러
 > 메시지의 정확한 문구는 완료 기준 밖이라 케이스에서 뺐다.
+>
+> **Phase 5(2026-09-18 추가)** — `api/client.js`에 `logout()` 신설(기존 내부 `_clearTokens()`
+> 재사용). 컴포넌트명 `ProfileMenu`는 새로 고정하는 게 아니라 계획서 § 범위 본문에 이미 쓰인
+> 별칭("`account-popover`(`ProfileMenu`) 슬롯")을 그대로 따른 것이다.
+>
+> ⚠️ **정정(2026-09-18, 구현 중 실측)** — 위 `api/client.js`의 `logout()` 신설 계획은
+> **실제로는 폐기했다.** 27-65가 실패했다 — 테스트가 `api/client`를 통째로 mock하므로
+> `AuthContext.logout()`이 그 mock된 `logout()`에 위임하면 실제 `localStorage` clear가
+> 일어나지 않는다. `login()`이 토큰 저장을 `apiLogin`에 맡기지 않고 직접 하는 것과 같은
+> 이유로, `logout()`도 `AuthContext`가 `localStorage`를 **직접** 지운다.
+> `api/client.js`의 `logout()` export는 그래서 다시 지웠다(순증감 0).
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
 |----|------|--------|:----:|------|:----:|:----:|
@@ -152,6 +163,11 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 | 27-61 | `RequireAuth` | 미인증 상태에서는 children을 렌더하지 않고 `/login`으로 리다이렉트한다 | 예외 | PLAN § Phase 4 완료 기준 — "`RequireAuth`가 미인증 접근을 `/login`으로 리다이렉트" | 4 | ✅ |
 | 27-62 | `pages/login` | 이메일·비밀번호를 입력하고 제출하면 그 값 그대로 `login()`이 호출된다 | 정상 | PLAN § Phase 4 완료 기준 — "`pages/login`...에서 회원가입·로그인이 동작" | 4 | ✅ |
 | 27-63 | `pages/signup` | 이메일·비밀번호를 입력하고 제출하면 그 값 그대로 `signup()`이 호출된다 | 정상 | 상동 | 4 | ✅ |
+| 27-64 | `AuthContext.logout()` | 호출 시 `isAuthenticated`가 false가 되고 `userEmail`이 사라진다 | 정상 | PLAN § Phase 5 완료 기준 — "로그아웃이 동작함" | 5 | ✅ |
+| 27-65 | `AuthContext.logout()` | 호출 시 `access_token`·`refresh_token`이 `localStorage`에서 지워진다 | 정상 | 근거 문서 없음 — 검증 계약이 관례로 고정(로그아웃이면 토큰도 지워져야 자동 갱신이 되살아나지 않는다) | 5 | ✅ |
+| 27-66 | `ProfileMenu` | 메뉴를 열면 로그인한 사용자의 이메일이 표시된다 | 정상 | PLAN § 범위 — "`account-popover`(`ProfileMenu`) 슬롯에 실제 로그인 사용자 정보 연결" | 5 | ✅ |
+| 27-67 | `ProfileMenu` + `RequireAuth` | "로그아웃" 클릭 후 보호된 화면 접근 시 `/login`으로 리다이렉트된다 | 정상 | PLAN § Phase 5 완료 기준 — "로그아웃이 동작함" | 5 | ✅ |
+| 27-68 | `layouts/dashboard/layout.tsx` | 헤더 우측 영역에 `ProfileMenu`가 배선되어 있다 (소스 스캔) | 정상 | PLAN § Phase 5 완료 기준 — "헤더의 프로필 메뉴에 ... 표시" | 5 | ✅ |
 
 ## 제약·함정
 

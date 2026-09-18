@@ -101,7 +101,7 @@
 | REQ-P03 | 서버 성능 (썸네일 병목·캐시·페이지네이션) | [spec](specs/20260716-REQ-P03-thumbnail-response-time.md) | 2026-07-25 | ✅ P03-06만 기각 |
 | REQ-P02 | 클라 성능 (가상화·dedup·memo 등 10건) | [spec](specs/20260629-REQ-P02-performance-improvements.md) | 2026-07-22 | ✅ |
 | REQ-C08 | 문제집·소스 삭제 (연관 저장물 포함) | — | 2026-07-25 | ✅ |
-| REQ-D07 | 프론트 전면 리디자인 (Minimal 템플릿) | [spec](specs/20260725-REQ-D07-minimal-template-adoption.md) | — | 🟡 2안 정렬 완료, 잔여 기능 대기 |
+| REQ-D07 | 프론트 전면 리디자인 (Minimal 템플릿) | [spec](specs/20260725-REQ-D07-minimal-template-adoption.md) | 2026-09-18 | ✅ 잔여 기능(`auth-layout`·`account-popover` 슬롯)이 REQ-27 Phase 4·5로 해소됨 — 실제로는 "슬롯 연결"이 아니라 슬롯 자체가 없어(주석 한 줄뿐) 새로 구현했다 |
 | REQ-D08 | 라이트/다크 모드 | [spec](specs/20260729-REQ-D08-dark-mode.md) | 2026-07-29 | ✅ |
 | REQ-B10 | 생성 중 화면 이탈 시 문제집 메타 유실 | [plan](plans/PLAN-B10-workbook-meta-lost-on-navigate.md) | 2026-07-31 | ✅ dev 배포 완료 — 백엔드 2026-08-18 · 프론트 2026-08-21 |
 | REQ-B11 | 알림 기준선이 피드 도착 전에 잡힘 — 새로고침마다 직전 알림 토스트 | [plan](plans/PLAN-B11-notification-baseline-before-feed.md) | 2026-08-28 | ✅ **Phase 1~2 완료**(`useNotificationsReady` + 세 소비처 게이트, 10/10 · dev Worker 배포 후 새로고침 5회 토스트 0건 · 계약 #27 정정) — PR #3 **main 머지 완료(2026-08-28, `3d35d65`)**. 미결 1건(ready 동승 알림)은 후속 |
@@ -119,7 +119,7 @@
 | REQ-29 | 각주·워터마크 등록(표지 CRUD와 같은 모양) + 생성 PDF 반영(표지 제외 전 페이지) | [plan](plans/PLAN-29-footnote-watermark-registration.md) | 2026-09-11 | ✅ **완료**(Phase 1+2, 케이스 28/28 · `/testrun` 확인 · 회귀 없음 140/140). PR #12 **main 머지 완료(2026-09-13, `e0da607`)**. 잔여 위험 2건(s3 스토리지 경로 미검증 · 브라우저 end-to-end 미실시)은 머지 후에도 그대로 |
 | REQ-30 | 템플릿 — 표지·각주·워터마크 조합 엔티티(**참조**, ADR-0004) + 생성 화면에서 `cover_id` 대신 `template_id` 선택 | [plan](plans/PLAN-30-template-entity.md) · [ADR](adr/0004-template-reference-not-snapshot.md) | 2026-09-13 | ✅ **Phase 1·2 완료**(케이스 41/41 · `/testrun` 확인 · 회귀 없음 백엔드 111·프론트 150). PR #13 **main 머지 완료(2026-09-13, `e1e4a7f`)**, 브랜치 삭제됨. 잔여 위험 2건(s3 경로 미검증 · 브라우저 e2e 미실시)은 머지 후에도 남는다 |
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
-| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | — | 🟡 **Phase 4 완료**(프론트 로그인/회원가입 화면 + `RequireAuth` 가드 + `apiFetch` 토큰 부착·401 재시도, 케이스 18/18 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 180/180). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). 브랜치 `feat/27-login-registration` 푸시됨, main 미머지. 남은 것은 Phase 5(`account-popover` 실 데이터 연결) |
+| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | 🟡 **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). **PR 미생성·main 미머지**라 🟡로 둔다(브랜치 `feat/27-login-registration` 푸시됨). D07 잔여 슬롯도 이걸로 해소 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -268,6 +268,32 @@ REQ-27 Phase 4 착수 중 미머지 브랜치를 점검하다가 `origin/fix/B13
 가능함을 확인하고 PR #15로 열어 검토 요청했다(병합은 사용자 판단). 별도로 로컬에만
 남아 있던 `feat/29-footnote-watermark-registration`(이미 PR #12로 main에 병합된 잔가지,
 upstream "gone")은 삭제했다 — 유실 위험 없는 로컬 정리.
+
+### REQ-27 Phase 5 완료 — account-popover 실 데이터 연결 (`/testrun` 5/5) — **REQ-27 전체 완료**
+
+Phase 4와 같은 게이트(검증 계약 Phase 5 케이스 0건)에 걸려 `/testgen`으로 5케이스(27-64~68)를
+먼저 뽑았다. 계획서 § 범위 본문에 이미 있던 별칭("`account-popover`(`ProfileMenu`) 슬롯")을
+그대로 컴포넌트명으로 썼다.
+
+**구현 중 계획 폐기 — `api/client.js`에 `logout()`을 신설하려던 애초 계획을 실제로는
+버렸다.** 27-65(로그아웃 시 토큰이 `localStorage`에서 지워지는지)가 실패했다 — 테스트가
+`api/client`를 통째로 mock하므로 `AuthContext.logout()`이 그 mock된 `logout()`에 위임하면
+실제 clear가 안 일어난다. Phase 4의 `login()`이 토큰 저장을 `apiLogin`에 맡기지 않고
+`AuthContext`가 직접 하는 것과 같은 이유로, `logout()`도 `AuthContext`가 `localStorage`를
+직접 지우도록 고쳤다 — `api/client.js`의 `logout()` export는 다시 지워 순증감 0으로 끝났다
+(수정 루프 1회). **테스트가 `api/client`를 mock하는 구조에서는, Context의 상태 변경
+메서드가 mock되는 client 함수의 부수효과에 의존하면 안 된다**는 게 이번에 재확인된
+패턴이다(AuthContext.jsx 주석에 남김 — 계약 승격은 안 함, REQ-27 하나에 국한된 국소
+패턴으로 판단).
+
+`/testrun` 확인: 27-64~68 5/5 통과, **REQ-27 전체 68/68**(백엔드 45 + 프론트 23), 회귀 없음
+(백엔드 전체 167/167 · 프론트 전체 185/185), 검증 계약 표-테스트 매칭 전부 대응(23개 ID
+연속, 누락·손추가 없음), 근거 인용 2건 전부 원문에서 재확인.
+
+브랜치 `feat/27-login-registration`에 커밋(`016ac8f`)·푸시 완료. **PR 미생성·main 미머지.**
+**이로써 PLAN-27의 Phase 1~5가 전부 끝났다** — 인증(JWT)·CORS 제한·D07 잔여 슬롯을 한
+세션 안에 순서대로 닫은 REQ다(2026-09-14 착수). D07의 마지막 잔여 항목도 이걸로 해소돼
+REQ-D07 자체도 완료 처리했다(위 요구사항 인덱스). 다음 로드맵은 REQ-28 공유.
 
 ## 2026-09-15
 
