@@ -120,7 +120,7 @@
 | REQ-30 | 템플릿 — 표지·각주·워터마크 조합 엔티티(**참조**, ADR-0004) + 생성 화면에서 `cover_id` 대신 `template_id` 선택 | [plan](plans/PLAN-30-template-entity.md) · [ADR](adr/0004-template-reference-not-snapshot.md) | 2026-09-13 | ✅ **Phase 1·2 완료**(케이스 41/41 · `/testrun` 확인 · 회귀 없음 백엔드 111·프론트 150). PR #13 **main 머지 완료(2026-09-13, `e1e4a7f`)**, 브랜치 삭제됨. 잔여 위험 2건(s3 경로 미검증 · 브라우저 e2e 미실시)은 머지 후에도 남는다 |
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
 | REQ-B13 | 문항 크롭 여백을 네 변 10pt로 통일 (TODO 4단계 "서버 영역 버그") | [plan](plans/PLAN-B13-crop-margin-uniform.md) | — | 🟡 **Phase 1 완료**(케이스 11/11 · `/testrun` 확인 · 회귀 없음 136). PR #15 **main 머지 완료(2026-09-18)**. **Phase 2 미착수** — 오탐 판정(허용 오차 2.0pt) 영향 실측, 기출 PDF 필요 |
-| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | 🟡 **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). **PR 미생성·main 미머지**라 🟡로 둔다(브랜치 `feat/27-login-registration` 푸시됨). D07 잔여 슬롯도 이걸로 해소 |
+| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | ✅ **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). PR #16 **main 머지 완료(2026-09-18, `88ba7a3`)**, 브랜치 삭제됨. D07 잔여 슬롯도 이걸로 해소 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -295,6 +295,23 @@ Phase 4와 같은 게이트(검증 계약 Phase 5 케이스 0건)에 걸려 `/te
 **이로써 PLAN-27의 Phase 1~5가 전부 끝났다** — 인증(JWT)·CORS 제한·D07 잔여 슬롯을 한
 세션 안에 순서대로 닫은 REQ다(2026-09-14 착수). D07의 마지막 잔여 항목도 이걸로 해소돼
 REQ-D07 자체도 완료 처리했다(위 요구사항 인덱스). 다음 로드맵은 REQ-28 공유.
+
+### REQ-27 PR #16 main 머지 — 그 사이 먼저 병합된 REQ-B13(PR #15)과 문서 충돌
+
+PR을 열려고 보니 `feat/27-login-registration`이 갈라진 뒤 `main`이 이미 한 번 움직여
+있었다(PR #15 REQ-B13 Phase 1, 이번 세션 앞쪽에서 발견해 열어 둔 것이 그새 사용자가
+직접 머지함). `CLAUDE.md`의 "현재 위치" 서술 문단과 `docs/PROGRESS.md` 요구사항 인덱스
+둘 다, **두 브랜치가 같은 자리에 서로 다른 다음 단계를 써 넣은 진짜 충돌**이었다 —
+코드 충돌은 0건(B13은 `question_parser.py`, REQ-27은 프론트+`auth`쪽이라 겹치지 않음).
+`git merge origin/main`으로 로컬에서 직접 충돌을 해소하고(두 REQ 서술을 합침, B13을
+"Phase 2 미착수"로 유지) 병합 후 전체 스위트를 다시 돌려 확인했다(백엔드 181/181 —
+B13의 신규 테스트 14건 포함, 프론트 185/185) — **머지 커밋 자체가 회귀를 안 만든다는
+근거가 필요해서**, 문서 충돌 해소만 하고 테스트 없이 넘어가지 않았다.
+
+`gh pr merge`는 세션 권한(자동 모드 분류기)이 "되돌리기 어려운 공유 상태 변경"으로 보고
+차단했다 — main 머지는 이 세션이 직접 실행할 수 없고 사람이 GitHub에서 눌러야 했다.
+PR #16 병합(`88ba7a3`) · 원격 브랜치는 GitHub 자동 삭제 정책으로 이미 지워져 있었고,
+로컬 브랜치도 정리했다.
 
 ## 2026-09-15
 
