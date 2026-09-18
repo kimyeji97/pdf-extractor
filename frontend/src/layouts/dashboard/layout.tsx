@@ -9,6 +9,7 @@ import { useTheme } from '@mui/material/styles';
 
 import ColorSchemeMenu from 'components/ColorSchemeMenu';
 import NotificationBell from 'components/NotificationBell';
+import ProfileMenu from 'components/ProfileMenu';
 
 import { NavMobile, NavDesktop } from './nav';
 import { navData } from './nav-config';
@@ -64,10 +65,10 @@ export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery 
         </>
       ),
       rightArea: (
-        // 추가 예정 기능 자리 — 계정(REQ-27)
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
           <NotificationBell />
           <ColorSchemeMenu />
+          <ProfileMenu />
         </Box>
       ),
     };

@@ -49,7 +49,7 @@ def _boundary(page_index: int, number: int, is_false_positive: bool = False) -> 
 
 
 def test_F12_13_stats가_SOURCE_job_오탐수를_합산(
-    client, make_job, stub_multi_page_detection, fake_pdf
+    authed_client, make_job, stub_multi_page_detection, fake_pdf
 ):
     """근거: PLAN § 작업 단계 Phase 1 — "`SOURCE` job 캐시 필드만 합산" """
     from app.routers.upload import _trigger_boundary_detection
@@ -67,12 +67,12 @@ def test_F12_13_stats가_SOURCE_job_오탐수를_합산(
     )
     _trigger_boundary_detection("job-b")
 
-    res = client.get("/api/stats")
+    res = authed_client.get("/api/stats")
 
     assert res.json()["false_positive_count"] == 2
 
 
-def test_F12_14_stats_processing_count는_PROCESSING_job_개수(client, make_job):
+def test_F12_14_stats_processing_count는_PROCESSING_job_개수(authed_client, make_job):
     """근거: PLAN § 결정 — "`boundaries_status == PROCESSING`인 job 개수" """
     from app.models.schemas import BoundariesStatus
     from app.services import storage
@@ -85,13 +85,13 @@ def test_F12_14_stats_processing_count는_PROCESSING_job_개수(client, make_job
     j2.boundaries_status = BoundariesStatus.DONE
     storage.put_status(j2)
 
-    res = client.get("/api/stats")
+    res = authed_client.get("/api/stats")
 
     assert res.json()["processing_count"] == 1
 
 
 def test_F12_15_stats_detection_rate가_공식과_일치(
-    client, make_job, stub_multi_page_detection, fake_pdf
+    authed_client, make_job, stub_multi_page_detection, fake_pdf
 ):
     """근거: PLAN § 결정 — "`(total_question_count(자동) − 오탐 수 − 수동 수) / total_question_count(자동)`" """
     from app.routers.upload import _trigger_boundary_detection
@@ -107,19 +107,19 @@ def test_F12_15_stats_detection_rate가_공식과_일치(
         page_count=1,
     )
     _trigger_boundary_detection("job-15")
-    client.post(
+    authed_client.post(
         "/api/jobs/job-15/pages/0/questions/manual",
         json={"title": "수동", "region": {"x0": 0, "y0": 0, "x1": 100, "y1": 50}},
     )
 
-    res = client.get("/api/stats")
+    res = authed_client.get("/api/stats")
 
     # total_question_count(자동)=4, 오탐=1, 수동=1 → (4-1-1)/4 = 0.5
     assert res.json()["detection_rate"] == pytest.approx(0.5)
 
 
 def test_F12_16_EXPORT_job은_통계_합산에서_제외(
-    client, make_job, stub_multi_page_detection, fake_pdf
+    authed_client, make_job, stub_multi_page_detection, fake_pdf
 ):
     """근거: PLAN § 결정 — "`SOURCE` job만 — `EXPORT`(생성 결과)는 제외" """
     from app.models.schemas import JobType
@@ -141,14 +141,14 @@ def test_F12_16_EXPORT_job은_통계_합산에서_제외(
     )
     _trigger_boundary_detection("job-export")
 
-    res = client.get("/api/stats")
+    res = authed_client.get("/api/stats")
 
     # EXPORT의 오탐 2건이 섞이면 3이 된다 — SOURCE의 1건만 집계돼야 한다
     assert res.json()["false_positive_count"] == 1
 
 
 def test_F12_17_자동감지_문항_총합이_0이면_detection_rate는_null(
-    client, make_job, stub_multi_page_detection, fake_pdf
+    authed_client, make_job, stub_multi_page_detection, fake_pdf
 ):
     """근거: PLAN § 결정 — "API는 `null`을 반환하고 프론트는 "—"(계측 불가)로 표시" """
     from app.routers.upload import _trigger_boundary_detection
@@ -157,6 +157,6 @@ def test_F12_17_자동감지_문항_총합이_0이면_detection_rate는_null(
     stub_multi_page_detection(boundaries=[], page_count=1)
     _trigger_boundary_detection("job-zero")
 
-    res = client.get("/api/stats")
+    res = authed_client.get("/api/stats")
 
     assert res.json()["detection_rate"] is None

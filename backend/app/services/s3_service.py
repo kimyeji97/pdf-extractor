@@ -390,6 +390,7 @@ COVERS_PREFIX = "covers"
 FOOTNOTES_PREFIX = "footnotes"
 WATERMARKS_PREFIX = "watermarks"
 TEMPLATES_PREFIX = "templates"
+USERS_PREFIX = "users"
 
 
 def list_covers() -> list:
@@ -653,3 +654,30 @@ def save_template(template_id: str, meta: dict) -> None:
 
 def delete_template(template_id: str) -> None:
     _delete(_key(TEMPLATES_PREFIX, f"{template_id}.json"))
+
+
+# ── 사용자 (users, REQ-27) — 각주와 같은 모양(오브젝트 1건 = 레코드 1건) ──
+
+def list_users() -> list:
+    prefix = _key(USERS_PREFIX) + "/"
+    paginator = r2.get_paginator("list_objects_v2")
+    keys = []
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".json"):
+                keys.append(obj["Key"])
+    users = []
+    for k in keys:
+        try:
+            users.append(_get_json(k))
+        except Exception:
+            continue
+    return users
+
+
+def get_user(user_id: str) -> Optional[dict]:
+    return _get_json_or_none(_key(USERS_PREFIX, f"{user_id}.json"))
+
+
+def save_user(user_id: str, meta: dict) -> None:
+    _put_json(_key(USERS_PREFIX, f"{user_id}.json"), meta)

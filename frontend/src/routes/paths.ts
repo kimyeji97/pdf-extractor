@@ -8,6 +8,8 @@ const paths = {
   create: '/create',
   results: '/results',
   templates: '/templates',
+  login: '/login',
+  signup: '/signup',
 };
 
 export default paths;

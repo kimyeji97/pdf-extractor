@@ -262,6 +262,34 @@ def client():
 
 
 @pytest.fixture
+def authed_client(client, isolated_storage):
+    """
+    REQ-27 Phase 2로 job/workbook/cover/footnote/watermark/template API에 인증이
+    걸리면서, 이전에는 인증 없이 호출하던 기존 테스트(REQ-29·30·F09·F12·F13)가 401로
+    깨졌다. 이 픽스처는 admin 계정으로 로그인해 Authorization 헤더를 심어 둔
+    TestClient를 준다 — admin은 소유권 필터를 받지 않으므로
+    (`auth_service.ensure_owner_or_admin`) Phase 2 이전의 "누구나 접근 가능" 동작을
+    그대로 재현한다.
+
+    `user` role로는 이 재현이 안 된다 — `make_job` 등 기존 픽스처가 만드는 데이터는
+    owner_id가 아예 없고, owner_id가 없는 레코드는 admin만 접근 가능하기 때문이다.
+    """
+    import json as _json
+
+    email, password = "fixture-admin@example.com", "fixture-admin-password"
+    signup = client.post("/api/auth/signup", json={"email": email, "password": password}).json()
+
+    user_path = isolated_storage / "users" / f"{signup['user_id']}.json"
+    user = _json.loads(user_path.read_text(encoding="utf-8"))
+    user["role"] = "admin"
+    user_path.write_text(_json.dumps(user), encoding="utf-8")
+
+    login = client.post("/api/auth/login", json={"email": email, "password": password}).json()
+    client.headers["Authorization"] = f"Bearer {login['access_token']}"
+    return client
+
+
+@pytest.fixture
 def days_ago():
     def _days_ago(n: float) -> datetime:
         return datetime.now(timezone.utc) - timedelta(days=n)

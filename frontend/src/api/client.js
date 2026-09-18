@@ -18,7 +18,7 @@ function _setLoading(delta) {
 // Response.clone()으로 반환해 여러 호출자가 각자 독립적으로 res.json()을 호출할 수 있게 한다.
 const _inflightGets = new Map();
 
-async function apiFetch(url, options) {
+async function _rawFetch(url, options) {
   const method = (options?.method || "GET").toUpperCase();
   if (method !== "GET") {
     _setLoading(+1);
@@ -43,6 +43,114 @@ async function apiFetch(url, options) {
   } finally {
     _inflightGets.delete(url);
   }
+}
+
+// ── 인증 토큰 (REQ-27 Phase 4) ──────────────────────────────
+// `localStorage`에 직접 읽고 쓴다 — `lib/utils.ts`의 `getItemFromStore` 등은 아무 데도
+// 안 쓰이는 미사용 템플릿 코드라(grep 0건) 쓰지 않는다(계획서 § 검증 계약 Phase 4 메모).
+const ACCESS_TOKEN_KEY = "access_token";
+const REFRESH_TOKEN_KEY = "refresh_token";
+
+function _getAccessToken() {
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+function _getRefreshToken() {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+function _setTokens({ access_token, refresh_token }) {
+  localStorage.setItem(ACCESS_TOKEN_KEY, access_token);
+  localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
+}
+
+function _clearTokens() {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+/** `getJobInfo`처럼 apiFetch를 거치지 않는 raw fetch 호출도 이걸로 헤더를 만든다. */
+function _authHeaders() {
+  const token = _getAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function _tryRefresh(refreshToken) {
+  try {
+    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) {
+      _clearTokens();
+      return false;
+    }
+    _setTokens(await res.json());
+    return true;
+  } catch {
+    _clearTokens();
+    return false;
+  }
+}
+
+/**
+ * `Authorization` 헤더를 붙이고, 401을 받으면 refresh를 1회 시도해 원 요청을 재시도한다
+ * (REQ-27 Phase 4). refresh 자체가 401이면 더 재시도하지 않고 토큰을 지운다 —
+ * 무한 루프 방지(계획서 § 제약·함정).
+ */
+async function apiFetch(url, options, _isRetry = false) {
+  const authHeader = _authHeaders();
+  const merged = Object.keys(authHeader).length
+    ? { ...options, headers: { ...options?.headers, ...authHeader } }
+    : options;
+
+  const res = await _rawFetch(url, merged);
+  if (res.status !== 401 || _isRetry) return res;
+
+  const refreshToken = _getRefreshToken();
+  if (!refreshToken) return res;
+
+  const refreshed = await _tryRefresh(refreshToken);
+  if (!refreshed) return res;
+
+  return apiFetch(url, options, true);
+}
+
+/**
+ * POST /api/auth/signup
+ * 이메일+비밀번호 회원가입. 토큰은 반환하지 않는다(검증 계약 헤더 참조) — 로그인은 별도.
+ */
+export async function signup(email, password) {
+  const res = await apiFetch(`${BASE_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "회원가입 실패");
+  }
+  return res.json(); // { user_id, email, role }
+}
+
+/**
+ * POST /api/auth/login
+ * 로그인 성공 시 access_token·refresh_token을 localStorage에 저장한다.
+ */
+export async function login(email, password) {
+  const res = await apiFetch(`${BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "로그인 실패");
+  }
+  const data = await res.json(); // { access_token, refresh_token, token_type }
+  _setTokens(data);
+  return data;
 }
 
 /**
@@ -109,7 +217,9 @@ export async function listJobs(opts = {}) {
  * 재감지 완료 폴링 시 사용
  */
 export async function getJobInfo(jobId) {
-  const res = await fetch(`${BASE_URL}/jobs/${jobId}`);
+  // apiFetch를 거치지 않는 raw fetch지만(계약 #26), /api/jobs/{id}는 REQ-27 Phase 2로
+  // 보호 라우트가 됐다 — 헤더만 직접 붙인다(딤 처리·401 재시도는 그대로 없다).
+  const res = await fetch(`${BASE_URL}/jobs/${jobId}`, { headers: _authHeaders() });
   if (!res.ok) throw new Error("job 정보 조회 실패");
   return res.json();
   // { job_id, filename, status, boundaries_status, total_question_count, ... }
@@ -518,7 +628,8 @@ export async function uploadCover(file, name = "") {
   const form = new FormData();
   form.append("file", file);
   form.append("name", name);
-  const res = await fetch(`${BASE_URL}/covers`, { method: "POST", body: form });
+  // /api/covers는 REQ-27 Phase 2로 보호 라우트가 됐다 — 헤더만 직접 붙인다.
+  const res = await fetch(`${BASE_URL}/covers`, { method: "POST", body: form, headers: _authHeaders() });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || "표지 업로드 실패");
@@ -608,7 +719,8 @@ export async function uploadWatermark(file, name = "") {
   const form = new FormData();
   form.append("file", file);
   form.append("name", name);
-  const res = await fetch(`${BASE_URL}/watermarks`, { method: "POST", body: form });
+  // /api/watermarks는 REQ-27 Phase 2로 보호 라우트가 됐다 — 헤더만 직접 붙인다.
+  const res = await fetch(`${BASE_URL}/watermarks`, { method: "POST", body: form, headers: _authHeaders() });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || "워터마크 업로드 실패");

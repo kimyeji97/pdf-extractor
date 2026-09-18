@@ -5,7 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from app.routers import upload, extract, browse, workbook, cover, notification, footnote, watermark, template
+from app.routers import upload, extract, browse, workbook, cover, notification, footnote, watermark, template, auth
+from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,7 +43,7 @@ app = FastAPI(
 app.add_middleware(TimeoutMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: 프로덕션에서는 특정 도메인으로 제한
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,6 +58,7 @@ app.include_router(footnote.router, prefix="/api", tags=["footnote"])
 app.include_router(watermark.router, prefix="/api", tags=["watermark"])
 app.include_router(template.router, prefix="/api", tags=["template"])
 app.include_router(notification.router, prefix="/api", tags=["notification"])
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 
 
 @app.get("/health")

@@ -15,10 +15,11 @@ Endpoints:
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
 
 from app.routers.template import guard_asset_delete
+from app.services import auth_service
 from app.services import storage
 
 router = APIRouter()
@@ -31,8 +32,9 @@ _MAX_SIZE = 10 * 1024 * 1024   # 10 MB — 표지와 동일 제한
 async def upload_watermark(
     file: UploadFile = File(...),
     name: str = Form(""),
+    current_user: dict = Depends(auth_service.get_current_user),
 ):
-    """워터마크 이미지를 업로드한다."""
+    """워터마크 이미지를 업로드한다. 업로드한 사용자 본인 소유로 귀속된다(REQ-27 Phase 2)."""
     if file.content_type not in _ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="JPEG 또는 PNG 이미지만 업로드할 수 있습니다.")
 
@@ -48,6 +50,7 @@ async def upload_watermark(
         "name": name.strip() or (file.filename or "워터마크"),
         "ext": ext,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "owner_id": current_user["user_id"],
     }
 
     storage.save_watermark(watermark_id, meta, data, ext)
@@ -61,9 +64,11 @@ async def upload_watermark(
 
 
 @router.get("/watermarks")
-def list_watermarks():
-    """업로드된 워터마크 목록을 반환한다."""
+def list_watermarks(current_user: dict = Depends(auth_service.get_current_user)):
+    """업로드된 워터마크 목록을 반환한다. `user`는 본인 소유만, `admin`은 전체(REQ-27 Phase 2)."""
     watermarks = storage.list_watermarks()
+    if current_user["role"] != "admin":
+        watermarks = [w for w in watermarks if w.get("owner_id") == current_user["user_id"]]
     return {
         "watermarks": [
             {
@@ -76,8 +81,15 @@ def list_watermarks():
 
 
 @router.get("/watermarks/{watermark_id}/image")
-def get_watermark_image(watermark_id: str):
+def get_watermark_image(
+    watermark_id: str, current_user: dict = Depends(auth_service.get_current_user)
+):
     """워터마크 이미지를 반환한다 (img src 직접 사용 가능)."""
+    meta = storage.get_watermark_meta(watermark_id)
+    if meta is None:
+        raise HTTPException(status_code=404, detail="워터마크를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, meta.get("owner_id"))
+
     result = storage.get_watermark_image(watermark_id)
     if result is None:
         raise HTTPException(status_code=404, detail="워터마크를 찾을 수 없습니다.")
@@ -86,10 +98,16 @@ def get_watermark_image(watermark_id: str):
 
 
 @router.delete("/watermarks/{watermark_id}")
-def delete_watermark(watermark_id: str, force: bool = False):
+def delete_watermark(
+    watermark_id: str,
+    force: bool = False,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """워터마크를 삭제한다."""
-    if storage.get_watermark_meta(watermark_id) is None:
+    meta = storage.get_watermark_meta(watermark_id)
+    if meta is None:
         raise HTTPException(status_code=404, detail="워터마크를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, meta.get("owner_id"))
     guard_asset_delete("watermark_id", watermark_id, force, "워터마크")
     storage.delete_watermark(watermark_id)
     return {"message": "삭제되었습니다."}

@@ -567,3 +567,33 @@ def save_template(template_id: str, meta: dict) -> None:
 def delete_template(template_id: str) -> None:
     path = _BASE / "templates" / f"{template_id}.json"
     path.unlink(missing_ok=True)
+
+
+# ── 사용자 (users, REQ-27) — 각주와 같은 모양(파일 1건 = 레코드 1건) ──────
+
+def list_users() -> list:
+    """저장된 사용자 메타데이터 전체를 반환한다 (이메일 조회는 상위 계층이 스캔)."""
+    users_dir = _BASE / "users"
+    if not users_dir.exists():
+        return []
+    users = []
+    for path in users_dir.glob("*.json"):
+        try:
+            users.append(json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    return users
+
+
+def get_user(user_id: str) -> Optional[dict]:
+    path = _BASE / "users" / f"{user_id}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_user(user_id: str, meta: dict) -> None:
+    """사용자 메타데이터(이메일·비밀번호 해시·role)를 저장한다."""
+    _ensure(_BASE / "users" / f"{user_id}.json").write_text(
+        json.dumps(meta, ensure_ascii=False, default=str), encoding="utf-8"
+    )

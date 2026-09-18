@@ -13,10 +13,11 @@ Endpoints:
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.routers.template import guard_asset_delete
+from app.services import auth_service
 from app.services import storage
 
 router = APIRouter()
@@ -28,8 +29,10 @@ class FootnoteCreate(BaseModel):
 
 
 @router.post("/footnotes", status_code=201)
-def create_footnote(body: FootnoteCreate):
-    """각주를 등록한다."""
+def create_footnote(
+    body: FootnoteCreate, current_user: dict = Depends(auth_service.get_current_user)
+):
+    """각주를 등록한다. 등록한 사용자 본인 소유로 귀속된다(REQ-27 Phase 2)."""
     footnote_id = str(uuid.uuid4())
 
     meta = {
@@ -37,6 +40,7 @@ def create_footnote(body: FootnoteCreate):
         "name": body.name.strip(),
         "text": body.text.strip(),
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "owner_id": current_user["user_id"],
     }
 
     storage.save_footnote(footnote_id, meta)
@@ -45,19 +49,28 @@ def create_footnote(body: FootnoteCreate):
 
 
 @router.get("/footnotes")
-def list_footnotes():
-    """등록된 각주 목록을 반환한다."""
-    return {"footnotes": storage.list_footnotes()}
+def list_footnotes(current_user: dict = Depends(auth_service.get_current_user)):
+    """등록된 각주 목록을 반환한다. `user`는 본인 소유만, `admin`은 전체(REQ-27 Phase 2)."""
+    footnotes = storage.list_footnotes()
+    if current_user["role"] != "admin":
+        footnotes = [f for f in footnotes if f.get("owner_id") == current_user["user_id"]]
+    return {"footnotes": footnotes}
 
 
 @router.delete("/footnotes/{footnote_id}")
-def delete_footnote(footnote_id: str, force: bool = False):
+def delete_footnote(
+    footnote_id: str,
+    force: bool = False,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """각주를 삭제한다.
 
     REQ-30: 템플릿이 참조 중이면 기본은 409 로 차단한다 (표지와 동일).
     """
-    if storage.get_footnote_meta(footnote_id) is None:
+    meta = storage.get_footnote_meta(footnote_id)
+    if meta is None:
         raise HTTPException(status_code=404, detail="각주를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, meta.get("owner_id"))
     guard_asset_delete("footnote_id", footnote_id, force, "각주")
     storage.delete_footnote(footnote_id)
     return {"message": "삭제되었습니다."}
