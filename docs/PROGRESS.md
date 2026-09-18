@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-09-16
+> 최종 갱신: 2026-09-18
 
 ## 요구사항 인덱스
 
@@ -119,7 +119,7 @@
 | REQ-29 | 각주·워터마크 등록(표지 CRUD와 같은 모양) + 생성 PDF 반영(표지 제외 전 페이지) | [plan](plans/PLAN-29-footnote-watermark-registration.md) | 2026-09-11 | ✅ **완료**(Phase 1+2, 케이스 28/28 · `/testrun` 확인 · 회귀 없음 140/140). PR #12 **main 머지 완료(2026-09-13, `e0da607`)**. 잔여 위험 2건(s3 스토리지 경로 미검증 · 브라우저 end-to-end 미실시)은 머지 후에도 그대로 |
 | REQ-30 | 템플릿 — 표지·각주·워터마크 조합 엔티티(**참조**, ADR-0004) + 생성 화면에서 `cover_id` 대신 `template_id` 선택 | [plan](plans/PLAN-30-template-entity.md) · [ADR](adr/0004-template-reference-not-snapshot.md) | 2026-09-13 | ✅ **Phase 1·2 완료**(케이스 41/41 · `/testrun` 확인 · 회귀 없음 백엔드 111·프론트 150). PR #13 **main 머지 완료(2026-09-13, `e1e4a7f`)**, 브랜치 삭제됨. 잔여 위험 2건(s3 경로 미검증 · 브라우저 e2e 미실시)은 머지 후에도 남는다 |
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
-| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | — | 🟡 **Phase 3 완료**(CORS 제한 — dev 프론트 도메인+`localhost:5173`만 허용, 케이스 4/4 · `/testrun` 확인 · 회귀 없음 백엔드 전체 167/167). 브랜치 `feat/27-login-registration` 푸시됨, main 미머지. 남은 것은 Phase 4·5(프론트 로그인/회원가입 화면 + `account-popover`) |
+| REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | — | 🟡 **Phase 4 완료**(프론트 로그인/회원가입 화면 + `RequireAuth` 가드 + `apiFetch` 토큰 부착·401 재시도, 케이스 18/18 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 180/180). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). 브랜치 `feat/27-login-registration` 푸시됨, main 미머지. 남은 것은 Phase 5(`account-popover` 실 데이터 연결) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -227,6 +227,47 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-09-18
+
+### REQ-27 Phase 4 완료 — 프론트 로그인/회원가입 화면 + 토큰 저장·갱신 + 인증 가드 (`/testrun` 18/18)
+
+`/implement 27 4` 착수 전 게이트에서 걸렸다 — 계획서 `## 검증 계약` 표에 Phase 4 케이스가
+0건이었다(`/testgen`을 아직 안 거침). `/testgen`으로 되돌리기 전에 계획서 배경 자체를
+실측해 보니, **"D07이 `auth-layout`·`ProfileMenu` 슬롯을 이미 만들어 뒀다"는 서술이
+사실이 아니었다** — 실제 코드에는 그런 파일이 전혀 없고 `layouts/dashboard/layout.tsx:67`에
+`// 추가 예정 기능 자리 — 계정(REQ-27)` 주석 한 줄만 있었다. Phase 4는 "슬롯 연결"이 아니라
+로그인/회원가입 화면·라우트·인증 상태·가드를 처음부터 새로 만드는 작업으로 범위가
+정정됐다. `/workplan`으로 되돌려 구조(파일 위치·라우트 경로·상태 관리·가드 위치·access
+자동 갱신 트리거·가입 직후 동작) 5건을 확정한 뒤(전부 사용자가 권장안 채택) `/testgen`으로
+18케이스(27-46~63)를 뽑았다.
+
+**구현 중 발견 — 계약 #26(raw fetch 예외)이 REQ-27 Phase 2와 충돌할 뻔했다.** `getJobInfo`·
+`uploadCover`·`uploadWatermark`는 `apiFetch`를 거치지 않는 raw fetch인데(딤 처리 회피 목적),
+그 대상 엔드포인트(`/api/jobs/{id}`·`/api/covers`·`/api/watermarks`)는 이미 Phase 2에서
+보호 라우트가 되어 있었다. `apiFetch`에만 `Authorization` 헤더 부착을 넣었다면 이 셋은
+로그인 후에도 조용히 401이 났을 것이다 — 검증 계약에 케이스로 넣지는 않았지만(원래 범위
+밖) Phase 4의 "보호된 4개 화면이 정상 동작" 완료 기준을 충족하려면 필요해서 함께 고쳤다.
+
+수정 루프 1회 — `TextField`의 `required` 속성이 접근성 라벨에 `*`를 붙여
+`getByLabelText('이메일')`이 못 찾음. 테스트가 아니라 구현이 붙인 속성이 원인이라 제거.
+
+`/testrun` 확인: 27-46~63 18/18 통과, REQ-27 전체 63/63(백엔드 45 + 프론트 18), 회귀 없음
+(백엔드 전체 167/167 · 프론트 전체 180/180), 검증 계약 표-테스트 매칭 전부 대응(누락·
+손추가 없음, 단 `pytest -k "27"`이 `test_30_27_...`까지 주워 46건으로 잘못 보인 필터
+함정 발견 — `-k "test_27_"`로 정정), 근거 인용 8건 전부 원문에서 재확인.
+
+브랜치 `feat/27-login-registration`에 커밋(`c87a438`)·푸시 완료. **main 미머지.** 남은 것은
+Phase 5(`account-popover` 실 데이터 연결).
+
+### REQ-B13 PR 오픈 — 완결된 작업이 PR 없이 원격 브랜치에 방치돼 있던 것을 발견
+
+REQ-27 Phase 4 착수 중 미머지 브랜치를 점검하다가 `origin/fix/B13-crop-margin-uniform`
+(2026-09-13, Phase 1 완료 11/11 — 문항 크롭 여백 네 변 10pt 통일)이 `origin/main` 바로
+위에서 갈라진 채 PR도 없이 남아 있는 것을 발견했다. main과 충돌 없이 fast-forward
+가능함을 확인하고 PR #15로 열어 검토 요청했다(병합은 사용자 판단). 별도로 로컬에만
+남아 있던 `feat/29-footnote-watermark-registration`(이미 PR #12로 main에 병합된 잔가지,
+upstream "gone")은 삭제했다 — 유실 위험 없는 로컬 정리.
 
 ## 2026-09-15
 

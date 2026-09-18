@@ -1,6 +1,6 @@
 # PLAN-27 · 로그인/회원가입 (인증 + CORS 제한 + D07 잔여 슬롯)
 
-> 출처: 2026-09-14 세션(AskUserQuestion 4건 + 미결 7건 확정 라운드 2건) + 과거 세션 전수 검색(REQ-27 관련 언급 9건, 실질 논의는 이번이 처음) · 작성: 2026-09-14 · 상태: 🟡 진행 — Phase 3 완료, 미결 0건
+> 출처: 2026-09-14 세션(AskUserQuestion 4건 + 미결 7건 확정 라운드 2건) + 과거 세션 전수 검색(REQ-27 관련 언급 9건, 실질 논의는 이번이 처음) · 작성: 2026-09-14 · 상태: 🟡 진행 — Phase 4 완료, 미결 0건
 
 ## 배경
 
@@ -10,6 +10,13 @@
 D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth-layout`이 라우터에 연결 안 된 채
 존재하고, `AppbarActionItems`의 `ProfileMenu`(account-popover)도 알맹이 없이 슬롯만 있다
 (D07 스펙 §6). 백엔드는 스토리지 팩토리(local/s3)에 사용자 개념이 전혀 없다.
+
+> ⚠️ **정정(2026-09-18, Phase 4 착수 시 실측)** — 위 문단은 D07 스펙(원본 Minimal 템플릿
+> 문서)을 그대로 옮긴 것이었는데 **실제 코드에는 `auth-layout`도 `ProfileMenu`도 파일 자체가
+> 없다.** 남아 있는 건 `layouts/dashboard/layout.tsx:67`의 주석 한 줄
+> (`// 추가 예정 기능 자리 — 계정(REQ-27)`)뿐이다. 즉 Phase 4·5는 "슬롯 연결"이 아니라
+> **로그인/회원가입 화면·라우트·인증 상태·가드를 처음부터 새로 만드는 작업**이다. 아래
+> 결정 표의 파일 위치·라우트 경로·상태 관리·가드 항목이 이 정정 때문에 새로 추가됐다.
 
 ## 범위
 
@@ -44,6 +51,11 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 | 토큰 수명 | access 1시간, refresh 7일, rolling refresh(갱신 때마다 refresh도 재발급해 만료 연장) | 사용자 선택 | 고정 만료(rolling 없음) |
 | 관리자 역할 | `role` 개념 도입 — `admin`은 모든 계정 데이터 조회 가능 | 사용자 선택("관리자 계정이면 모든 계정껄 다 볼 수 있어야 함") | 역할 없이 계정 소유물만 접근 |
 | CORS 허용 도메인 | dev 프론트 도메인 + 로컬 개발(`localhost:5173`) 포함 | 사용자 선택 | 로컬 제외, dev/prod만 |
+| **(Phase 4, 2026-09-18)** 로그인/회원가입 화면 파일 위치·라우트 | `pages/login/index.jsx` · `pages/signup/index.jsx`, 라우트 `/login` · `/signup`(`paths.ts`에 추가) | 사용자 선택 — 기존 `pages/<이름>/index.jsx` 관례(analysis·editor·format·history)와 동일하게 맞춘다 | `pages/auth/login.jsx` + `pages/auth/signup.jsx` 한 폴더 묶음 — 폴더 1개=화면 1개인 기존 관례와 어긋난다 |
+| **(Phase 4)** 인증 상태 관리 | `contexts/AuthContext.jsx` — `NotificationProvider`와 같은 Provider 패턴, `App.tsx`에서 함께 감싼다 | 사용자 선택 — `NotificationContext` 선례를 그대로 따른다(리렌더·소비처 다건이라 Context가 자연스럽다) | Context 없이 `api/client.js` 모듈 레벨 상태 + `hooks/useAuth.js` — `_activeCount` 패턴과 같지만 React 트리와 분리돼 리렌더 연동이 훅 쪽에 따로 필요 |
+| **(Phase 4)** 인증 가드 위치 | 라우터 최상위에서 `DashboardLayout`을 감싸는 `RequireAuth` 래퍼 컴포넌트(`/login`·`/signup`은 감싸지 않음) | 사용자 선택 — 4개 화면(analysis·editor·format·history) 전부를 한곳에서 막을 수 있다 | `useAnalysisEntryGuard`처럼 화면마다 훅 추가 — REQ-F11 선례와 같은 모양이지만 화면 4곳에 중복해서 넣어야 한다 |
+| **(Phase 4)** access token 자동 갱신 트리거 | `apiFetch`가 401 응답을 받으면 refresh를 1회 시도하고 원 요청을 재시도(reactive) | 사용자 선택 — 타이머 관리가 필요 없고 진입점이 `api/client.js`의 `apiFetch` 하나뿐이라 기존 로딩 상태 처리(`_setLoading`)와 같은 자리에 넣을 수 있다 | `exp` 기반 선행 타이머로 만료 전에 미리 갱신 — 더 매끄럽지만 타이머 생성·해제 관리가 새로 필요하고, 계약 #25가 지적한 "waitFor가 setInterval을 쓰면 타이머 스파이 테스트와 충돌"과 같은 계열 함정을 새로 들일 수 있다 |
+| **(Phase 4)** 회원가입 직후 동작 | signup(토큰 미반환, `{user_id, email, role}`만) 성공 직후 같은 자격증명으로 `POST /api/auth/login`을 자동 호출해 토큰을 받고 바로 보호된 화면으로 진입 | 사용자 선택 — 사용자가 방금 입력한 비밀번호를 다시 치지 않아도 된다 | 가입 후 `/login`으로 리다이렉트만 하고 별도 로그인 입력을 요구 — 구현은 더 간단하지만 이중 입력이 생긴다 |
 
 ## 미결 질문
 
@@ -57,8 +69,12 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
       완료 기준: 인증 없이 기존 job/workbook/cover/footnote/watermark/template API 호출 시 401. `user` 역할은 본인 소유 데이터만 조회되고 타인 소유물 접근 시 403/404(→404로 고정, 위 Phase 2 메모 참조). `admin` 역할은 전체 조회 가능. 마이그레이션 스크립트 실행 후 기존 데이터(6종 전부) 각 메타에 `owner_id`(관리자 계정)가 채워짐.
 - [x] **Phase 3** — CORS 제한 — ✅ 2026-09-16, 케이스 4/4 (`/testrun` 확인), 회귀 없음(백엔드 전체 167/167)
       완료 기준: dev 프론트 도메인·`localhost:5173` 외 origin에서 API 호출 시 CORS로 차단됨.
-- [ ] **Phase 4** — 프론트 로그인/회원가입 화면 + 토큰 저장·갱신 + 인증 가드
-      완료 기준: `auth-layout`이 라우터에 연결되고, 미인증 접근 시 로그인 화면으로 리다이렉트되며, `localStorage` 토큰으로 로그인 후 보호된 화면이 정상 동작하고 access 만료 시 자동 갱신됨. (선행: Phase 1·2 완료)
+- [x] **Phase 4** — 프론트 로그인/회원가입 화면 + 토큰 저장·갱신 + 인증 가드 — ✅ 2026-09-18, 케이스 18/18 (`/testrun` 확인), 회귀 없음(백엔드 전체 167/167 · 프론트 전체 180/180)
+      완료 기준: `pages/login`·`pages/signup`(라우트 `/login`·`/signup`)에서 회원가입·로그인이 동작하고,
+      `RequireAuth`가 미인증 접근을 `/login`으로 리다이렉트하며, `contexts/AuthContext`가 로그인 상태를
+      들고 `localStorage` 토큰으로 보호된 4개 화면(analysis·editor·format·history)이 정상 동작하고,
+      `apiFetch`가 401 응답에 refresh 1회 재시도로 access를 자동 갱신함. (선행: Phase 1·2 완료.
+      위 "정정" 메모대로 `auth-layout` 슬롯 연결이 아니라 신규 구현이다)
 - [ ] **Phase 5** — `account-popover` 실 데이터 연결
       완료 기준: 헤더의 프로필 메뉴에 실제 로그인 사용자 정보(이메일 등)가 표시되고 로그아웃이 동작함. (선행: Phase 4 완료)
 
@@ -84,6 +100,17 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 > 격리와 무관하게 CORS 미들웨어 자체만 검증). Starlette `CORSMiddleware` 소스 확인 —
 > 허용 안 된 origin의 preflight(OPTIONS)는 `400 "Disallowed CORS origin"`, 단순 GET은
 > 200으로 통과하되 `Access-Control-Allow-Origin` 헤더가 붙지 않는다(둘 다 케이스로 분리).
+>
+> **Phase 4(2026-09-18 추가)** — 계획서가 안 정한 프론트 구조는 이 검증 계약이 관례로 고정한다
+> (REQ-30 client 함수 시그니처 선례와 같은 방식): `api/client.js`에 `signup(email, password)`·
+> `login(email, password)` 신설, `localStorage` 키는 `access_token`·`refresh_token`.
+> `contexts/AuthContext.jsx`의 `useAuth()`는 `{ isAuthenticated, userEmail, login, signup }`을
+> 반환한다(`logout`은 Phase 5 완료 기준에만 있어 이번엔 안 만든다). `components/RequireAuth.jsx`는
+> 기본 export, 미인증 시 `paths.login`으로 리다이렉트. 로그인 응답에는 이메일이 없으므로
+> `userEmail`은 로그인 폼에 입력한 값을 그대로 쓴다. `lib/utils.ts`의 `getItemFromStore` 등은
+> 쓰지 않는다 — 아무 데도 안 쓰이는 미사용 템플릿 코드라(grep 0건) `auth-layout`과 같은 함정을
+> 또 만들 수 있어 raw `localStorage` 호출을 그대로 쓴다. `logout()` 동작과 로그인/회원가입 에러
+> 메시지의 정확한 문구는 완료 기준 밖이라 케이스에서 뺐다.
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
 |----|------|--------|:----:|------|:----:|:----:|
@@ -107,6 +134,24 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 | 27-43 | GET /health | `http://localhost:5173` 요청도 동일하게 허용된다 | 정상 | PLAN § 결정 — "CORS 허용 도메인 \| dev 프론트 도메인 + 로컬 개발(`localhost:5173`) 포함" | 3 | ✅ |
 | 27-44 | OPTIONS /health (preflight) | 허용 목록에 없는 origin의 preflight 요청은 400으로 차단된다 | 예외 | PLAN § Phase 3 완료 기준 — "dev 프론트 도메인·`localhost:5173` 외 origin에서 API 호출 시 CORS로 차단됨" | 3 | ✅ |
 | 27-45 | GET /health | 허용되지 않은 origin의 단순 요청 응답에는 `Access-Control-Allow-Origin` 헤더가 없다 | 예외 | PLAN § Phase 3 완료 기준 — "dev 프론트 도메인·`localhost:5173` 외 origin에서 API 호출 시 CORS로 차단됨" | 3 | ✅ |
+| 27-46 | `routes/paths.ts` | `paths.login === '/login'`, `paths.signup === '/signup'` | 정상 | PLAN § 결정(Phase 4) — "라우트 `/login`·`/signup`(`paths.ts`에 추가)" | 4 | ✅ |
+| 27-47 | `routes/router`(실제 `routes` + `RouterProvider`) | 토큰 없이 `/`로 진입하면 최종 위치가 `/login`이 된다 | 정상 | PLAN § Phase 4 완료 기준 — "`RequireAuth`가 미인증 접근을 `/login`으로 리다이렉트" | 4 | ✅ |
+| 27-48 | `signup()` | `POST /api/auth/signup`에 `{email,password}`를 JSON body로 보낸다 | 정상 | 검증 계약 헤더 — "`POST /api/auth/signup` → 201 `{user_id, email, role}`" | 4 | ✅ |
+| 27-49 | `signup()` | 서버가 409를 반환하면 응답 `detail`로 Error를 던진다 | 예외 | 근거 문서 없음 — 기존 `client.js` 관례(`err.detail \|\| ...`)를 검증 계약이 고정 | 4 | ✅ |
+| 27-50 | `login()` | `POST /api/auth/login`에 `{email,password}`를 보내고, 성공 시 `access_token`·`refresh_token`을 `localStorage`에 저장한다 | 정상 | PLAN § 결정 — "refresh 토큰 저장 위치 \| 프론트 `localStorage`" | 4 | ✅ |
+| 27-51 | `login()` | 서버가 401을 반환하면 응답 `detail`로 Error를 던진다 | 예외 | 근거 문서 없음 — 기존 `client.js` 관례를 검증 계약이 고정 | 4 | ✅ |
+| 27-52 | `apiFetch`(경유: `listJobs()`) | `localStorage`에 `access_token`이 있으면 요청에 `Authorization: Bearer <token>` 헤더가 붙는다 | 정상 | PLAN § 범위 — "`Authorization` 헤더로 부착" | 4 | ✅ |
+| 27-53 | `apiFetch`(경유: `listJobs()`) | `access_token`이 없으면 `Authorization` 헤더를 붙이지 않는다 | 경계 | 상동(토큰 없는 반대 경우) | 4 | ✅ |
+| 27-54 | `apiFetch`(경유: `listJobs()`) | 401을 받으면 refresh를 1회 호출해 새 `access_token`으로 원 요청을 재시도한다 | 정상 | PLAN § Phase 4 완료 기준 — "`apiFetch`가 401 응답에 refresh 1회 재시도로 access를 자동 갱신함" | 4 | ✅ |
+| 27-55 | `apiFetch`(경유: `listJobs()`) | refresh 자체가 401이면 더 재시도하지 않고 저장된 토큰을 지운다 | 예외/회귀 | PLAN § 제약·함정(Phase 4) — "무한 루프에 빠지지 않도록 그 자리에서 로그아웃 처리하고 재시도하지 않는다" | 4 | ✅ |
+| 27-56 | `AuthContext`(`useAuth`) | 마운트 시 `access_token`이 있으면 `isAuthenticated`가 true다 | 정상 | PLAN § Phase 4 완료 기준 — "`contexts/AuthContext`가 로그인 상태를 들고" | 4 | ✅ |
+| 27-57 | `AuthContext`(`useAuth`) | 마운트 시 토큰이 없으면 `isAuthenticated`가 false다 | 경계 | 상동 | 4 | ✅ |
+| 27-58 | `AuthContext.login()` | 로그인 성공 시 `isAuthenticated`가 true가 되고, 입력한 이메일이 사용자 정보로 노출된다(로그인 응답엔 이메일이 없다) | 정상 | 근거 문서 없음 — 검증 계약이 관례로 고정(로그인 응답 봉투에 이메일이 없어 입력값을 쓴다) | 4 | ✅ |
+| 27-59 | `AuthContext.signup()` | 회원가입 성공 직후 같은 자격증명으로 로그인이 자동 호출되어 `isAuthenticated`가 true가 된다 | 정상 | PLAN § 결정(Phase 4) — "회원가입 직후 동작 \| ... 성공 직후 같은 자격증명으로 `POST /api/auth/login`을 자동 호출" | 4 | ✅ |
+| 27-60 | `RequireAuth` | 인증된 상태에서는 children을 그대로 렌더한다 | 정상 | PLAN § Phase 4 완료 기준 — "보호된 4개 화면이 정상 동작" | 4 | ✅ |
+| 27-61 | `RequireAuth` | 미인증 상태에서는 children을 렌더하지 않고 `/login`으로 리다이렉트한다 | 예외 | PLAN § Phase 4 완료 기준 — "`RequireAuth`가 미인증 접근을 `/login`으로 리다이렉트" | 4 | ✅ |
+| 27-62 | `pages/login` | 이메일·비밀번호를 입력하고 제출하면 그 값 그대로 `login()`이 호출된다 | 정상 | PLAN § Phase 4 완료 기준 — "`pages/login`...에서 회원가입·로그인이 동작" | 4 | ✅ |
+| 27-63 | `pages/signup` | 이메일·비밀번호를 입력하고 제출하면 그 값 그대로 `signup()`이 호출된다 | 정상 | 상동 | 4 | ✅ |
 
 ## 제약·함정
 
@@ -114,3 +159,5 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 - **계약 #24(테스트 스토리지 격리)** — 사용자·인증 테스트도 예외 없이 `os.environ` 값 덮어쓰기로 local 백엔드 격리를 지켜야 한다. 인증 흐름이라고 다르지 않다.
 - **`owner_id` 필터 누락은 에러 없이 조용히 샌다** — 메타데이터 필드 방식(결정 참조)을 택했으므로 물리적 격리가 없다. 라우터 하나에서 소유권 체크를 빠뜨리면 다른 사용자 데이터가 조용히 노출된다 — 6개 엔티티(job·workbook·cover·footnote·watermark·template) × 각 CRUD 엔드포인트마다 빠짐없이 확인 필요. `/testgen`에서 "인증된 다른 사용자로 접근 시 403/404" 케이스를 모든 엔티티에 필수로 넣을 것.
 - **렌더 무대 없는 화면** — `editor/index.jsx`·`format/index.jsx`와 같은 계열로, 로그인/회원가입 화면도 API mock이 여러 개 필요해 렌더 테스트 무대가 없을 가능성이 높다(계약 #25 계열). 착수 시 확인할 것.
+- **(Phase 4) `apiFetch`의 401 재시도는 1회로 고정한다** — refresh 자체가 401이면(refresh_token도 만료·위조) 무한 루프에 빠지지 않도록 그 자리에서 로그아웃 처리하고 재시도하지 않는다.
+- **(Phase 4) `RequireAuth`가 `/login`·`/signup`을 감싸면 안 된다** — 감싸면 미인증 사용자가 로그인 화면 자체에서 다시 `/login`으로 리다이렉트되는 무한 루프가 생긴다. 라우터 구조상 이 두 경로는 `DashboardLayout` 트리 밖에 둔다(router.tsx에 `RequireAuth` 래퍼 라우트와 별도 형제 라우트로).
