@@ -349,8 +349,9 @@ PROGRESS "미착수 — 번호만 부여된 것" 표. 번호는 완료돼도 재
   D07 잔여 슬롯을 한 번에 닫는 범위였다) — **D07의 마지막 잔여 항목(`auth-layout`·
   `account-popover` 슬롯)도 이걸로 해소됐다.** 착수 중 배경 서술 오류를 하나 잡았다 —
   D07 스펙이 "이미 슬롯을 만들어 뒀다"고 했지만 실제 코드에는 그 슬롯이 없고 주석 한 줄뿐이었다
-  (계획서 [PLAN-27](docs/plans/PLAN-27-login-registration.md) § 배경 정정). **PR 미생성·
-  main 미머지** — 브랜치 `feat/27-login-registration` 푸시됨. 다음은 **REQ-28 공유**.
+  (계획서 [PLAN-27](docs/plans/PLAN-27-login-registration.md) § 배경 정정). 다음은 **REQ-28 공유**.
+  🟡 남아 있는 것: **REQ-B13**(문항 크롭 여백 통일) **Phase 2**(오탐 판정 영향 실측, 기출 PDF 필요) —
+  Phase 1은 2026-09-18 main에 병합됐다(PR #15).
   **개별 REQ의 상태·완료일·PR 번호는 [`docs/PROGRESS.md`](docs/PROGRESS.md) 인덱스가 단일 출처다** —
   여기에 옮겨 적지 않는다(옛 이력을 이 절에 쌓다가 실제와 반대로 읽히는 문단이 됐다).
 - ⚠️ **REQ-29·30·F13의 잔여 위험** — ①**s3 스토리지 경로**: 자동 테스트는 계약 #24 격리로 항상

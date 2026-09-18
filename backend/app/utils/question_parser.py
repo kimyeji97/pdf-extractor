@@ -572,6 +572,20 @@ def _fill_y_bottom(
 # 5-b. v3 감지 정밀도 개선 (REQ-23, REQ-24, REQ-15)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# ── 크롭 여유 (REQ-B13) ──────────────────────────────────────
+#
+# 문항을 오려낼 때 텍스트에서 **네 변 모두** 이만큼 띄운다.
+#
+# ⚠️ **네 변이 이 상수 하나를 공유한다.** 변마다 숫자를 따로 적으면 "통일"이 코드에서
+#    안 읽히고, 나중에 값을 바꿀 때 세 곳만 고치는 사고가 난다(계획서 § 제약).
+#    B13-10 이 monkeypatch 로 그걸 검증하므로 **함수 안에서 읽어야** 한다 —
+#    import 시점에 지역 변수로 복사해 두면 그 케이스가 빨개진다.
+#
+# 값의 유래: 좌측이 REQ-24에서 "번호가 잘리지 않도록" 10pt 를 쓰고 있었고, 나머지 세 변을
+# 그 검증된 값에 맞췄다(REQ-B13). 종전 하단은 +50pt 였으나 그건 **상한**이라 다음 문항이
+# 가까우면 그만큼 줄어 문항마다 달랐다 — 이제 고정값이다.
+_CROP_MARGIN_PT = 10.0
+
 # 오탐지 판정 허용 오차 (pt 단위)
 # 페이지 전체 크기와 ±2pt 이내로 일치하면 오탐지로 간주한다.
 _FALSE_POSITIVE_TOLERANCE = 2.0
@@ -586,16 +600,19 @@ def _calc_tight_y_bottom(
     fallback_y_bottom: float,
 ) -> float:
     """
-    [REQ-23] 문항 내 실제 텍스트 하단 + 50pt 이내로 y_bottom을 조여준다.
+    [REQ-23 → REQ-B13] 문항 내 실제 텍스트 하단 + _CROP_MARGIN_PT 이내로 y_bottom을 조여준다.
 
     문제:
       _fill_y_bottom은 "다음 문항 y_top까지"를 y_bottom으로 쓰는데,
       두 문항 사이 여백이 클 경우 크롭 영역에 불필요한 빈 공간이 생긴다.
 
     해결:
-      문항에 속하는 단어들의 bottom 좌표 중 최대값에 50pt를 더한 값과
+      문항에 속하는 단어들의 bottom 좌표 중 최대값에 _CROP_MARGIN_PT 를 더한 값과
       fallback_y_bottom(다음 문항 y_top 또는 페이지 하단) 중 더 작은 값 사용.
-      50pt 여유를 두는 이유: 문항 번호 직후에 오는 그림/표는 텍스트가 없기 때문.
+
+    ⚠️ **`min()` 가드를 빼면 안 된다** — 문항 간격이 여유보다 좁을 때 **다음 문항 번호가
+       크롭에 찍힌다.** "기본 여유만큼, 다음 문항이 더 가까우면 그만큼만"이 계약이다
+       (계획서 § 결정 "하단", 계약 #11 — 감지 정확도).
 
     Args:
         question_words: 해당 문항 영역(y_top ~ fallback_y_bottom) 안의 단어들
@@ -605,7 +622,7 @@ def _calc_tight_y_bottom(
         # 텍스트가 없으면 기존 값 유지 (그림만 있는 문항 등)
         return fallback_y_bottom
     last_text_bottom = max(w["bottom"] for w in question_words)
-    return min(fallback_y_bottom, last_text_bottom + 50)
+    return min(fallback_y_bottom, last_text_bottom + _CROP_MARGIN_PT)
 
 
 def _is_false_positive(
@@ -694,7 +711,12 @@ def _apply_precision_improvements(
       - 단어 필터링에는 확정된 y_bottom(다음 문항 y_top)이 필요함
       - _fill_y_bottom이 y_bottom을 확정한 이후에만 단어 범위를 정확히 알 수 있음
     """
-    for b in boundaries:
+    # ⚠️ **(페이지, 컬럼)별로 y_top 오름차순 처리한다** (REQ-B13).
+    #    상단을 위로 넓힐 때 **이전 문항의 확정된 y_bottom** 을 넘지 않아야 하는데,
+    #    임의 순서로 돌면 그 값이 아직 정밀화 전이라 앞 문항 꼬리가 딸려 들어온다.
+    prev_bottom: dict[tuple[int, int], float] = {}
+
+    for b in sorted(boundaries, key=lambda x: (x.page_index, x.col, x.y_top)):
         if b.page_index >= len(pages_data):
             continue
         page_w, page_h, all_words = pages_data[b.page_index]
@@ -716,16 +738,23 @@ def _apply_precision_improvements(
             None,
         )
         if num_word:
-            # 문항 번호 텍스트 x0에서 10pt 왼쪽으로 여유를 줘서 번호가 잘리지 않도록
-            b.col_x0 = max(0.0, num_word["x0"] - 10)
-        # 해당 문항에 속한 모든 단어의 최대 x1을 새 col_x1로 사용
+            # 문항 번호 텍스트 x0에서 여유만큼 왼쪽으로 — 번호가 잘리지 않도록
+            b.col_x0 = max(0.0, num_word["x0"] - _CROP_MARGIN_PT)
+        # 해당 문항에 속한 모든 단어의 최대 x1 + 여유 (REQ-B13: 좌우 대칭)
         if question_words:
-            b.col_x1 = min(page_w, max(w["x1"] for w in question_words))
+            b.col_x1 = min(page_w, max(w["x1"] for w in question_words) + _CROP_MARGIN_PT)
 
         # ── REQ-23: y_bottom 정밀화 ──────────────────────────────
         # 다음 문항 y_top까지 포함했던 넓은 y_bottom을 실제 텍스트 하단에 맞게 줄임.
         # 문항 사이 불필요한 여백을 제거하여 크롭 이미지가 더 촘촘하게 표시됨.
         b.y_bottom = _calc_tight_y_bottom(question_words, b.y_bottom)
+
+        # ── REQ-B13: y_top 정밀화 — 상단에도 같은 여유 ───────────
+        # 단어 필터가 원래 y_top 을 기준으로 끝난 뒤에 넓힌다(먼저 넓히면 앞 문항 단어가
+        # 이 문항 것으로 잡힌다). 페이지 상단과 **이전 문항의 확정된 y_bottom** 이 상한이다.
+        floor = prev_bottom.get((b.page_index, b.col), 0.0)
+        b.y_top = max(floor, b.y_top - _CROP_MARGIN_PT)
+        prev_bottom[(b.page_index, b.col)] = b.y_bottom
 
         # ── REQ-15: 오탐지 마킹 ──────────────────────────────────
         # x 정밀화 + y 정밀화 후 최종 경계로 오탐지 여부를 판정한다.
