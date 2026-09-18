@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router';
 import GlobalDim from 'components/GlobalDim';
+import { AuthProvider } from 'contexts/AuthContext';
 import { NotificationProvider } from 'contexts/NotificationContext';
 import NotificationSnackbar from 'components/NotificationSnackbar';
 import { setLoadingCallback } from 'api/client';
@@ -23,13 +24,17 @@ const App = () => {
 
   // NotificationProvider 는 Outlet 바깥이다 — 라우트가 바뀌어도 폴링이 끊기면 안 된다
   // (REQ-F09 Phase 2). 화면 안쪽에 두면 종전 폴링과 같은 실패로 되돌아간다.
+  // AuthProvider 가 바깥인 이유는 로그인/회원가입 화면(Outlet 안, RequireAuth 밖)도
+  // useAuth()를 써야 하기 때문이다 (REQ-27 Phase 4).
   return (
-    <NotificationProvider>
-      <GlobalDim visible={apiLoading} />
-      <Outlet />
-      {/* 스낵바는 라우트 밖이다 — 완료가 어느 화면에서든 잡히므로 (REQ-F09 Phase 5) */}
-      <NotificationSnackbar />
-    </NotificationProvider>
+    <AuthProvider>
+      <NotificationProvider>
+        <GlobalDim visible={apiLoading} />
+        <Outlet />
+        {/* 스낵바는 라우트 밖이다 — 완료가 어느 화면에서든 잡히므로 (REQ-F09 Phase 5) */}
+        <NotificationSnackbar />
+      </NotificationProvider>
+    </AuthProvider>
   );
 };
 
