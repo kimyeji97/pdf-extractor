@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useState } from 'react';
 import { login as apiLogin, signup as apiSignup } from 'api/client';
 
 /**
- * 인증 상태 (REQ-27 Phase 4)
+ * 인증 상태 (REQ-27 Phase 4, `logout`은 Phase 5)
  *
  * `NotificationProvider`와 같은 자리(App.tsx)에서 앱 셸을 감싼다.
  *
@@ -13,9 +13,7 @@ import { login as apiLogin, signup as apiSignup } from 'api/client';
  *
  * 로그인 응답에는 이메일이 없으므로(검증 계약 헤더 참조) `userEmail`은 로그인 폼에 입력한
  * 값을 그대로 쓴다. 새로고침 후에도 표시할 수 있도록 별도 키로 함께 보관한다 — 인증에는
- * 쓰이지 않는 표시 전용 값이다.
- *
- * `logout()`은 Phase 5 완료 기준에만 있어 이번엔 만들지 않는다(계획서 § 검증 계약 Phase 4 메모).
+ * 쓰이지 않는 표시 전용 값이다. `logout()`이 이 키도 함께 지운다.
  */
 const USER_EMAIL_KEY = 'user_email';
 
@@ -41,8 +39,21 @@ export function AuthProvider({ children }) {
     [login],
   );
 
+  const logout = useCallback(() => {
+    // `login()`이 토큰 저장을 apiLogin에 맡기지 않고 직접 하는 것과 같은 이유로,
+    // 여기도 api/client를 거치지 않고 직접 지운다 — 테스트가 `api/client`를 통째로
+    // mock하므로 그쪽에 위임하면 mock이 실제 clear를 안 한다(27-65 실측).
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem(USER_EMAIL_KEY);
+    setUserEmail(null);
+    setIsAuthenticated(false);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, userEmail, login, signup }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ isAuthenticated, userEmail, login, signup, logout }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 
