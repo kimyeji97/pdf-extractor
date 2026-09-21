@@ -121,7 +121,7 @@
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
 | REQ-B13 | 문항 크롭 여백을 네 변 10pt로 통일 (TODO 4단계 "서버 영역 버그") | [plan](plans/PLAN-B13-crop-margin-uniform.md) | — | 🟡 **Phase 1 완료**(케이스 11/11 · `/testrun` 확인 · 회귀 없음 136). PR #15 **main 머지 완료(2026-09-18)**. **Phase 2 미착수** — 오탐 판정(허용 오차 2.0pt) 영향 실측, 기출 PDF 필요 |
 | REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | ✅ **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). PR #16 **main 머지 완료(2026-09-18, `88ba7a3`)**, 브랜치 삭제됨. D07 잔여 슬롯도 이걸로 해소 |
-| REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. 브랜치 `feat/B14-upload-extract-auth` 푸시 완료, **PR 미생성·main 미머지**(사용자 판단 영역) |
+| REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. PR #17 **main 머지 완료(2026-09-21, `eeb79c4`)**, 브랜치 삭제됨 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -339,8 +339,15 @@ job 존재·소유권 검사가 그걸 그대로 404로 잡아낸 것이다(계�
 일치, 표-테스트 매칭 누락·오타 없음. **PLAN-B14 Phase 1~3 전부 완료.**
 
 REQ-B14는 2026-09-14~18 세션에서 발견해 TODO에 미뤄 뒀던 REQ-27 후속 버그를, 2026-09-21
-하루 만에 계획서 작성부터 Phase 1~3 전부 닫은 REQ다. 브랜치 `feat/B14-upload-extract-auth`
-푸시 완료, **PR 오픈·main 머지는 하지 않음**(사람 판단 영역).
+하루 만에 계획서 작성부터 Phase 1~3 전부 닫은 REQ다.
+
+### REQ-B14 PR #17 main 머지
+
+PR #17 오픈 후 `gh pr merge`가 세션 권한(자동 모드 분류기, "Merge Without Review")으로
+막혀 REQ-27 PR #16 때와 같은 이유로 사람이 GitHub에서 직접 머지했다(`eeb79c4`). 원격
+브랜치는 GitHub 자동 삭제 정책으로 지워졌고, 로컬 `feat/B14-upload-extract-auth`도
+`git branch -d`로 정리했다(`git pull --ff-only`로 main 갱신 후 fast-forward 확인,
+충돌 없음).
 
 ## 2026-09-18
 
