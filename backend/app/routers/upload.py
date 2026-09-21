@@ -10,13 +10,14 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional
 
 from app.core.config import settings
 from app.models.schemas import BoundariesStatus, UploadResponse, JobStatusFile, JobStatus
+from app.services import auth_service
 from app.services import storage
 from app.services import thumbnail_service
 from app.services import prewarm_service
@@ -37,7 +38,10 @@ class UploadRequest(BaseModel):
 # ── presigned URL 요청 (모드 공통) ───────────────────────
 
 @router.post("/upload", response_model=UploadResponse)
-def request_upload(body: UploadRequest = UploadRequest()):
+def request_upload(
+    body: UploadRequest = UploadRequest(),
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     R2 모드: 클라이언트가 presigned URL로 직접 R2에 PUT
     로컬 모드: /api/upload/direct 엔드포인트 URL 반환 (multipart POST)
@@ -62,6 +66,7 @@ def request_upload(body: UploadRequest = UploadRequest()):
             original_key=key,
             workbook_name=body.workbook_name,
             workbook_types=body.workbook_types,
+            owner_id=current_user["user_id"],
         )
     )
     logger.info("[upload] status 저장 완료 | job_id=%s", job_id)
@@ -71,7 +76,11 @@ def request_upload(body: UploadRequest = UploadRequest()):
 # ── R2 업로드 완료 알림 (R2 모드 전용) ───────────────────
 
 @router.post("/upload/notify")
-def notify_upload_complete(job_id: str, background_tasks: BackgroundTasks):
+def notify_upload_complete(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     클라이언트가 R2 presigned URL로 파일 업로드를 완료한 뒤 호출한다.
     백그라운드로 문항 경계 감지를 시작하고 즉시 응답을 반환한다.
@@ -82,6 +91,7 @@ def notify_upload_complete(job_id: str, background_tasks: BackgroundTasks):
     status_file = storage.get_status(job_id)
     if status_file is None:
         raise HTTPException(status_code=404, detail="job_id를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, status_file.owner_id)
 
     logger.info("[upload] notify 수신 — 경계 감지 시작 | job_id=%s", job_id)
     background_tasks.add_task(_trigger_boundary_detection, job_id)
@@ -91,7 +101,12 @@ def notify_upload_complete(job_id: str, background_tasks: BackgroundTasks):
 # ── 직접 업로드 (로컬 모드 전용) ─────────────────────────
 
 @router.post("/upload/direct")
-async def direct_upload(key: str, file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()):
+async def direct_upload(
+    key: str,
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     로컬 개발용. generate_upload_presigned_url이 반환한 URL로
     프론트엔드가 multipart/form-data POST를 보낸다.
@@ -205,7 +220,7 @@ def _trigger_boundary_detection(job_id: str) -> None:
 # ── 파일 서빙 (로컬 모드 전용) ────────────────────────────
 
 @router.get("/files/{key:path}")
-def serve_file(key: str):
+def serve_file(key: str, current_user: dict = Depends(auth_service.get_current_user)):
     """
     로컬 개발용. generate_download_presigned_url이 반환한 URL로 접근하면
     result PDF를 그대로 돌려준다.

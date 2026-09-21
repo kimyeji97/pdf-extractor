@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from app.models.schemas import (
     ExtractRequest, ExtractResponse,
     StatusResponse, JobStatus, JobStatusFile, JobType,
@@ -17,7 +17,7 @@ from app.models.schemas import (
     WorkbookMeta, WorkbookSelectionItem,
 )
 from app.routers.template import is_empty
-from app.services import storage, pdf_service, notification_service
+from app.services import auth_service, storage, pdf_service, notification_service
 
 router = APIRouter()
 
@@ -31,10 +31,15 @@ _extract_pool = ProcessPoolExecutor(max_workers=2)
 # ── 추출 요청 ─────────────────────────────────────────────
 
 @router.post("/extract", response_model=ExtractResponse)
-def start_extract(req: ExtractRequest, background_tasks: BackgroundTasks):
+def start_extract(
+    req: ExtractRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     status_file = storage.get_status(req.job_id)
     if status_file is None:
         raise HTTPException(status_code=404, detail="job_id를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, status_file.owner_id)
     if status_file.status not in (JobStatus.PENDING,):
         raise HTTPException(
             status_code=409,
@@ -52,10 +57,11 @@ def start_extract(req: ExtractRequest, background_tasks: BackgroundTasks):
 # ── 상태 조회 ─────────────────────────────────────────────
 
 @router.get("/status/{job_id}", response_model=StatusResponse)
-def get_status(job_id: str):
+def get_status(job_id: str, current_user: dict = Depends(auth_service.get_current_user)):
     status_file = storage.get_status(job_id)
     if status_file is None:
         raise HTTPException(status_code=404, detail="job_id를 찾을 수 없습니다.")
+    auth_service.ensure_owner_or_admin(current_user, status_file.owner_id)
 
     download_url = None
     if status_file.status == JobStatus.DONE and status_file.result_key:
@@ -147,12 +153,24 @@ def _resolve_assets(req: ExtractV2Request) -> tuple[str | None, str | None, str 
 
 
 @router.post("/extract-v2", response_model=ExtractV2Response)
-def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
+def start_extract_v2(
+    req: ExtractV2Request,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     복수 job/page/question 선택으로부터 새 PDF 추출.
     새 export_job_id를 생성하여 PENDING 상태로 저장 후 백그라운드 태스크 시작.
     req.layout 으로 그리드 레이아웃 지정 가능 (REQ-18).
     """
+    # selections 는 여러 job_id 를 섞을 수 있다(멀티소스) — 하나라도 본인 소유가
+    # 아니면 요청 전체를 거절한다(계획서 § 결정 "extract-v2 멀티소스 소유권").
+    for job_id in {s.job_id for s in req.selections}:
+        source_job = storage.get_status(job_id)
+        if source_job is None:
+            raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
+        auth_service.ensure_owner_or_admin(current_user, source_job.owner_id)
+
     # ⚠️ **job 생성보다 먼저 검증한다.** 거절인데 job 만 남으면 결과 목록에 영원히
     #    PENDING 인 유령이 쌓인다 (계획서 Phase 1 완료 기준).
     cover_id, footnote_id, watermark_id = _resolve_assets(req)
@@ -163,6 +181,7 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
         job_id=export_job_id,
         status=JobStatus.PENDING,
         job_type=JobType.EXPORT,
+        owner_id=current_user["user_id"],
     )
     storage.put_status(export_status)
 
@@ -171,6 +190,7 @@ def start_extract_v2(req: ExtractV2Request, background_tasks: BackgroundTasks):
     background_tasks.add_task(
         _process_extraction_v2, req.selections, export_job_id, layout, cover_id,
         req.workbook_name, footnote_id, watermark_id, req.template_id,
+        current_user["user_id"],
     )
     return ExtractV2Response(job_id=export_job_id)
 
@@ -181,6 +201,7 @@ def _save_workbook_meta(
     layout: str,
     workbook_name: str,
     template_id: str | None = None,
+    owner_id: str | None = None,
 ) -> None:
     """
     생성 **성공** 직후 문제집 메타를 저장한다 (REQ-B10).
@@ -218,7 +239,9 @@ def _save_workbook_meta(
         # REQ-30: 이력 → 편집 복원 시 템플릿을 되살리는 근거.
         template_id=template_id,
     )
-    storage.save_workbook(meta.workbook_id, meta.model_dump(mode="json"))
+    data = meta.model_dump(mode="json")
+    data["owner_id"] = owner_id
+    storage.save_workbook(meta.workbook_id, data)
 
 
 def _process_extraction_v2(
@@ -230,6 +253,7 @@ def _process_extraction_v2(
     footnote_id: str | None = None,
     watermark_id: str | None = None,
     template_id: str | None = None,
+    owner_id: str | None = None,
 ) -> None:
     export_status = storage.get_status(export_job_id)
     export_status.status = JobStatus.PROCESSING
@@ -260,7 +284,7 @@ def _process_extraction_v2(
             if workbook_name:
                 try:
                     _save_workbook_meta(
-                        selections, export_job_id, layout, workbook_name, template_id
+                        selections, export_job_id, layout, workbook_name, template_id, owner_id
                     )
                 except Exception as e:
                     # 메타 저장 실패가 "PDF 생성 실패"로 둔갑하면 안 된다 — PDF는 이미 만들어졌다.
