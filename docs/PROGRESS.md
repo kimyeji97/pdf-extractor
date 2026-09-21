@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-09-18
+> 최종 갱신: 2026-09-21
 
 ## 요구사항 인덱스
 
@@ -121,6 +121,7 @@
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
 | REQ-B13 | 문항 크롭 여백을 네 변 10pt로 통일 (TODO 4단계 "서버 영역 버그") | [plan](plans/PLAN-B13-crop-margin-uniform.md) | — | 🟡 **Phase 1 완료**(케이스 11/11 · `/testrun` 확인 · 회귀 없음 136). PR #15 **main 머지 완료(2026-09-18)**. **Phase 2 미착수** — 오탐 판정(허용 오차 2.0pt) 영향 실측, 기출 PDF 필요 |
 | REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | ✅ **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). PR #16 **main 머지 완료(2026-09-18, `88ba7a3`)**, 브랜치 삭제됨. D07 잔여 슬롯도 이걸로 해소 |
+| REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | — | 🟡 **Phase 1 완료**(케이스 15/15 · `/testrun` 확인). **Phase 2~3 미착수** — 프론트 raw fetch 헤더 보강(B14-12) · 기존 테스트 회귀 확인. 브랜치 `feat/B14-upload-extract-auth` 푸시(미머지). ⚠️ Phase 1이 REQ-30 기존 테스트 8건을 깨뜨림(fixture가 실제 job 없이 job_id만 참조) — Phase 3에서 처리 필요 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -229,6 +230,70 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 
 # 로그
 
+## 2026-09-21
+
+### REQ-B14 계획서 작성 — 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 후속)
+
+09-18에 발견해 TODO에만 남겨 뒀던 후속 버그(`ee9c785`)를 계획서로 옮겼다. 결정 5건:
+- 생성 경로 인증 방식 → **A안**(로그인 강제, `owner_id` 채움). 게스트 허용(B안)은
+  기각 — REQ-27의 원래 목적이 "인증 전무" 상태를 닫는 것.
+- `GET /api/files/{key:path}` → 로그인만 요구, 소유권 검사는 뺐다(잔여 위험: 다른
+  로그인 사용자는 여전히 job_id를 알면 접근 가능 — 사용자가 트레이드오프로 승인).
+- `POST /api/upload/notify` → 로그인 + 소유권 검사 둘 다.
+- 기존 `owner_id=None` 레코드 → admin 귀속. **조사 중 발견**: REQ-27의
+  `migration_service.backfill_owner_id()`가 이미 범용·재실행 가능해서 새 코드가
+  필요 없다 — 배포 후 재실행만 하면 된다.
+- `extract-v2` 멀티소스 → 전체 차단(selections의 job_id 중 하나라도 타인 소유면
+  요청 전체 404). 부분 허용(조용히 제외)은 계약 #22 계열의 "조용히 틀린 결과" 위험으로
+  기각.
+
+### 미결 정리 — v1 `/extract`·`/status`도 같은 수준으로 보호하기로 결정
+
+계획서 작성 당시 빠져 있던 것 2건을 추가 결정했다 — `POST /api/extract`(v1)의
+`req.job_id`, `GET /api/status/{job_id}` 둘 다 기존에 무인증이었다. `/testgen` 진행
+중 `GET /api/status`가 `GET /api/jobs/{id}`와 사실상 같은 정보(상태·download_url)를
+노출한다는 걸 추가로 발견해 B14 범위에 편입했다. 둘 다 로그인+소유권 검사로
+통일했다 — 일관성 근거(`extract-v2`·`GET /api/jobs/{id}` 등 다른 모든 경로가 이미 이
+패턴을 씀).
+
+### CLAUDE.md 계약 #32 추가 — "생성 라우터에 인증 걸 때 owner_id도 함께 채워야"
+
+REQ-B14 자체가 "인증만 걸고 owner_id를 안 채우면 오히려 본인도 접근 못하게 된다"는
+패턴의 실제 사례라, 계약 #30·#31과 같은 계열(백엔드 절)로 승격했다. REQ-28 공유 등
+앞으로 새 생성 라우터에 인증을 걸 때 반복되지 않게 하려는 목적.
+
+### REQ-B14 `/testgen` — 16케이스 작성(백엔드 15 · 프론트 1)
+
+계획서 자체가 1차 소스(별도 스펙 없음, 버그 수정 REQ 관례). 근거 인용이 여러 줄에
+걸치는 문제를 발견해 Phase 1 완료 기준을 줄바꿈 없는 불릿 목록으로 재작성했다(인용은
+원문의 줄바꿈을 넘지 않는 범위에서 딴다는 원칙). `test_auth_authorization.py`(REQ-27)의
+`_signup_and_login`·`_headers`·`_make_job` 헬퍼를 그대로 가져다 썼다(새로 안 만듦).
+B14-09(notify 소유권)는 로컬 모드에서 `/upload/notify`가 원래도 "R2 모드에서만" 404를
+던지는 기존 가드와 겹쳐 **가짜로 통과하는 테스트**가 될 뻔한 걸 미리 잡아
+`STORAGE_BACKEND`를 `"s3"`로 monkeypatch해 가드를 우회하는 식으로 썼다(실제 파일 I/O는
+conftest 격리로 그대로 로컬).
+
+### REQ-B14 Phase 1 구현 — 백엔드 인증·소유권 검사 (`/testrun` 15/15)
+
+브랜치 `feat/B14-upload-extract-auth`(main에서 분기). `browse.py`의 `_get_owned_job`
+같은 공용 헬퍼를 새로 만들지 않고 `storage.get_status → None 체크 →
+ensure_owner_or_admin` 3줄을 각 엔드포인트에 그대로 반복했다 — `browse.py`를
+건드리지 않으려고(Phase 1 범위 밖 파일). `extract-v2`는 새로 만드는 EXPORT job과
+workbook 메타에도 `owner_id`를 채워야 해서, 백그라운드 태스크(`_process_extraction_v2`)로
+`owner_id`를 추가 인자로 스레딩했다.
+
+`/testrun` 확인: B14-01~11·13~16 15/15 통과. **⚠️ 예상된 회귀 발견 —
+`test_template_extract_wiring.py`(REQ-30) 8건이 새로 실패한다.** 원인: 그 테스트들이
+`selections`에 실제로 존재하지 않는 `job_id="job-src"`를 쓰는데, 이번에 추가한
+`extract-v2` 소유권 검사가 admin이어도 **job 자체가 없으면 404**를 던지기 때문이다
+(기존 `browse.py`의 `_get_owned_job`과 동일 패턴 — 존재 확인은 admin도 예외 없음).
+REQ-30은 이미 병합·완료된 REQ라 이 세션에서 그 테스트 파일을 손대지 않고 계획서
+Phase 3("기존 테스트 회귀 확인")로 넘겼다 — **Phase 3 착수 시 `test_template_extract_wiring.py`의
+8개 케이스에 `_make_job`으로 실제 job을 만들어 주는 수정이 필요하다.**
+
+커밋 `67a0357`, 푸시 완료. PR 미생성·main 미머지. B14-12(프론트 `uploadPdf()`
+Authorization 헤더)는 Phase 2 몫으로 아직 미구현 — `/testrun`에서 예상대로 실패.
+
 ## 2026-09-18
 
 ### REQ-27 Phase 4 완료 — 프론트 로그인/회원가입 화면 + 토큰 저장·갱신 + 인증 가드 (`/testrun` 18/18)
@@ -312,6 +377,15 @@ B13의 신규 테스트 14건 포함, 프론트 185/185) — **머지 커밋 자
 차단했다 — main 머지는 이 세션이 직접 실행할 수 없고 사람이 GitHub에서 눌러야 했다.
 PR #16 병합(`88ba7a3`) · 원격 브랜치는 GitHub 자동 삭제 정책으로 이미 지워져 있었고,
 로컬 브랜치도 정리했다.
+
+### REQ-27 후속 버그 발견 — `upload.py`·`extract.py`가 Phase 2 범위 밖이라 무인증 + owner_id 미기입으로 남음
+
+PR #16 머지 직후 점검하다가, Phase 2가 "6개 엔티티 조회/수정 API"만 보호해 **엔티티를
+새로 만드는 생성 경로**(업로드·추출)는 그대로 무인증이고, 생성되는 job에 `owner_id`도
+안 채워지는 걸 발견했다. `ensure_owner_or_admin`이 `owner_id=None`인 레코드는 admin만
+통과시키므로, 로그인한 일반 사용자가 자기가 방금 올린 파일을 `GET /api/jobs/{id}`에서
+404로 못 보는 실제 증상까지 있었다. `docs/TODO.md`에 "우선순위 높음"으로 기록만 해
+두고(`ee9c785`) 이 세션에서는 후속 REQ로 착수하지 않았다. → 2026-09-21 REQ-B14로 이어짐.
 
 ## 2026-09-15
 
