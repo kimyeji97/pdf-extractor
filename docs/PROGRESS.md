@@ -119,7 +119,7 @@
 | REQ-29 | 각주·워터마크 등록(표지 CRUD와 같은 모양) + 생성 PDF 반영(표지 제외 전 페이지) | [plan](plans/PLAN-29-footnote-watermark-registration.md) | 2026-09-11 | ✅ **완료**(Phase 1+2, 케이스 28/28 · `/testrun` 확인 · 회귀 없음 140/140). PR #12 **main 머지 완료(2026-09-13, `e0da607`)**. 잔여 위험 2건(s3 스토리지 경로 미검증 · 브라우저 end-to-end 미실시)은 머지 후에도 그대로 |
 | REQ-30 | 템플릿 — 표지·각주·워터마크 조합 엔티티(**참조**, ADR-0004) + 생성 화면에서 `cover_id` 대신 `template_id` 선택 | [plan](plans/PLAN-30-template-entity.md) · [ADR](adr/0004-template-reference-not-snapshot.md) | 2026-09-13 | ✅ **Phase 1·2 완료**(케이스 41/41 · `/testrun` 확인 · 회귀 없음 백엔드 111·프론트 150). PR #13 **main 머지 완료(2026-09-13, `e1e4a7f`)**, 브랜치 삭제됨. 잔여 위험 2건(s3 경로 미검증 · 브라우저 e2e 미실시)은 머지 후에도 남는다 |
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
-| REQ-B13 | 문항 크롭 여백을 네 변 10pt로 통일 (TODO 4단계 "서버 영역 버그") | [plan](plans/PLAN-B13-crop-margin-uniform.md) | — | 🟡 **Phase 1 완료**(케이스 11/11 · `/testrun` 확인 · 회귀 없음 136). PR #15 **main 머지 완료(2026-09-18)**. **Phase 2 미착수** — 오탐 판정(허용 오차 2.0pt) 영향 실측, 기출 PDF 필요 |
+| REQ-B13 | 문항 크롭 여백을 네 변 10pt로 통일 (TODO 4단계 "서버 영역 버그") | [plan](plans/PLAN-B13-crop-margin-uniform.md) | 2026-09-21 | ✅ **Phase 1·2 전부 완료**. Phase 1(케이스 11/11 · `/testrun` 확인 · 회귀 없음 136) PR #15 **main 머지 완료(2026-09-18)**. Phase 2(2026-09-21) 실제 기출 PDF 4종·문항 1,141개로 오탐 실측 — 3종 0건 유지, 1종에서 1건 증가했으나 원인이 "유형 N 배지 오인식"이라는 기존 오탐지가 색상 필터에 정확히 걸린 것으로 확인돼 허용 오차 조정 없이 종결(사용자 확인) |
 | REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | ✅ **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). PR #16 **main 머지 완료(2026-09-18, `88ba7a3`)**, 브랜치 삭제됨. D07 잔여 슬롯도 이걸로 해소 |
 | REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. PR #17 **main 머지 완료(2026-09-21, `eeb79c4`)**, 브랜치 삭제됨 |
 
@@ -231,6 +231,34 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-09-21
+
+### REQ-B13 Phase 2 — 오탐 판정 영향 실측 완료 (미결 질문 해소, REQ-B13 완전 종결)
+
+REQ-B14를 마친 뒤 TODO.md 4단계에 남아 있던 REQ-B13 Phase 2("오탐 판정 실측, 기출 PDF
+필요")를 이어서 진행했다. `local_storage/uploads`에 로컬 개발용으로 남아 있던 실제
+기출 PDF 1개(중3 BLUE 심화기출, 32p)를 먼저 찾아 측정했고, 사용자가 `~/temp/pdf-extractor/`에
+있던 나머지 3개(내신마스터·심화대비·Red)를 추가로 알려줘 총 4종·문항 1,141개로 검증을
+넓혔다.
+
+**측정 방법**: `question_parser.py`가 `re`·`pdfplumber`·`fitz`에만 의존하고 앱의 다른
+모듈을 임포트하지 않는다는 걸 이용해, Phase 1 커밋(`58cf729`) 직전 버전과 현재 버전을
+`importlib`로 각각 독립 로드하고 같은 PDF에 `detect_question_boundaries()`를 양쪽 다
+돌려 `is_false_positive` 개수를 직접 비교했다 — API·백그라운드 태스크를 거치지 않고
+순수 함수 비교라 빠르고 결정적이었다.
+
+**결과**: 3개 PDF는 오탐 0건 유지(완료 기준 그대로 충족). 1개 PDF(내신마스터, 820문항)에서
+1건 증가 — page 106 "문항 11". `fitz`로 크롭 영역을 실제 렌더링해 원인을 확인했다: 이건
+진짜 문항이 아니라 **"유형 11"이라는 검정 배지**를 파서가 문항 번호로 오인식한 것이었다
+(진짜 문항은 바로 아래 "45."). 이 오인식 자체는 Phase 1 이전에도 있었다(변경 전·후 둘 다
+"문항 11"로 감지됨) — 달라진 건 확장된 크롭이 배지의 검은 배경을 더 많이 포함해 색상
+필터(`_apply_bg_color_filter`)에 걸렸다는 것뿐이다. **원래 틀렸던 감지가 이제야 정확히
+"오탐지 의심"으로 표시된 것**이라 완료 기준의 취지(정상 문항이 억울하게 오탐 찍히는 걸
+막는다)와 배치되지 않는다고 판단했다.
+
+허용 오차(`2.0pt`) 조정 여부를 사용자에게 확인했고, **조정하지 않고 그대로 종결**하기로
+결정했다 — 근본 원인이 B13과 무관한 "유형 N 배지 오인식"이라 이 REQ에서 고칠 대상이
+아니다(별도 이슈로 남김, 번호 미부여). PLAN-B13 미결 질문·Phase 2 체크, PROGRESS 인덱스
+갱신. **REQ-B13 Phase 1·2 전부 완료 — TODO.md 4단계 완전히 닫힘.**
 
 ### REQ-B14 계획서 작성 — 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 후속)
 
