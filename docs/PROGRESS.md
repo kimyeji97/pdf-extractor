@@ -121,7 +121,7 @@
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
 | REQ-B13 | 문항 크롭 여백을 네 변 10pt로 통일 (TODO 4단계 "서버 영역 버그") | [plan](plans/PLAN-B13-crop-margin-uniform.md) | — | 🟡 **Phase 1 완료**(케이스 11/11 · `/testrun` 확인 · 회귀 없음 136). PR #15 **main 머지 완료(2026-09-18)**. **Phase 2 미착수** — 오탐 판정(허용 오차 2.0pt) 영향 실측, 기출 PDF 필요 |
 | REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | ✅ **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). PR #16 **main 머지 완료(2026-09-18, `88ba7a3`)**, 브랜치 삭제됨. D07 잔여 슬롯도 이걸로 해소 |
-| REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | — | 🟡 **Phase 1 완료**(케이스 15/15 · `/testrun` 확인). **Phase 2~3 미착수** — 프론트 raw fetch 헤더 보강(B14-12) · 기존 테스트 회귀 확인. 브랜치 `feat/B14-upload-extract-auth` 푸시(미머지). ⚠️ Phase 1이 REQ-30 기존 테스트 8건을 깨뜨림(fixture가 실제 job 없이 job_id만 참조) — Phase 3에서 처리 필요 |
+| REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | — | 🟡 **Phase 1·2 완료**(케이스 16/16 · `/testrun` 확인 · 프론트 전체 회귀 없음 186/186). **Phase 3 미착수** — REQ-30 기존 테스트 8건 fixture 수정 + 전체 회귀 확인. 브랜치 `feat/B14-upload-extract-auth` 푸시(미머지). ⚠️ Phase 1이 만든 REQ-30 회귀(`test_template_extract_wiring.py`, fixture가 실제 job 없이 job_id만 참조)는 Phase 2 이후에도 그대로 남아 있음 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -293,6 +293,22 @@ Phase 3("기존 테스트 회귀 확인")로 넘겼다 — **Phase 3 착수 시 
 
 커밋 `67a0357`, 푸시 완료. PR 미생성·main 미머지. B14-12(프론트 `uploadPdf()`
 Authorization 헤더)는 Phase 2 몫으로 아직 미구현 — `/testrun`에서 예상대로 실패.
+
+### REQ-B14 Phase 2 구현 — 프론트 `uploadPdf()` Authorization 헤더 (`/testrun` 1/1)
+
+`uploadPdf()`의 로컬 direct-upload 분기가 `apiFetch`가 아닌 raw `fetch`라
+`_authHeaders()`가 안 붙고 있었다(계약 #26/#31과 같은 패턴). `headers: _authHeaders()`
+한 줄 추가로 끝났다 — R2 모드 분기(presigned URL PUT)는 건드리지 않았다(그쪽은 우리
+백엔드가 아니라 R2로 직접 가는 요청이라 범위 밖).
+
+`/testrun` 확인: B14-12 1/1 통과, **REQ-B14 전체 16/16**(백엔드 15 + 프론트 1). 전체
+회귀 재확인 — 백엔드 188/196(REQ-30 동일 8건, Phase 1 때와 변동 없음 — Phase 2는
+프론트만 건드려 예상대로), 프론트 186/186(회귀 없음). 근거 인용 16건 전부 원문과
+일치, 표-테스트 매칭 누락·오타 없음.
+
+커밋 `9ecce2d`, 푸시 완료. PR 미생성·main 미머지. **Phase 1·2 완료, Phase 3(REQ-30
+fixture 8건 수정 + 전체 회귀 확인)만 남았다** — 아직 `/testgen`을 안 거쳐 착수 전 게이트에
+걸릴 것.
 
 ## 2026-09-18
 

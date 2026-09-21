@@ -1,6 +1,6 @@
 # PLAN-B14 · 업로드/추출 생성 경로 무인증 + owner_id 미기입
 
-> 출처: 현재 세션 대화(2026-09-21) · 작성: 2026-09-21 · 상태: 🟡 진행 (Phase 1 완료)
+> 출처: 현재 세션 대화(2026-09-21) · 작성: 2026-09-21 · 상태: 🟡 진행 (Phase 1·2 완료)
 
 ## 배경
 
@@ -86,8 +86,11 @@ footnote·watermark·template)만 범위로 잡았다. **엔티티를 새로 만
       ⚠️ **완료했지만 회귀 하나를 남겼다** — `test_template_extract_wiring.py`(REQ-30)
       8건이 새로 실패한다(존재하지 않는 `job_id="job-src"`를 참조하던 fixture가 새
       소유권 검사의 "job 존재 확인"에 걸림). Phase 3에서 처리한다.
-- [ ] **Phase 2** — 프론트: `uploadPdf()`의 로컬 direct-upload 분기에 `_authHeaders()` 추가
+- [x] **Phase 2** — 프론트: `uploadPdf()`의 로컬 direct-upload 분기에 `_authHeaders()` 추가
       완료 기준: 로컬 모드 업로드가 로그인 상태에서 401 없이 완료된다
+
+      `/testrun`(2026-09-21) 확인: B14-12 **1/1 통과**, 프론트 전체 회귀 없음(186/186).
+      R2 모드 분기(presigned URL PUT)는 범위 밖이라 손대지 않았다.
 - [ ] **Phase 3** — 기존 테스트 회귀 확인 + 신규 케이스(일반 사용자 업로드→조회 성공, 타인
       job 404) 추가. **Phase 1이 남긴 것**: `test_template_extract_wiring.py`(REQ-30)의
       selections가 참조하는 `job_id`를 `_make_job`으로 실제 생성하도록 고쳐야 하는
@@ -121,7 +124,7 @@ footnote·watermark·template)만 범위로 잡았다. **엔티티를 새로 만
 | B14-09 | `POST /api/upload/notify` | 타인 소유 pending job에 걸면 404 | 예외 | PLAN § Phase 1 완료 기준 — "타인 소유 pending job에 `/upload/notify`를 걸면 404" | 1 | ✅ |
 | B14-10 | `POST /api/extract-v2` | selections에 타인 소유 job_id가 하나라도 섞이면 요청 전체 404 | 예외 | PLAN § Phase 1 완료 기준 — "`extract-v2` selections 중 하나라도 타인 소유 job_id가 섞이면 요청 전체 404" | 1 | ✅ |
 | B14-11 | `POST /api/extract-v2` | selections가 전부 본인 소유 job이면 차단되지 않는다 | 정상 | PLAN § 결정 — "`selections`의 job_id 중 하나라도 본인 소유가 아니면 요청 전체를 404로 거부" (역) | 1 | ✅ |
-| B14-12 | `uploadPdf()` (client.js) | 로컬 direct-upload 요청에 Authorization 헤더가 붙는다 | 회귀 | PLAN § 제약·함정 — "로컬 direct-upload 분기가 여기 해당" (계약 #26/#31) | 2 | ❌ |
+| B14-12 | `uploadPdf()` (client.js) | 로컬 direct-upload 요청에 Authorization 헤더가 붙는다 | 회귀 | PLAN § 제약·함정 — "로컬 direct-upload 분기가 여기 해당" (계약 #26/#31) | 2 | ✅ |
 | B14-13 | `GET /api/status/{job_id}` | 인증 없이 호출 시 401 | 예외 | PLAN § Phase 1 완료 기준 — "로그인 없이 업로드/추출/파일 다운로드/상태 조회 호출 시 401" | 1 | ✅ |
 | B14-14 | `POST /api/extract` | 타인 소유 job으로 호출하면 404 | 예외 | PLAN § Phase 1 완료 기준 — "타인 소유 job으로 `POST /api/extract`를 호출하면 404" | 1 | ✅ |
 | B14-15 | `GET /api/status/{job_id}` | 타인 소유 job으로 호출하면 404 | 예외 | PLAN § Phase 1 완료 기준 — "타인 소유 job으로 `GET /api/status/{id}`를 호출하면 404" | 1 | ✅ |
