@@ -249,7 +249,7 @@ export async function uploadPdf(uploadUrl, file, jobId) {
   if (isLocal) {
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch(uploadUrl, { method: "POST", body: form });
+    const res = await fetch(uploadUrl, { method: "POST", body: form, headers: _authHeaders() });
     if (!res.ok) throw new Error("로컬 업로드 실패");
   } else {
     const res = await fetch(uploadUrl, {

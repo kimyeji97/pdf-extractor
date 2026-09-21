@@ -19,8 +19,17 @@ E(요청 시점 400) 케이스는 대역조차 필요 없다 — 거절되면 �
 `get_cover_meta`/`save_cover`·`get_footnote_meta`/`save_footnote` 명명 규약을 그대로
 따른 이름이고, **이 테스트가 그 이름을 검증 계약으로 고정한다**(계획서 § 검증 계약의
 "테스트가 먼저 고정한 것"과 같은 성격).
+
+⚠️ REQ-B14 Phase 1(2026-09-21)이 `POST /api/extract-v2`에 `selections`의 job 존재·소유권
+검사를 추가하면서, `_selections()`가 쓰는 `job_id="job-src"`가 실재하지 않아 8개 케이스가
+404로 깨졌다(PLAN-B14 § 결정 "extract-v2 멀티소스 소유권"). 이 파일이 검증하는 대상(표지·
+각주·워터마크 배선, E 케이스)과는 무관한 뜻밖의 선행 조건이라 `_make_job`으로 "job-src"를
+실제로 만들어 준다 — `authed_client`가 admin이라 소유권 자체는 어차피 안 걸리고, 존재만
+있으면 된다.
 """
 import pytest
+
+from tests.test_auth_authorization import _make_job
 
 
 def _png_bytes() -> bytes:
@@ -82,8 +91,9 @@ def captured_extract(monkeypatch, inline_extract_pool):
 
 # ── 배선 — template_id 가 세 자산으로 풀린다 ───────────────
 
-def test_30_09_template_id만_주면_템플릿의_세_id가_전달된다(authed_client, captured_extract):
+def test_30_09_template_id만_주면_템플릿의_세_id가_전달된다(authed_client, isolated_storage, captured_extract):
     """근거: PLAN § Phase 1 — "반영된 PDF가 나온다." """
+    _make_job(isolated_storage, "job-src")
     cover_id = _make_cover(authed_client)
     footnote_id = _make_footnote(authed_client)
     watermark_id = _make_watermark(authed_client)
@@ -99,8 +109,9 @@ def test_30_09_template_id만_주면_템플릿의_세_id가_전달된다(authed_
     assert captured_extract["assets"] == (cover_id, footnote_id, watermark_id)
 
 
-def test_30_10_template_id와_직접_id가_함께_오면_template_id가_이긴다(authed_client, captured_extract):
+def test_30_10_template_id와_직접_id가_함께_오면_template_id가_이긴다(authed_client, isolated_storage, captured_extract):
     """근거: PLAN § 결정 — "둘 다 오면 `template_id` 우선" """
+    _make_job(isolated_storage, "job-src")
     template_cover = _make_cover(authed_client, "템플릿표지")
     direct_cover = _make_cover(authed_client, "직접표지")
     template = authed_client.post("/api/templates", json={
@@ -116,12 +127,13 @@ def test_30_10_template_id와_직접_id가_함께_오면_template_id가_이긴�
     assert captured_extract["assets"][0] == template_cover
 
 
-def test_30_11_template_id가_없으면_직접_id가_그대로_전달된다(authed_client, captured_extract):
+def test_30_11_template_id가_없으면_직접_id가_그대로_전달된다(authed_client, isolated_storage, captured_extract):
     """근거: PLAN § 결정 — "**`template_id` 추가, 기존 3필드 유지.**"
 
     구 프론트 호환 경로다. 배포가 백엔드 먼저·프론트 나중으로 갈라지는 기간(REQ-B10 실측
     3일)에 이 경로가 죽으면 그동안 표지가 전부 빠진 PDF가 나온다.
     """
+    _make_job(isolated_storage, "job-src")
     cover_id = _make_cover(authed_client)
 
     authed_client.post("/api/extract-v2", json={
@@ -143,13 +155,14 @@ def test_30_12_ExtractV2Request의_template_id_기본값은_None(authed_client):
     assert req.template_id is None
 
 
-def test_30_13_생성_성공시_WorkbookMeta에_template_id가_저장된다(authed_client, captured_extract):
+def test_30_13_생성_성공시_WorkbookMeta에_template_id가_저장된다(authed_client, isolated_storage, captured_extract):
     """근거: PLAN § 결정 — "**범위에 넣는다**"
 
     이력 복원 시 템플릿이 조용히 "없음"이 되는 것을 막는 필드다(계약 #22·#23과 같은 모양).
     """
     from app.services import storage
 
+    _make_job(isolated_storage, "job-src")
     template = authed_client.post("/api/templates", json={
         "name": "기본형", "cover_id": _make_cover(authed_client),
     }).json()
@@ -170,8 +183,9 @@ def test_30_13_생성_성공시_WorkbookMeta에_template_id가_저장된다(auth
 
 # ── E — 요청 시점 400 ─────────────────────────────────────
 
-def test_30_14_없는_template_id로_생성_요청하면_400(authed_client):
+def test_30_14_없는_template_id로_생성_요청하면_400(authed_client, isolated_storage):
     """근거: PLAN § 결정 — "**E — 요청 시점 400.** 참조가 끊겼으면 백그라운드 진입 전에 거절" """
+    _make_job(isolated_storage, "job-src")
     res = authed_client.post("/api/extract-v2", json={
         "selections": _selections(), "template_id": "no-such-template",
     })
@@ -179,12 +193,13 @@ def test_30_14_없는_template_id로_생성_요청하면_400(authed_client):
     assert res.status_code == 400
 
 
-def test_30_15_템플릿이_가리키는_표지가_삭제됐으면_400(authed_client):
+def test_30_15_템플릿이_가리키는_표지가_삭제됐으면_400(authed_client, isolated_storage):
     """근거: PLAN § 결정 — "**E — 요청 시점 400.** 참조가 끊겼으면 백그라운드 진입 전에 거절"
 
     A′ 가 차단하므로 정상 경로로는 생기기 어렵지만, 강제 삭제와 생성이 겹치는 경쟁
     상태에서 발생한다 — E 는 그 나머지를 잡는 두 번째 그물이다.
     """
+    _make_job(isolated_storage, "job-src")
     cover_id = _make_cover(authed_client)
     template = authed_client.post("/api/templates", json={
         "name": "기본형", "cover_id": cover_id,
@@ -204,12 +219,13 @@ def test_30_15_템플릿이_가리키는_표지가_삭제됐으면_400(authed_cl
     assert res.status_code == 400
 
 
-def test_30_16_직접_cover_id가_삭제된_것이면_400(authed_client):
+def test_30_16_직접_cover_id가_삭제된_것이면_400(authed_client, isolated_storage):
     """근거: PLAN § 결정 — "**직접 id 경로에도 적용한다**"
 
     "표지를 골랐는데 표지 없이 나온 PDF" 가 실패보다 나쁘다 — 사용자는 다운로드해
     열기 전까지 모른다.
     """
+    _make_job(isolated_storage, "job-src")
     cover_id = _make_cover(authed_client)
     authed_client.delete(f"/api/covers/{cover_id}")
 
@@ -220,8 +236,9 @@ def test_30_16_직접_cover_id가_삭제된_것이면_400(authed_client):
     assert res.status_code == 400
 
 
-def test_30_17_빈_템플릿을_가리키는_생성_요청은_400(authed_client):
+def test_30_17_빈_템플릿을_가리키는_생성_요청은_400(authed_client, isolated_storage):
     """근거: PLAN § Phase 1 — "슬롯을 모두 비우는 POST·PATCH와 빈 템플릿을 가리키는 생성 요청은 400으로 거절되지만," """
+    _make_job(isolated_storage, "job-src")
     cover_id = _make_cover(authed_client)
     template = authed_client.post("/api/templates", json={
         "name": "표지전용", "cover_id": cover_id,
