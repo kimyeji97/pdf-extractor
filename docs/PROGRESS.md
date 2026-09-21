@@ -121,7 +121,7 @@
 | REQ-F13 | 미리보기에 템플릿(표지·각주·워터마크) 반영 + 워터마크 알파 결함 수정(REQ-29에서 들어옴) | [plan](plans/PLAN-F13-preview-template-rendering.md) | 2026-09-13 | ✅ **Phase 1~3 완료**(케이스 23/23 · `/testrun` 확인 · 육안 검증 완료 · 회귀 없음 백엔드 122·프론트 162). 렌더 상수는 **프론트에 복제하지 않고 서버가 응답에 실어 보낸다**. PR #14 **main 머지 완료(2026-09-13, `2fb290b`)**, 브랜치 삭제됨 |
 | REQ-B13 | 문항 크롭 여백을 네 변 10pt로 통일 (TODO 4단계 "서버 영역 버그") | [plan](plans/PLAN-B13-crop-margin-uniform.md) | — | 🟡 **Phase 1 완료**(케이스 11/11 · `/testrun` 확인 · 회귀 없음 136). PR #15 **main 머지 완료(2026-09-18)**. **Phase 2 미착수** — 오탐 판정(허용 오차 2.0pt) 영향 실측, 기출 PDF 필요 |
 | REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | ✅ **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). PR #16 **main 머지 완료(2026-09-18, `88ba7a3`)**, 브랜치 삭제됨. D07 잔여 슬롯도 이걸로 해소 |
-| REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | — | 🟡 **Phase 1·2 완료**(케이스 16/16 · `/testrun` 확인 · 프론트 전체 회귀 없음 186/186). **Phase 3 미착수** — REQ-30 기존 테스트 8건 fixture 수정 + 전체 회귀 확인. 브랜치 `feat/B14-upload-extract-auth` 푸시(미머지). ⚠️ Phase 1이 만든 REQ-30 회귀(`test_template_extract_wiring.py`, fixture가 실제 job 없이 job_id만 참조)는 Phase 2 이후에도 그대로 남아 있음 |
+| REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. 브랜치 `feat/B14-upload-extract-auth` 푸시 완료, **PR 미생성·main 미머지**(사용자 판단 영역) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -309,6 +309,38 @@ Authorization 헤더)는 Phase 2 몫으로 아직 미구현 — `/testrun`에서
 커밋 `9ecce2d`, 푸시 완료. PR 미생성·main 미머지. **Phase 1·2 완료, Phase 3(REQ-30
 fixture 8건 수정 + 전체 회귀 확인)만 남았다** — 아직 `/testgen`을 안 거쳐 착수 전 게이트에
 걸릴 것.
+
+### REQ-B14 `/testgen` Phase 3 — 새 케이스 없음이 결론 (착수 전 게이트 논의)
+
+계획서 Phase 3 원문은 "신규 케이스(일반 사용자 업로드→조회 성공, 타인 job 404) 추가"라고
+했는데, 그 두 시나리오는 **Phase 1이 이미 구현·검증했다**(일반 사용자 업로드→조회 성공 =
+B14-07·08, 타인 job 404 = B14-09·14·15) — `/workplan` 시점에 예상했던 것보다 Phase 1의
+범위가 넓어져서(`GET /api/status` 소유권 검사 등 미결 정리로 편입) 앞당겨 끝난 셈이다.
+그래서 Phase 3에 걸 새 B14 케이스가 없다는 결론을 내리고 사용자 확인을 받았다. Phase 3의
+실제 남은 일은 지난 `/testrun`이 이미 특정해 둔 REQ-30 fixture 수정뿐 — 이건 새 케이스
+작성이 아니라 `/testrun`의 **(a) 테스트 결함** 범주라 `/testgen`은 아무것도 쓰지 않고
+바로 `/testrun`으로 넘겼다.
+
+### REQ-B14 Phase 3 — REQ-30 fixture 수정 + 전체 회귀 확인 (`/testrun` 최종 16/16)
+
+`/testrun 30`으로 `test_template_extract_wiring.py`의 8건을 **(a)**로 분류해 그 자리에서
+고쳤다 — `_selections()`가 쓰는 `job_id="job-src"`가 실재하지 않았는데, REQ-B14 Phase 1의
+job 존재·소유권 검사가 그걸 그대로 404로 잡아낸 것이다(계획서 § 결정 "extract-v2 멀티소스
+소유권"). 원인 파악은 지난 세션 `/testrun B14`에서 이미 끝나 있었어서, 이번엔 각 테스트에
+`isolated_storage` 파라미터를 추가하고 본문 앞에 `_make_job(isolated_storage, "job-src")`
+(REQ-27의 `test_auth_authorization._make_job` 재사용)를 넣는 것으로 1회 만에 8/8 전부
+해결됐다. `authed_client`가 admin이라 소유권 자체는 원래도 안 걸리고 **존재**만 필요했다.
+
+`/implement B14 3`로 이 fixture 수정을 커밋(`08b6b46`) — Phase 3엔 신규 프로덕션 코드가
+없다, 완료 기준 자체가 "`/testrun` 전체 회귀 없음"이라 회귀 확인이 곧 이 Phase의 구현이었다.
+
+최종 `/testrun B14` 확인: **REQ-B14 전체 16/16**(백엔드 15 + 프론트 1), 전체 회귀
+**백엔드 196/196(REQ-30 포함 전부 회복)·프론트 186/186**, 근거 인용 16건 전부 원문과
+일치, 표-테스트 매칭 누락·오타 없음. **PLAN-B14 Phase 1~3 전부 완료.**
+
+REQ-B14는 2026-09-14~18 세션에서 발견해 TODO에 미뤄 뒀던 REQ-27 후속 버그를, 2026-09-21
+하루 만에 계획서 작성부터 Phase 1~3 전부 닫은 REQ다. 브랜치 `feat/B14-upload-extract-auth`
+푸시 완료, **PR 오픈·main 머지는 하지 않음**(사람 판단 영역).
 
 ## 2026-09-18
 
