@@ -223,3 +223,60 @@ def test_B13_10_상수를_바꾸면_네_변이_모두_따라간다(monkeypatch, 
     refine(b, words)
 
     assert getattr(b[0], side) == expected
+
+
+# ── REQ-B16: 문항 끝에 붙은 그림 ─────────────────────────────
+
+def test_B16_01_trailing_figure_extends_bottom():
+    """[B16-01] 텍스트 아래 그림으로 끝나는 문항은 그림 하단 + 여유까지 크롭한다 (3p 5번 실측)."""
+    words = [word("5.", 50, 100, 60, 110), word("본문", 70, 100, 200, 110)]
+    fig = {"x0": 100, "top": 120, "x1": 240, "bottom": 240}
+    (b,) = [boundary(5, 100, col_x1=297.0)]
+    _apply_precision_improvements([b], [(PAGE_W, PAGE_H, words)], [[fig]])
+    assert b.y_bottom == 240 + MARGIN
+
+
+def test_B16_02_figure_outside_column_ignored():
+    """[B16-02] 컬럼 밖으로 삐져나가는 도형(구분선·전폭 장식)은 하단 계산에 안 쓴다."""
+    words = [word("5.", 50, 100, 60, 110)]
+    wide = {"x0": 40, "top": 120, "x1": 560, "bottom": 400}
+    (b,) = [boundary(5, 100, col_x1=297.0)]
+    _apply_precision_improvements([b], [(PAGE_W, PAGE_H, words)], [[wide]])
+    assert b.y_bottom == 110 + MARGIN
+
+
+def test_B16_03_figure_capped_by_next_question():
+    """[B16-03] 그림이 있어도 다음 문항 y_top 을 넘지 않는다 (min() 가드 유지)."""
+    words = [word("5.", 50, 100, 60, 110), word("6.", 50, 200, 60, 210)]
+    fig = {"x0": 100, "top": 120, "x1": 240, "bottom": 199}
+    bs = [boundary(5, 100, col_x1=297.0), boundary(6, 200, col_x1=297.0)]
+    _fill_y_bottom(bs, [PAGE_H])
+    _apply_precision_improvements(bs, [(PAGE_W, PAGE_H, words)], [[fig]])
+    assert bs[0].y_bottom <= 200
+
+
+def test_B16_04_neighbor_column_border_ignored():
+    """[B16-04] 옆 단 박스 테두리(분할점보다 오른쪽, 번호보다 왼쪽)는 딸려 오지 않는다 (내신마스터 p107 45번 실측)."""
+    words = [word("45.", 309, 170, 330, 180), word("본문", 340, 170, 500, 380)]
+    border = {"x0": 288.0, "top": 281, "x1": 288.2, "bottom": 626}
+    (b,) = [boundary(45, 170, col=1, col_x0=285.0, col_x1=PAGE_W)]
+    _apply_precision_improvements([b], [(PAGE_W, PAGE_H, words)], [[border]])
+    assert b.y_bottom == 380 + MARGIN
+
+
+def test_B16_05_figure_wider_than_text_counts():
+    """[B16-05] 텍스트보다 오른쪽으로 넓은 그림도 컬럼 안이면 하단 계산에 쓴다."""
+    words = [word("5.", 50, 100, 60, 110), word("본문", 70, 100, 150, 110)]
+    fig = {"x0": 100, "top": 120, "x1": 280, "bottom": 300}
+    (b,) = [boundary(5, 100, col_x1=297.0)]
+    _apply_precision_improvements([b], [(PAGE_W, PAGE_H, words)], [[fig]])
+    assert b.y_bottom == 300 + MARGIN
+
+
+def test_B16_06_figure_does_not_move_side_edges():
+    """[B16-06] 그림은 하단에만 영향 — 우측 변은 종전대로 텍스트 x1 + 여유."""
+    words = [word("5.", 50, 100, 60, 110), word("본문", 70, 100, 150, 110)]
+    fig = {"x0": 100, "top": 120, "x1": 280, "bottom": 300}
+    (b,) = [boundary(5, 100, col_x1=297.0)]
+    _apply_precision_improvements([b], [(PAGE_W, PAGE_H, words)], [[fig]])
+    assert b.col_x1 == 150 + MARGIN

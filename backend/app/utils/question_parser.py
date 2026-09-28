@@ -339,6 +339,8 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     # (page_width, page_height, words_list) 튜플을 페이지 순서대로 저장.
     # 폰트 임계값 계산과 경계 감지 두 단계 모두 이 데이터를 공유하여 재사용.
     pages_data: list[tuple[float, float, list[dict]]] = []
+    # 페이지별 그림 bbox (이미지·벡터 도형) — 하단 조임에서 그림이 잘리지 않게 (REQ-B16)
+    pages_graphics: list[list[dict]] = []
     size_counts: Counter[float] = Counter()
 
     # ── Step 1: PDF 1패스 — 전체 단어+좌표+폰트 수집 ──────────
@@ -353,6 +355,13 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
                 extra_attrs=["size"],  # 폰트 크기 속성도 함께 추출
             )
             pages_data.append((page_w, page_h, words))
+            # 머리말·꼬리말 띠에 걸치거나 페이지 절반보다 긴 것(단 구분선 등)은 장식이라 뺀다
+            pages_graphics.append([
+                g for g in page.images + page.rects + page.curves + page.lines
+                if g["top"] >= page_h * _HEADER_PERCENT
+                and g["bottom"] <= page_h * _FOOTER_PERCENT
+                and g["bottom"] - g["top"] <= page_h / 2
+            ])
 
             # 폰트 임계값 계산용: 헤더/푸터(상위 11%, 하위 9%) 제외한 본문만 집계
             # 상단 11%: 장 제목, 학교명 등 / 하단 9%: 쪽번호, 저작권 표시 등
@@ -461,7 +470,7 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     # ── Step 5-b: 감지 정밀도 개선 (v3 REQ-23/24/15) ─────────
     # _fill_y_bottom으로 y_bottom이 확정된 뒤 단어 범위를 알 수 있으므로 이 시점에 처리.
     # x 좌표 정밀화, y_bottom 조임, 오탐지 마킹을 순서대로 수행.
-    _apply_precision_improvements(raw, pages_data)
+    _apply_precision_improvements(raw, pages_data, pages_graphics)
 
     # ── Step 5-c: 배경색 필터 — 비백색 배경 오탐지 마킹 ────────
     # x/y 정밀화가 완료된 최종 bbox로 픽셀을 렌더링해야 정확하므로 5-b 이후에 실행.
@@ -695,6 +704,7 @@ def _apply_bg_color_filter(
 def _apply_precision_improvements(
     boundaries: list[QuestionBoundary],
     pages_data: list[tuple[float, float, list[dict]]],
+    pages_graphics: Optional[list[list[dict]]] = None,
 ) -> None:
     """
     [REQ-23, REQ-24, REQ-15] _fill_y_bottom 이후 경계 정밀도를 추가로 개선한다.
@@ -729,6 +739,9 @@ def _apply_precision_improvements(
             and b.y_top <= w["top"] <= b.y_bottom
         ]
 
+        # 그림 필터의 우측 한계는 x 정밀화 **전** 컬럼 경계 — 텍스트보다 넓은 그림도 잡는다
+        col_x1_raw = b.col_x1
+
         # ── REQ-24: x 좌표 정밀화 ────────────────────────────────
         # 문항 번호 텍스트의 x0를 실제 col_x0로 재계산한다.
         # 컬럼 분할점 기반 고정 경계 대신 실제 문항 번호 텍스트 위치 기반으로 정밀화.
@@ -747,7 +760,17 @@ def _apply_precision_improvements(
         # ── REQ-23: y_bottom 정밀화 ──────────────────────────────
         # 다음 문항 y_top까지 포함했던 넓은 y_bottom을 실제 텍스트 하단에 맞게 줄임.
         # 문항 사이 불필요한 여백을 제거하여 크롭 이미지가 더 촘촘하게 표시됨.
-        b.y_bottom = _calc_tight_y_bottom(question_words, b.y_bottom)
+        # ⚠️ 텍스트만 보면 **문항 끝에 붙은 그림이 잘린다** (REQ-B16 — 선지 없이 그림으로
+        #    끝나는 문항). 그림은 하단 계산에만 쓴다 — x 정밀화·번호 탐색엔 넣지 않는다.
+        #    좌측 한계는 **정밀화된** col_x0(번호 x0 − 여유) — 거친 분할점을 쓰면 옆 단의
+        #    박스 테두리(실측 x=288, 분할점보다 오른쪽)가 딸려 와 빈 공간 243pt 가 붙었다.
+        #    다음 문항 침범은 _calc_tight_y_bottom 의 min() 가드가 그대로 막는다.
+        graphics = [
+            g for g in (pages_graphics[b.page_index] if pages_graphics else [])
+            if b.col_x0 <= g["x0"] and g["x1"] <= col_x1_raw
+            and b.y_top <= g["top"] <= b.y_bottom
+        ]
+        b.y_bottom = _calc_tight_y_bottom(question_words + graphics, b.y_bottom)
 
         # ── REQ-B13: y_top 정밀화 — 상단에도 같은 여유 ───────────
         # 단어 필터가 원래 y_top 을 기준으로 끝난 뒤에 넓힌다(먼저 넓히면 앞 문항 단어가
