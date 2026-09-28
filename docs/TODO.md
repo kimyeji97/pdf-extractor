@@ -61,11 +61,11 @@
 - ⏸ REQ-28 공유 — 27 뒤에 별도 판단
 
 ### 6. 운영 환경 구성
-- [ ] **JWT 서명키 등록** (2026-09-28 발견, 🔴 우선) — dev 태스크 정의(`pdf-extractor-backend-dev:3`)
+- [x] **JWT 서명키 등록** ✅ 2026-09-28 (Secrets Manager `pdf-extractor/dev`에 `JWT_SECRET_KEY` 추가 → rev 4) (2026-09-28 발견, 🔴 우선) — dev 태스크 정의(`pdf-extractor-backend-dev:3`)
       `secrets`에 `JWT_SECRET_KEY`가 없어 코드 기본값 `dev-insecure-secret-change-me`로 서명 중.
       공개 레포에 있는 값이라 **누구나 토큰 위조 가능**. Secrets Manager `pdf-extractor/dev`에 추가 →
       태스크 정의 새 리비전 → 서비스 갱신. admin 계정 승격·백필은 이 뒤에
-- [ ] **dev 배포 시 ECR `latest`를 안 가져감** (2026-09-28) — `backend-build.sh`로 새 `latest` 푸시 후
+- [x] **dev 배포 시 ECR `latest`를 안 가져감** ✅ 2026-09-28 해결 (rev 4 `:latest`+JWT 배포, rev 3 deregister, 실행 digest `6505e71d…`=`7c03bf2`) (2026-09-28) — `backend-build.sh`로 새 `latest` 푸시 후
       ECS 배포했는데 새 이미지가 반영되지 않았다.
       **원인(조사 완료)**: 이번 배포는 AWS **콘솔**에서 했고(CloudTrail `UpdateService` 09-28 02:16Z, 브라우저 UA),
       콘솔은 태스크 정의를 **최신 리비전 rev 3**으로 채운다. rev 3은 P04 Phase 0 프로브(08-18) 잔재로 이미지가
