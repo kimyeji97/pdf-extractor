@@ -61,9 +61,18 @@
 - ⏸ REQ-28 공유 — 27 뒤에 별도 판단
 
 ### 6. 운영 환경 구성
+- [ ] **JWT 서명키 등록** (2026-09-28 발견, 🔴 우선) — dev 태스크 정의(`pdf-extractor-backend-dev:3`)
+      `secrets`에 `JWT_SECRET_KEY`가 없어 코드 기본값 `dev-insecure-secret-change-me`로 서명 중.
+      공개 레포에 있는 값이라 **누구나 토큰 위조 가능**. Secrets Manager `pdf-extractor/dev`에 추가 →
+      태스크 정의 새 리비전 → 서비스 갱신. admin 계정 승격·백필은 이 뒤에
+- [ ] **dev 배포 시 ECR `latest`를 안 가져감** (2026-09-28) — `backend-build.sh`로 새 `latest` 푸시 후
+      ECS 배포했는데 새 이미지가 반영되지 않았다. 원인 미조사
 - [ ] **밀린 dev 프론트 재배포** (위 배포 정책 — 로드맵 완료 시점 또는 백엔드 배포에 딸려서)
 - [ ] prod 환경 분리 (현재 dev 하나 — 백엔드 desired 0 토글 운영, 프론트 wrangler 수동 배포)
-- [ ] 프론트 자동 배포 / 백엔드 배포 파이프라인
+- [ ] 프론트 자동 배포(CI/CD) / 백엔드 배포 파이프라인 — 현재 `.github/workflows` 없음. 프론트는
+      main push 시 빌드(`VITE_API_BASE_URL` 주입) + `wrangler deploy`, Cloudflare API 토큰 secret 필요
+- [ ] **전체 인프라 구성 이해** (2026-09-28) — Cloudflare(DNS·Workers·Tunnel·R2) ↔ AWS(ECR·ECS Fargate·
+      Secrets Manager·CloudWatch) 연결 관계와 배포 흐름 파악. 출발점: CLAUDE.md "배포 토폴로지"·`docs/infra/`
 - [ ] 테스트 커버리지 — 알림 경로 외 0건(문항 감지·PDF 생성)
 - [ ] F09 Phase 6 브라우저 알림 (런칭 준비 시점, 08-06 결정)
 - ❌ REQ-E01 감지 진행률 스트리밍 — 차후, P04(SSE) 위에 재검토 가능
