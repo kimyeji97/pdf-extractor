@@ -124,7 +124,7 @@
 | REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. PR #17 **main 머지 완료(2026-09-21, `eeb79c4`)**, 브랜치 삭제됨 |
 | REQ-B15 | 이미지 요청 401 — `<img>`가 인증 헤더를 못 보냄 (REQ-27 후속, dev 배포 후 발견) → access 쿠키 병행 | [plan](plans/PLAN-B15-image-auth-cookie.md) | 2026-09-28 | ✅ **Phase 1~3 전부 완료**(케이스 22/22 · `/testrun` 확인 · 회귀 없음 백엔드 221/221·프론트 192/192 · dev 육안 5개 화면). PR #18 **main 머지 완료(2026-09-28, `da8e1c1`)**, 브랜치 삭제됨 |
 | REQ-B16 | 문항 끝에 붙은 그림이 크롭 하단에서 잘림 (dev 육안 제보, `0928 테스트4` 3p 5번) | [plan](plans/PLAN-B16-trailing-figure-crop.md) | 2026-09-28 | ✅ **Phase 1 완료**(케이스 6/6 · `/testrun` 확인 · 회귀 없음 백엔드 227/227 · 기출 4종 1,141문항 실측). PR #19 **main 머지 완료(2026-09-28, `7498854`)**, 브랜치 삭제됨. **dev 백엔드 배포 전** — 배포 후 기존 파일은 재감지 필요 |
-| REQ-B17 | 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한 (dev 연속 업로드 중 530) | [plan](plans/PLAN-B17-analysis-oom.md) | — | 🟡 **Phase 1 완료**(누수 수정, 케이스 5/5 · `/testrun` 확인 · 회귀 없음 232/232 · 기출 4종 결과 동일 · 212쪽 1,033→170MB). `fix/B17-analysis-oom` `2b39d5b` 푸시. Phase 2(동시 5개·시작 시 FAILED)는 **미결 2건** 정리 후, Phase 3 dev 확인 |
+| REQ-B17 | 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한 (dev 연속 업로드 중 530) | [plan](plans/PLAN-B17-analysis-oom.md) | — | 🟡 **Phase 1·2 완료**(누수 수정 + 동시 5개·`QUEUED`·시작 시 FAILED·알림·통계, 케이스 17건 · `/testrun` 확인 · 회귀 없음 246/246). `fix/B17-analysis-oom` `2b39d5b`·`4116ac0` 푸시. **Phase 3(프론트 `QUEUED`·"대기 중" 타일) 전에는 배포 금지**, Phase 4 dev 확인 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -267,6 +267,23 @@ prewarm은 +50MB). 메모리가 쪽수에 비례했다 — pdfplumber가 읽은 
 
 **부수 피해 — 아직 남아 있음**: 죽은 태스크가 돌리던 `내신마스터` job이 dev R2에 `boundaries_status=PROCESSING`으로
 멈춰 있다. Phase 2의 "시작 시 FAILED" 배포 후 재감지로 복구할 예정.
+
+**Phase 2 결정·구현(같은 날)** — 미결 두 건을 닫았다. ①시작 시 FAILED 전환 때 **실패 알림을 보낸다**.
+②대기는 **새 상태 `QUEUED`** — 이미 있는 `PENDING`("감지 대기")을 재사용하면 변경은 작지만, `PENDING`은
+"업로드 notify 전"에도 쓰여(재시작돼도 notify가 오면 진행) **재시작 시 인메모리 대기열에 있던 작업과 구분할 수 없다**
+→ FAILED로 못 돌려 영원히 남는다. 그래서 상태를 하나 늘렸다. 현황판엔 "대기 중" 타일을 따로 둔다(사용자 선택,
+기존 "분석중 파일수"는 `PROCESSING`만). 필드명 `queued_count`는 `/testgen`에서 승인.
+구현: 인프로세스 `BoundedSemaphore(5)`를 최초 감지·재감지가 공유하고 **감지 + prewarm 전체**를 감싼다(감지만 감싸면
+prewarm 12스레드가 한도 밖에서 겹친다). 서버 시작(lifespan)에서 `QUEUED`·`PROCESSING` → `FAILED` + 감지 실패 알림.
+**조회 경로의 `PROCESSING` 가드는 `QUEUED`로 넓히지 않았다** — `QUEUED`는 상세 진입을 허용하고 기존 문항을
+보여 주기로 했으니 캐시를 돌려주는 게 맞다. 남는 틈: 캐시가 없는 최초 업로드 job이 `QUEUED`인 채로 상세에 들어가면
+조회 경로가 한도 밖에서 동기 감지를 돈다(지금 `PENDING`과 같은 틈, 계획서 범위 제외).
+테스트는 감지 대역을 이벤트로 멈춰 두고 스레드 6개로 흘려 관찰한다 — 부정 관찰("6번째가 안 들어갔다")은 0.3초
+유예 뒤에 보고, `/testrun`에서 3회 연속 돌려 흔들림 없음을 확인했다. 세마포어가 모듈 전역이라 **테스트가 슬롯을
+풀지 않으면 다음 테스트가 멈춘다** — 모든 케이스가 끝에서 풀고 join한다.
+**같은 워킹 트리를 다른 세션(B18)이 동시에 쓰고 있다** — 그쪽 미추적 테스트(`test_parser_regex_only_fp.py`,
+구현 전이라 빨강)가 이 브랜치 위에 올라와 있어 전체 스위트를 그 파일을 빼고 판정했다. 그쪽이 이 브랜치에서
+커밋하면 B17 브랜치에 섞인다 — 브랜치 분리 또는 `git worktree` 필요.
 
 ### REQ-B16 — 그림으로 끝나는 문항은 그림이 통째로 잘렸다 (계획서 + Phase 1)
 
