@@ -1,6 +1,6 @@
 # PLAN-B17 · 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한
 
-> 출처: 현재 세션(2026-09-28 dev 테스트 중 사용자 보고) · 작성: 2026-09-28 · 상태: 🟡 진행 (Phase 1·2 완료 2026-09-28 — Phase 3 프론트와 함께 배포할 것)
+> 출처: 현재 세션(2026-09-28 dev 테스트 중 사용자 보고) · 작성: 2026-09-28 · 상태: 🟡 진행 (Phase 1~3 완료 2026-09-28 — 배포 가능, Phase 4 dev 확인 남음)
 > 번호: 처음 B16으로 썼으나 같은 시각 병행 작업(문항 끝 그림 크롭)이 먼저 B16을 써서 **B17로 옮겼다**(2026-09-28 사용자 결정).
 > 두 작업은 `question_parser.py`의 같은 페이지 루프를 고친다 — B16이 먼저 커밋된 뒤 이 작업을 얹는다
 
@@ -109,9 +109,11 @@ dev에서 PDF 여러 개를 연달아 "업로드 후 분석"하던 중 업로드
       `/api/stats/detail`이 그 파일 목록을 준다. 기존 케이스 회귀 없음
       → ✅ 2026-09-28 `4116ac0` — 케이스 12건(parametrize 14) 3회 연속 통과, 전체 246/246(다른 세션의 미구현 B18 파일 제외).
       ⚠️ 프론트가 아직 `QUEUED`를 모른다 — **Phase 3과 함께 배포**
-- [ ] **Phase 3** — 프론트: `QUEUED` 표시·규칙 + 현황판 "대기 중" 타일
+- [x] **Phase 3** — 프론트: `QUEUED` 표시·규칙 + 현황판 "대기 중" 타일
       완료 기준: 목록 배지·파일 칩이 "대기 중"을 보인다. `QUEUED`는 상세 진입 허용·재감지 차단.
       현황판에 "대기 중" 타일이 있고 클릭하면 파일 목록이 펼쳐진다. 기존 케이스 회귀 없음
+      → ✅ 2026-09-28 `2c91e15` — 케이스 6/6, 프론트 전체 198/198. 타일 제목 "대기 중 파일수"·색(타일 primary, 배지·칩 info)은
+      계획서 미정이라 구현이 골랐다(테스트 미고정)
 - [ ] **Phase 4** — dev 배포 후 확인
       완료 기준: `내신마스터` 포함 4개를 연달아 업로드해도 태스크가 죽지 않는다(ECS stopped task 없음).
       6개 이상 연달아 올리면 초과분이 "대기 중"으로 보였다가 차례로 분석된다. 지금 멈춰 있는 `내신마스터` job이
@@ -120,7 +122,8 @@ dev에서 PDF 여러 개를 연달아 "업로드 후 분석"하던 중 업로드
 ## 검증 계약
 
 > 작성: 2026-09-28 · 스펙: 없음(계획서가 1차 소스) · 검증: `/testrun B17` · 파일: `backend/tests/test_parser_page_release.py`(Phase 1) ·
-> `backend/tests/test_analysis_concurrency.py`(Phase 2 — 통계 필드·상세 field 이름 `queued_count`는 `/testgen`에서 승인)
+> `backend/tests/test_analysis_concurrency.py`(Phase 2 — 통계 필드·상세 field 이름 `queued_count`는 `/testgen`에서 승인) ·
+> `frontend/src/utils/jobStatus.queued.test.js`·`frontend/src/pages/analysis/queued.test.jsx`(Phase 3 — 타일 제목 문구·배지 색은 미고정)
 > ⚠️ pdfplumber 0.11.4의 `PDF.close()`는 **끝에서 모든 페이지를 닫는다** — "닫힌 페이지 집합"을 단언하면 수정 전 코드도
 > 통과한다. 그래서 B17-01·02는 **"다음 페이지를 읽기 전에 이전 페이지가 닫혔다"**(호출 순서)를 본다.
 > 동일성(B17-03·04)은 기준값 파일 대신 **닫기를 no-op으로 바꾼 실행과 비교**한다 — 닫기가 결과를 바꾸는지만 본다.
@@ -146,6 +149,12 @@ dev에서 PDF 여러 개를 연달아 "업로드 후 분석"하던 중 업로드
 | B17-15 | `GET /api/stats` | `queued_count` = `QUEUED` job 수 | 정상 | PLAN § 작업 단계 — "`/api/stats`가 `QUEUED` 개수를" | 2 | ✅ |
 | B17-16 | `GET /api/stats` | `processing_count`는 `QUEUED`를 세지 않는다 | 불변식 | PLAN § 결정 — "기존 \"분석중 파일수\"는 `PROCESSING`만 그대로" | 2 | ✅ |
 | B17-17 | `GET /api/stats/detail?field=queued_count` | `QUEUED` job 목록만 준다 | 정상 | PLAN § 작업 단계 — "`/api/stats/detail`이 그 파일 목록을 준다" | 2 | ✅ |
+| B17-18 | `isEntryBlocked` | `QUEUED`는 상세 진입을 막지 않는다 | 정상 | PLAN § 결정 — "상세 진입 **허용**, 재감지 **차단**" | 3 | ✅ |
+| B17-19 | `isRefreshBlocked` | `QUEUED`면 재감지가 막힌다 | 정상 | PLAN § 결정 — "상세 진입 **허용**, 재감지 **차단**" | 3 | ✅ |
+| B17-20 | 분석 목록 카드 배지 | `QUEUED` job 카드에 "대기 중"이 보인다 | 정상 | PLAN § 작업 단계 — "목록 배지·파일 칩이 \"대기 중\"을 보인다" | 3 | ✅ |
+| B17-21 | `FileListPanel` 칩 | `QUEUED` job에 "대기 중" 칩이 보인다 | 정상 | PLAN § 작업 단계 — "목록 배지·파일 칩이 \"대기 중\"을 보인다" | 3 | ✅ |
+| B17-22 | 현황판 `StatCards` | `stat-tile-queued_count` 타일에 `queued_count` 값이 보인다 | 정상 | PLAN § 작업 단계 — "현황판에 \"대기 중\" 타일이 있고" | 3 | ✅ |
+| B17-23 | 현황판 `StatCards` | "대기 중" 타일 클릭 시 `getStatsDetail('queued_count')`로 파일 목록을 조회한다 | 정상 | PLAN § 작업 단계 — "클릭하면 파일 목록이 펼쳐진다" | 3 | ✅ |
 
 ## 제약·함정
 

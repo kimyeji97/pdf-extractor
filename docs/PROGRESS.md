@@ -124,7 +124,7 @@
 | REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. PR #17 **main 머지 완료(2026-09-21, `eeb79c4`)**, 브랜치 삭제됨 |
 | REQ-B15 | 이미지 요청 401 — `<img>`가 인증 헤더를 못 보냄 (REQ-27 후속, dev 배포 후 발견) → access 쿠키 병행 | [plan](plans/PLAN-B15-image-auth-cookie.md) | 2026-09-28 | ✅ **Phase 1~3 전부 완료**(케이스 22/22 · `/testrun` 확인 · 회귀 없음 백엔드 221/221·프론트 192/192 · dev 육안 5개 화면). PR #18 **main 머지 완료(2026-09-28, `da8e1c1`)**, 브랜치 삭제됨 |
 | REQ-B16 | 문항 끝에 붙은 그림이 크롭 하단에서 잘림 (dev 육안 제보, `0928 테스트4` 3p 5번) | [plan](plans/PLAN-B16-trailing-figure-crop.md) | 2026-09-28 | ✅ **Phase 1 완료**(케이스 6/6 · `/testrun` 확인 · 회귀 없음 백엔드 227/227 · 기출 4종 1,141문항 실측). PR #19 **main 머지 완료(2026-09-28, `7498854`)**, 브랜치 삭제됨. **dev 백엔드 배포 전** — 배포 후 기존 파일은 재감지 필요 |
-| REQ-B17 | 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한 (dev 연속 업로드 중 530) | [plan](plans/PLAN-B17-analysis-oom.md) | — | 🟡 **Phase 1·2 완료**(누수 수정 + 동시 5개·`QUEUED`·시작 시 FAILED·알림·통계, 케이스 17건 · `/testrun` 확인 · 회귀 없음 246/246). `fix/B17-analysis-oom` `2b39d5b`·`4116ac0` 푸시. **Phase 3(프론트 `QUEUED`·"대기 중" 타일) 전에는 배포 금지**, Phase 4 dev 확인 |
+| REQ-B17 | 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한 (dev 연속 업로드 중 530) | [plan](plans/PLAN-B17-analysis-oom.md) | — | 🟡 **Phase 1~3 완료**(누수 수정 · 동시 5개·`QUEUED`·시작 시 FAILED·알림·통계 · 프론트 "대기 중" 표시·타일, 케이스 23건 · `/testrun` 확인 · 회귀 없음 백엔드 246/246·프론트 198/198). `fix/B17-analysis-oom` `2b39d5b`·`4116ac0`·`2c91e15` 푸시. **Phase 4(dev 배포 확인) 남음** |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -284,6 +284,13 @@ prewarm 12스레드가 한도 밖에서 겹친다). 서버 시작(lifespan)에�
 **같은 워킹 트리를 다른 세션(B18)이 동시에 쓰고 있다** — 그쪽 미추적 테스트(`test_parser_regex_only_fp.py`,
 구현 전이라 빨강)가 이 브랜치 위에 올라와 있어 전체 스위트를 그 파일을 빼고 판정했다. 그쪽이 이 브랜치에서
 커밋하면 B17 브랜치에 섞인다 — 브랜치 분리 또는 `git worktree` 필요.
+
+**Phase 3(프론트) 완료** — `QUEUED`를 재감지 차단에 넣고(진입은 `PENDING`처럼 허용), 목록 배지·편집 화면 파일 칩에
+"대기 중", 현황판에 "대기 중 파일수" 타일(클릭 시 대기 파일 아코디언)을 "분석중 파일수" 옆에 뒀다.
+타일 제목·색은 계획서가 정하지 않아 구현이 골랐고 테스트는 testid·값·"대기 중" 문구만 본다.
+**이제 백엔드·프론트가 모두 `QUEUED`를 알아 배포 가능** — Phase 2만 따로 올리면 프론트가 `QUEUED` 배지를 비워
+두고 재감지 버튼을 열어 두는 상태였다. Phase 4는 dev에서 `내신마스터` 포함 연속 업로드(6건 이상), 멈춰 있는
+`내신마스터` job의 FAILED·실패 알림·재감지 복구를 본다.
 
 ### REQ-B16 — 그림으로 끝나는 문항은 그림이 통째로 잘렸다 (계획서 + Phase 1)
 
