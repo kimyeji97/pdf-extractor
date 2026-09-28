@@ -220,7 +220,7 @@ def _trigger_boundary_detection(job_id: str) -> None:
 # ── 파일 서빙 (로컬 모드 전용) ────────────────────────────
 
 @router.get("/files/{key:path}")
-def serve_file(key: str, current_user: dict = Depends(auth_service.get_current_user)):
+def serve_file(key: str, current_user: dict = Depends(auth_service.get_current_user_allow_cookie)):
     """
     로컬 개발용. generate_download_presigned_url이 반환한 URL로 접근하면
     result PDF를 그대로 돌려준다.

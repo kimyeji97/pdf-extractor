@@ -82,7 +82,7 @@ def list_watermarks(current_user: dict = Depends(auth_service.get_current_user))
 
 @router.get("/watermarks/{watermark_id}/image")
 def get_watermark_image(
-    watermark_id: str, current_user: dict = Depends(auth_service.get_current_user)
+    watermark_id: str, current_user: dict = Depends(auth_service.get_current_user_allow_cookie)
 ):
     """워터마크 이미지를 반환한다 (img src 직접 사용 가능)."""
     meta = storage.get_watermark_meta(watermark_id)

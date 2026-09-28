@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useState } from 'react';
 
-import { login as apiLogin, signup as apiSignup } from 'api/client';
+import { login as apiLogin, logout as apiLogout, signup as apiSignup } from 'api/client';
 
 /**
  * 인증 상태 (REQ-27 Phase 4, `logout`은 Phase 5)
@@ -48,6 +48,13 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(USER_EMAIL_KEY);
     setUserEmail(null);
     setIsAuthenticated(false);
+    // 서버가 HttpOnly access 쿠키를 지운다(REQ-B15). 기다리지 않고 실패도 삼킨다 — 로컬은 항상
+    // 로그아웃(PLAN-B15 § 결정). 반환값을 Promise.resolve로 감싸는 건 mock이 undefined를 돌려줘도 안전하게.
+    try {
+      Promise.resolve(apiLogout()).catch(() => {});
+    } catch {
+      // 동기 throw도 삼킨다 — 로컬 로그아웃은 이미 끝났다
+    }
   }, []);
 
   return (

@@ -11,7 +11,7 @@
 > 이 로드맵이 끝난 뒤, 또는 **백엔드를 dev에 배포해서 프론트도 같이 올려야만 동작하는 상황**이 오면 그때 배포한다.
 > 프론트 배포는 `wrangler` 수동이라(자동 배포 없음) 매 변경마다 돌리는 비용이 크고, dev는 상시 가동이 아니다.
 > ⚠️ 그래서 **dev 프론트는 main보다 뒤처져 있는 것이 정상**이다 — "dev에서 안 보인다"를 버그로 읽지 말 것.
-> 현재 dev 프론트: `feat/B11-notification-baseline` 빌드(2026-08-28). C09·D09·F10·D10·D11·B12·F12·REQ-29·REQ-30·F13 프론트 변경 미반영(2026-09-13 기준).
+> 현재 dev 프론트: 2026-09-28 main 빌드(REQ-27까지 반영). 이후 변경(REQ-B15 Phase 2~)은 미반영.
 
 
 ### 1. 미결 결정 ✅ 2026-08-28 (6건 모두 결정 — 각 계획서 미결 절에 결론 기록)
@@ -73,7 +73,7 @@
       `2ddae2f5…` = `p04-probe`). 8월 배포는 CLI `--force-new-deployment`(태스크 정의 미지정 → 기존 rev 2 `:latest`
       유지)라 문제가 없었다. **해결**: `:latest` + `JWT_SECRET_KEY`로 rev 4를 등록해 최신 리비전으로 만들고(1번과 묶음),
       rev 3은 deregister해서 콘솔 기본값이 프로브를 가리키지 않게 한다
-- [ ] **밀린 dev 프론트 재배포** (위 배포 정책 — 로드맵 완료 시점 또는 백엔드 배포에 딸려서)
+- [x] **밀린 dev 프론트 재배포** ✅ 2026-09-28 (REQ-27 백엔드 배포에 딸려 사용자가 `wrangler deploy`, 로그인 화면 확인)
 - [ ] prod 환경 분리 (현재 dev 하나 — 백엔드 desired 0 토글 운영, 프론트 wrangler 수동 배포)
 - [ ] 프론트 자동 배포(CI/CD) / 백엔드 배포 파이프라인 — 현재 `.github/workflows` 없음. 프론트는
       main push 시 빌드(`VITE_API_BASE_URL` 주입) + `wrangler deploy`, Cloudflare API 토큰 secret 필요

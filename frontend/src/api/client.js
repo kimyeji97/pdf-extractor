@@ -79,6 +79,7 @@ async function _tryRefresh(refreshToken) {
   try {
     const res = await fetch(`${BASE_URL}/auth/refresh`, {
       method: "POST",
+      credentials: "include", // 응답의 access 쿠키(REQ-B15)를 저장하려면 필요 — 빠지면 조용히 무시된다
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
@@ -137,10 +138,12 @@ export async function signup(email, password) {
 /**
  * POST /api/auth/login
  * 로그인 성공 시 access_token·refresh_token을 localStorage에 저장한다.
+ * 서버는 access token을 `<img>`용 HttpOnly 쿠키로도 심는다(REQ-B15) — `credentials: "include"` 필수.
  */
 export async function login(email, password) {
   const res = await apiFetch(`${BASE_URL}/auth/login`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
@@ -151,6 +154,15 @@ export async function login(email, password) {
   const data = await res.json(); // { access_token, refresh_token, token_type }
   _setTokens(data);
   return data;
+}
+
+/**
+ * POST /api/auth/logout — access 쿠키 삭제 (REQ-B15). HttpOnly라 JS가 못 지운다.
+ * raw fetch다(계약 #26 — 호출부가 기다리지 않으므로 전역 딤을 켜면 화면 전환 뒤 딤만 번쩍인다).
+ * 로컬 토큰 정리는 호출부(`AuthContext.logout`)가 한다.
+ */
+export async function logout() {
+  await fetch(`${BASE_URL}/auth/logout`, { method: "POST", credentials: "include" });
 }
 
 /**
