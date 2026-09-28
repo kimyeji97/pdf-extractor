@@ -123,7 +123,7 @@
 | REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | ✅ **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). PR #16 **main 머지 완료(2026-09-18, `88ba7a3`)**, 브랜치 삭제됨. D07 잔여 슬롯도 이걸로 해소 |
 | REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. PR #17 **main 머지 완료(2026-09-21, `eeb79c4`)**, 브랜치 삭제됨 |
 | REQ-B15 | 이미지 요청 401 — `<img>`가 인증 헤더를 못 보냄 (REQ-27 후속, dev 배포 후 발견) → access 쿠키 병행 | [plan](plans/PLAN-B15-image-auth-cookie.md) | 2026-09-28 | ✅ **Phase 1~3 전부 완료**(케이스 22/22 · `/testrun` 확인 · 회귀 없음 백엔드 221/221·프론트 192/192 · dev 육안 5개 화면). PR #18 **main 머지 완료(2026-09-28, `da8e1c1`)**, 브랜치 삭제됨 |
-| REQ-B16 | 문항 끝에 붙은 그림이 크롭 하단에서 잘림 (dev 육안 제보, `0928 테스트4` 3p 5번) | [plan](plans/PLAN-B16-trailing-figure-crop.md) | — | 🟡 **Phase 1 완료**(케이스 6/6 · `/testrun` 확인 · 회귀 없음 백엔드 227/227 · 기출 4종 1,141문항 실측). 브랜치 `fix/B16-trailing-figure-crop` 푸시, **PR·main 머지·dev 배포 전**. 반영 후 기존 파일은 재감지 필요 |
+| REQ-B16 | 문항 끝에 붙은 그림이 크롭 하단에서 잘림 (dev 육안 제보, `0928 테스트4` 3p 5번) | [plan](plans/PLAN-B16-trailing-figure-crop.md) | 2026-09-28 | ✅ **Phase 1 완료**(케이스 6/6 · `/testrun` 확인 · 회귀 없음 백엔드 227/227 · 기출 4종 1,141문항 실측). PR #19 **main 머지 완료(2026-09-28, `7498854`)**, 브랜치 삭제됨. **dev 백엔드 배포 전** — 배포 후 기존 파일은 재감지 필요 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
