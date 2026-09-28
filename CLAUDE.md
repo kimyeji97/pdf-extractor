@@ -366,12 +366,12 @@ PROGRESS "미착수 — 번호만 부여된 것" 표. 번호는 완료돼도 재
 
 ### 배포 상태 (세션마다 필요한 사실)
 
-⚠️ **dev 백엔드는 2026-09-28 main(`7c03bf2`, REQ-27·B14 포함)으로 배포됐고 현재 `desired 1`이다**
+⚠️ **dev 백엔드는 2026-09-28 `feat/B15-image-auth-cookie`(`93dc8f2`, REQ-27·B14·B15 포함)로 배포됐고 현재 `desired 1`이다**
 (켜면 ~$23/월, 꺼 두면 ~$2/월 — 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 4**(`:latest` +
 `JWT_SECRET_KEY` secret). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
-⚠️ **dev 프론트는 2026-09-28 main 빌드(REQ-27까지)다** — 실체는 Pages가 아니라
+⚠️ **dev 프론트는 2026-09-28 `feat/B15-image-auth-cookie` 빌드(REQ-27·B15까지)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
 "배포 (프론트엔드)" 두 줄을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**
