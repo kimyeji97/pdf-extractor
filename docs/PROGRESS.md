@@ -122,7 +122,7 @@
 | REQ-B13 | 문항 크롭 여백을 네 변 10pt로 통일 (TODO 4단계 "서버 영역 버그") | [plan](plans/PLAN-B13-crop-margin-uniform.md) | 2026-09-21 | ✅ **Phase 1·2 전부 완료**. Phase 1(케이스 11/11 · `/testrun` 확인 · 회귀 없음 136) PR #15 **main 머지 완료(2026-09-18)**. Phase 2(2026-09-21) 실제 기출 PDF 4종·문항 1,141개로 오탐 실측 — 3종 0건 유지, 1종에서 1건 증가했으나 원인이 "유형 N 배지 오인식"이라는 기존 오탐지가 색상 필터에 정확히 걸린 것으로 확인돼 허용 오차 조정 없이 종결(사용자 확인) |
 | REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | ✅ **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). PR #16 **main 머지 완료(2026-09-18, `88ba7a3`)**, 브랜치 삭제됨. D07 잔여 슬롯도 이걸로 해소 |
 | REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. PR #17 **main 머지 완료(2026-09-21, `eeb79c4`)**, 브랜치 삭제됨 |
-| REQ-B15 | 이미지 요청 401 — `<img>`가 인증 헤더를 못 보냄 (REQ-27 후속, dev 배포 후 발견) → access 쿠키 병행 | [plan](plans/PLAN-B15-image-auth-cookie.md) | — | 🟡 **Phase 1 완료**(백엔드, 케이스 16/16 · `/testrun` 확인 · 회귀 없음 221/221). `feat/B15-image-auth-cookie` `cdc09ca` 푸시. Phase 2(프론트 credentials)·3(dev 확인) 남음 |
+| REQ-B15 | 이미지 요청 401 — `<img>`가 인증 헤더를 못 보냄 (REQ-27 후속, dev 배포 후 발견) → access 쿠키 병행 | [plan](plans/PLAN-B15-image-auth-cookie.md) | — | 🟡 **Phase 1·2 완료**(케이스 22/22 · `/testrun` 확인 · 회귀 없음 백엔드 221/221·프론트 192/192). `feat/B15-image-auth-cookie` `cdc09ca`·`c0c2f94` 푸시. **Phase 3(dev 재배포 후 브라우저 확인) 남음** |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -294,6 +294,18 @@ http로 띄우면 올바른 구현도 401). `AUTH_COOKIE_SECURE`는 케이스가
 **ADR-0005 서술 정정**: 배경에 "프론트·백엔드가 다른 도메인이라 쿠키면 `SameSite=None; Secure`가
 필요하다"고 돼 있지만, 두 호스트는 `yejicraft-cf.com`의 서브도메인 = **같은 사이트**라 `Lax`로 실린다.
 ADR의 결정(서버 세션 쿠키 기각)은 그대로다 — B15는 무상태 JWT를 쿠키로도 운반할 뿐이다.
+
+**Phase 2(프론트) 완료** — login·refresh fetch에 `credentials: 'include'`, `api/client.logout()` 신설,
+`AuthContext.logout()`이 서버 로그아웃을 부른다. 케이스 6/6(B15-17~22), 프론트 전체 192/192.
+`/testgen`에서 미결 두 건을 닫았다 — ①**서버 로그아웃이 실패해도 로컬은 항상 로그아웃**(기다리지 않고
+실패를 삼킨다). 실패 시 로그아웃을 막으면 백엔드가 꺼져 있을 때(dev `desired 0` 운영) 로그아웃 자체가
+안 된다. 남은 쿠키는 최대 1시간 뒤 만료되고 다음 로그인이 덮어쓴다. ②**로그아웃 요청은 전역 딤을 켜지
+않는다**(raw fetch, 계약 #26) — 기다리지 않으니 딤을 켜면 화면 전환 뒤 딤만 번쩍이고, `apiFetch`를
+태우면 401 시 refresh를 시도해 로그아웃 도중 토큰을 새로 받는 역설이 생긴다.
+함정 하나: 기존 27-64·65가 `logout()`을 동기로 부르고 곧바로 로컬 상태를 보며, `api/client` mock의
+`logout: vi.fn()`은 Promise가 아니라 `undefined`를 돌려준다. 그래서 서버 호출은 **즉시 부르되 반환값을
+`Promise.resolve()`로 감싸야** 한다 — `.then()` 안으로 미뤘더니 "호출 시 부른다"(B15-21)가 한 틱 늦어
+실패했고, `apiLogout().catch()`로 쓰면 mock에서 TypeError가 난다.
 
 ## 2026-09-21
 

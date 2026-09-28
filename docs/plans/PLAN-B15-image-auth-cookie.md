@@ -1,6 +1,6 @@
 # PLAN-B15 · 이미지 요청 401 — `<img>`가 인증 헤더를 못 보냄 (쿠키 병행)
 
-> 출처: 현재 세션(2026-09-28 dev 배포·admin 승격 직후) · 작성: 2026-09-28 · 상태: 🟡 진행 (Phase 1 완료 2026-09-28)
+> 출처: 현재 세션(2026-09-28 dev 배포·admin 승격 직후) · 작성: 2026-09-28 · 상태: 🟡 진행 (Phase 1·2 완료 2026-09-28, Phase 3 dev 확인 남음)
 
 ## 배경
 
@@ -45,6 +45,8 @@ REQ-27 Phase 2가 이미지 엔드포인트에도 `get_current_user`(= `Authoriz
 | 배포 전 로그인 세션 | **재로그인으로 해결** — 코드 추가 없음 (2026-09-28 사용자 선택) | localStorage 토큰은 있고 쿠키는 없는 세션은, API가 헤더로 통해 refresh가 안 일어나므로 토큰 만료(≤1시간)까지 이미지만 401. dev 사용자가 본인뿐 | 앱 시작 시 refresh 1회로 쿠키 동기화 — 코드가 늘고 앱 열 때마다 요청이 하나 더 |
 | 쿠키 경로의 소유권 검사 | **헤더 경로와 동일하게 적용** — 쿠키로 타인 소유 이미지를 요청하면 404 (2026-09-28 사용자 확정, `/testgen` 미결에서) | 쿠키는 인증 수단만 바꾸는 것이지 권한을 넓히는 게 아니다 | — |
 | 로그아웃 경로 | `POST /api/auth/logout` (2026-09-28 `/testgen` 케이스 표 승인) | 기존 `/auth/login`·`/auth/refresh`와 같은 계열 | — |
+| 서버 로그아웃 실패 시 | **로컬은 항상 로그아웃** — 서버 호출은 기다리지 않고 실패를 삼킨다 (2026-09-28 사용자 선택, `/testgen` Phase 2 미결에서) | 남은 쿠키는 최대 1시간 뒤 만료되고 다음 로그인이 덮어쓴다. 기존 27-64·65가 `logout()`을 동기로 부르고 바로 로컬 상태를 본다 | 실패 시 로그아웃 중단·에러 표시 — 백엔드가 꺼져 있으면(dev `desired 0` 운영) 로그아웃 자체를 못 한다 |
+| 로그아웃 요청의 전역 딤 | **켜지 않는다** — raw fetch로 보낸다(`apiFetch` 미경유, 계약 #26) (2026-09-28 사용자 선택) | 서버를 기다리지 않으므로 딤을 켜면 화면 전환 뒤에 딤만 번쩍인다. login·refresh도 raw fetch | `apiFetch` 경유 — 401이면 refresh를 시도해 로그아웃 도중 토큰을 새로 받는 역설 |
 | CORS | 변경 없음 | `allow_credentials=True`가 **이미 켜져 있고**(`main.py`) origin도 명시 목록(REQ-27 Phase 3)이다 — 와일드카드 origin이면 credentials가 금지되지만 해당 없음 | — |
 
 ## 미결 질문
@@ -64,15 +66,17 @@ REQ-27 Phase 2가 이미지 엔드포인트에도 `get_current_user`(= `Authoriz
       로그아웃 응답이 쿠키를 지운다. **쿠키만으로 이미지 외 엔드포인트(예: `GET /api/jobs`)는 401**(범위 결정 검증).
       로그인·refresh 응답의 `Set-Cookie`에 결정 표의 속성이 붙는다. 기존 백엔드 케이스 회귀 없음
       → ✅ 2026-09-28 `cdc09ca` — 케이스 16/16, 전체 221/221. ⚠️ `AUTH_COOKIE_SECURE`(로컬용 설정)는 케이스 없음 — 자동 검증 밖
-- [ ] **Phase 2** — 프론트: 로그인·refresh·로그아웃 fetch에 `credentials: 'include'`, 로그아웃이 서버를 호출
+- [x] **Phase 2** — 프론트: 로그인·refresh·로그아웃 fetch에 `credentials: 'include'`, 로그아웃이 서버를 호출
       완료 기준: 해당 fetch가 `credentials: 'include'`로 나가고 로그아웃이 서버 엔드포인트를 부름(테스트),
       기존 프론트 케이스 회귀 없음
+      → ✅ 2026-09-28 `c0c2f94` — 케이스 6/6(B15-17~22), 프론트 전체 192/192
 - [ ] **Phase 3** — dev 배포 후 브라우저 확인(백엔드 이미지 + 프론트 `wrangler deploy`)
       완료 기준: 분석 목록·작업 화면·편집·결과·템플릿 관리에서 이미지가 뜬다, 로그아웃 후 이미지 URL 직접 열면 401
 
 ## 검증 계약
 
-> 작성: 2026-09-28 · 스펙: 없음(계획서가 1차 소스) · 검증: `/testrun B15` · 파일: `backend/tests/test_image_cookie_auth.py`
+> 작성: 2026-09-28 · 스펙: 없음(계획서가 1차 소스) · 검증: `/testrun B15` · 파일: `backend/tests/test_image_cookie_auth.py`(Phase 1) ·
+> `frontend/src/api/client.cookie.test.js`·`frontend/src/contexts/AuthContext.serverLogout.test.jsx`(Phase 2)
 > 쿠키만 싣는 클라이언트는 `https://testserver`로 띄운다 — `Secure` 쿠키는 http 요청에 실리지 않는다.
 > 쿠키 이름은 테스트에 박지 않는다(로그인 응답의 쿠키를 클라이언트가 되돌려 보내는 방식).
 
@@ -94,6 +98,12 @@ REQ-27 Phase 2가 이미지 엔드포인트에도 `get_current_user`(= `Authoriz
 | B15-14 | 로그아웃 후 | 같은 클라이언트로 이미지 요청 → 401 | 정상 | PLAN § 작업 단계 — "로그아웃 후 이미지 URL 직접 열면 401" | 1 | ✅ |
 | B15-15 | 이미지 GET | 유효한 쿠키 + 잘못된 헤더 → 401 (헤더 우선) | 불변식 | PLAN § 결정 — "별도 의존성(헤더 우선, 없으면 쿠키)" | 1 | ✅ |
 | B15-16 | 이미지 GET | 쿠키로 타인 소유 이미지 요청 → 404 | 불변식 | PLAN § 결정 — "쿠키로 타인 소유 이미지를 요청하면 404" | 1 | ✅ |
+| B15-17 | `login()` | `/auth/login` fetch가 `credentials: 'include'`로 나간다 | 정상 | PLAN § 범위 — "프론트의 로그인·refresh·로그아웃 fetch에 `credentials: 'include'`" | 2 | ✅ |
+| B15-18 | refresh (경유: `listJobs` 401 재시도) | `/auth/refresh` fetch가 `credentials: 'include'`로 나간다 | 정상 | PLAN § 범위 — "프론트의 로그인·refresh·로그아웃 fetch에 `credentials: 'include'`" | 2 | ✅ |
+| B15-19 | `logout()` (`api/client`) | `POST /api/auth/logout`을 부른다 | 정상 | PLAN § 작업 단계 — "로그아웃이 서버 엔드포인트를 부름(테스트)" | 2 | ✅ |
+| B15-20 | `logout()` (`api/client`) | 그 fetch가 `credentials: 'include'`로 나간다 | 정상 | PLAN § 범위 — "프론트의 로그인·refresh·로그아웃 fetch에 `credentials: 'include'`" | 2 | ✅ |
+| B15-21 | `AuthContext.logout()` | 호출 시 `api/client`의 `logout()`을 부른다 | 정상 | PLAN § 작업 단계 — "로그아웃이 서버 엔드포인트를 부름(테스트)" | 2 | ✅ |
+| B15-22 | `AuthContext.logout()` | 서버 로그아웃이 실패(reject)해도 `isAuthenticated`가 false가 된다 | 예외 | PLAN § 결정 — "**로컬은 항상 로그아웃** — 서버 호출은 기다리지 않고 실패를 삼킨다" | 2 | ✅ |
 
 ## 제약·함정
 
