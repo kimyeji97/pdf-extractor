@@ -124,8 +124,8 @@
 | REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. PR #17 **main 머지 완료(2026-09-21, `eeb79c4`)**, 브랜치 삭제됨 |
 | REQ-B15 | 이미지 요청 401 — `<img>`가 인증 헤더를 못 보냄 (REQ-27 후속, dev 배포 후 발견) → access 쿠키 병행 | [plan](plans/PLAN-B15-image-auth-cookie.md) | 2026-09-28 | ✅ **Phase 1~3 전부 완료**(케이스 22/22 · `/testrun` 확인 · 회귀 없음 백엔드 221/221·프론트 192/192 · dev 육안 5개 화면). PR #18 **main 머지 완료(2026-09-28, `da8e1c1`)**, 브랜치 삭제됨 |
 | REQ-B16 | 문항 끝에 붙은 그림이 크롭 하단에서 잘림 (dev 육안 제보, `0928 테스트4` 3p 5번) | [plan](plans/PLAN-B16-trailing-figure-crop.md) | 2026-09-28 | ✅ **Phase 1 완료**(케이스 6/6 · `/testrun` 확인 · 회귀 없음 백엔드 227/227 · 기출 4종 1,141문항 실측). PR #19 **main 머지 완료(2026-09-28, `7498854`)**, 브랜치 삭제됨. **dev 백엔드 배포 전** — 배포 후 기존 파일은 재감지 필요 |
-| REQ-B17 | 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한 (dev 연속 업로드 중 530) | [plan](plans/PLAN-B17-analysis-oom.md) | — | 🟡 **Phase 1~3 완료**(누수 수정 · 동시 5개·`QUEUED`·시작 시 FAILED·알림·통계 · 프론트 "대기 중" 표시·타일, 케이스 23건 · `/testrun` 확인 · 회귀 없음 백엔드 246/246·프론트 198/198). PR #20 **main 머지 완료(2026-09-28, `6862b75`)**, 브랜치 삭제됨. **Phase 4(dev 배포 확인)는 B18과 함께 배포 후** |
-| REQ-B18 | 목차·"유형 N" 제목이 문항으로 잡히고, 번호만 보고 합쳐 진짜 문항이 사라짐 (dev `0928 테스트2` 1쪽 목차 4문항 · 2쪽 0문항) | [plan](plans/PLAN-B18-regex-only-false-positive.md) | — | 🟡 **Phase 1 완료**(위치 기준 병합 + 정규식 전용 경계 오탐 **표시**, 케이스 8/8 · `/testrun` 확인 · 회귀 없음 257/257 · 기출 4종 실측: 심화대비 복구, 내신마스터 "유형 N" 62건 오탐, Blue·Red 동일). `fix/B18-regex-only-fp` `591493b` 푸시. Phase 2(dev 확인)는 B17 Phase 4와 함께 배포 후 |
+| REQ-B17 | 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한 (dev 연속 업로드 중 530) | [plan](plans/PLAN-B17-analysis-oom.md) | — | 🟡 **Phase 1~3 완료**(누수 수정 · 동시 5개·`QUEUED`·시작 시 FAILED·알림·통계 · 프론트 "대기 중" 표시·타일, 케이스 23건 · `/testrun` 확인 · 회귀 없음 백엔드 246/246·프론트 198/198). PR #20 **main 머지 완료(2026-09-28, `6862b75`)**, 브랜치 삭제됨. **Phase 4 부분 확인**(dev `c17f884` — 멈춘 job FAILED+알림 ✅, 재감지는 FAILED 상세 504로 막힘 → TODO §7, 연속 업로드 미확인) |
+| REQ-B18 | 목차·"유형 N" 제목이 문항으로 잡히고, 번호만 보고 합쳐 진짜 문항이 사라짐 (dev `0928 테스트2` 1쪽 목차 4문항 · 2쪽 0문항) | [plan](plans/PLAN-B18-regex-only-false-positive.md) | — | 🟡 **Phase 1 완료**(위치 기준 병합 + 정규식 전용 경계 오탐 **표시**, 케이스 8/8 · `/testrun` 확인 · 회귀 없음 257/257 · 기출 4종 실측: 심화대비 복구, 내신마스터 "유형 N" 62건 오탐, Blue·Red 동일). PR #21 **main 머지 완료(2026-09-28, `c17f884`)**, 브랜치 삭제됨. dev 배포 완료 — **Phase 2 상세 화면 육안 확인 남음** |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -235,6 +235,23 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-09-28
+
+### REQ-B17·B18 dev 배포 (`c17f884`) — 확인 중 FAILED 파일 상세 504 발견, 계약 #33 승격
+
+B18 PR #21을 main에 머지(`c17f884`, B17 기록 docs `66b324c`도 함께 원격 반영)하고 백엔드(이미지 태그 `c17f884`, rev 4 그대로)·
+프론트(Workers)를 **함께** 배포했다(B17 `QUEUED`를 프론트가 알아야 해서). 기동 로그에 `중단된 분석을 FAILED 로 전환 |
+job_id=5065d74a…`가 찍혔고 사용자가 실패 표시·알림을 확인했다. 세션 끝에 dev 백엔드는 **desired 0**으로 내렸다.
+
+**막힌 것 — FAILED 파일 상세가 "Failed to fetch"라 재감지 확인을 못 했다.** 백엔드 로그상 `/questions`·`/pages/0/questions`가
+30초 504(`TimeoutMiddleware`). FAILED job은 경계 캐시가 없어 조회가 **요청 안 동기 감지**로 폴백하는데, 212쪽은 0.5 vCPU에서
+30초를 넘고 타임아웃은 응답만 끊어 **감지 스레드는 계속 돈다**(새로고침마다 하나씩 누적). B17이 "요청 경로 동기 감지"를
+동시성 제한 범위에서 **제외**했던 바로 그 자리다 — 제외 당시엔 캐시 미스가 드문 경로였지만, B17이 FAILED 전환을 만들면서
+**캐시 없는 job이 화면에 정상적으로 나타나는 경로**가 생겼다. 같은 시각 API 전반 지연(stats 9s·jobs 5.6s)도 이 폭주와
+겹쳐 동일 원인으로 추정(미검증). 504에 CORS 헤더가 없던 건 계약 #8이 지켜져 있는데도 난 것이라 원인 미확인.
+둘 다 `docs/TODO.md` §7로 올렸다(다음 번호 B19로 `/workplan` 예정).
+
+B18의 "5-b가 `is_false_positive`를 덮어쓴다"·"오탐 경계도 자르기 참여"는 **계약 #33**으로 CLAUDE.md에 승격(사용자 승인).
+
 
 ### REQ-B18 — 목차가 문항으로 잡히고 진짜 1~4번이 사라짐: 번호로 합치던 병합이 원인 (계획서 + Phase 1)
 
