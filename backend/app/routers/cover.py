@@ -79,7 +79,7 @@ def list_covers(current_user: dict = Depends(auth_service.get_current_user)):
 
 
 @router.get("/covers/{cover_id}/image")
-def get_cover_image(cover_id: str, current_user: dict = Depends(auth_service.get_current_user)):
+def get_cover_image(cover_id: str, current_user: dict = Depends(auth_service.get_current_user_allow_cookie)):
     """표지 이미지를 반환한다 (img src 직접 사용 가능)."""
     meta = storage.get_cover_meta(cover_id)
     if meta is None:

@@ -8,6 +8,11 @@ access 1시간 · refresh 7일, refresh는 rolling(갱신할 때마다 재발급
 Phase 2 — 타인 소유물 접근 시 상태 코드는 **404**로 고정한다(검증 계약,
 PLAN-27 § 검증 계약 "Phase 2" 참조 — 계획서의 "403/404" 병기 중 존재 자체를 숨기는
 쪽으로 확정).
+
+REQ-B15 — 브라우저 `<img>`는 `Authorization` 헤더를 못 붙이므로, access token을 HttpOnly
+쿠키로도 심고 **이미지·파일 GET에 한해** 헤더가 없을 때 쿠키를 받는다
+(`get_current_user_allow_cookie`). 나머지 엔드포인트는 헤더 전용 그대로 — 쿠키로는 "보기"만
+가능하게 해 CSRF 표면을 만들지 않는다(PLAN-B15 § 결정).
 """
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -15,7 +20,7 @@ from typing import Optional
 
 import bcrypt
 import jwt
-from fastapi import Header, HTTPException
+from fastapi import Cookie, Header, HTTPException, Response
 
 from app.core.config import settings
 from app.services import storage
@@ -23,6 +28,8 @@ from app.services import storage
 ACCESS_TOKEN_EXPIRE_SECONDS = 60 * 60             # 1시간
 REFRESH_TOKEN_EXPIRE_SECONDS = 7 * 24 * 60 * 60    # 7일
 _ALGORITHM = "HS256"
+ACCESS_COOKIE_NAME = "access_token"
+_ACCESS_COOKIE_PATH = "/api"
 
 
 def hash_password(password: str) -> str:
@@ -95,17 +102,8 @@ def decode_access_token(token: str) -> dict:
 
 # ── Phase 2: 인증 의존성 · 소유권 검사 ──────────────────────
 
-def get_current_user(authorization: Optional[str] = Header(default=None)) -> dict:
-    """
-    `Authorization: Bearer <access_token>` 헤더에서 현재 사용자를 추출하는 FastAPI 의존성.
-
-    헤더가 없거나·형식이 틀리거나·토큰이 유효하지 않거나·사용자가 더는 존재하지 않으면
-    전부 401(계획서 § Phase 2 완료 기준 — "인증 없이 ... API 호출 시 401").
-    """
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
-
-    token = authorization[len("Bearer "):].strip()
+def _user_from_access_token(token: str) -> dict:
+    """access token → 사용자. 토큰이 유효하지 않거나 사용자가 없으면 401."""
     try:
         payload = decode_access_token(token)
     except jwt.PyJWTError:
@@ -116,6 +114,56 @@ def get_current_user(authorization: Optional[str] = Header(default=None)) -> dic
         raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
 
     return user
+
+
+def get_current_user(authorization: Optional[str] = Header(default=None)) -> dict:
+    """
+    `Authorization: Bearer <access_token>` 헤더에서 현재 사용자를 추출하는 FastAPI 의존성.
+
+    헤더가 없거나·형식이 틀리거나·토큰이 유효하지 않거나·사용자가 더는 존재하지 않으면
+    전부 401(계획서 § Phase 2 완료 기준 — "인증 없이 ... API 호출 시 401").
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
+
+    return _user_from_access_token(authorization[len("Bearer "):].strip())
+
+
+def get_current_user_allow_cookie(
+    authorization: Optional[str] = Header(default=None),
+    access_cookie: Optional[str] = Cookie(default=None, alias=ACCESS_COOKIE_NAME),
+) -> dict:
+    """
+    이미지·파일 GET 전용 (REQ-B15). 헤더가 있으면 헤더만 본다(잘못된 헤더는 쿠키가 있어도 401),
+    헤더가 없을 때만 access 쿠키로 인증한다. 상태를 바꾸는 엔드포인트에 쓰지 않는다.
+    """
+    if authorization is not None or not access_cookie:
+        return get_current_user(authorization)
+    return _user_from_access_token(access_cookie)
+
+
+def set_access_cookie(response: Response, access_token: str) -> None:
+    """로그인·갱신 응답에 access 쿠키를 심는다 — 속성은 PLAN-B15 § 결정."""
+    response.set_cookie(
+        ACCESS_COOKIE_NAME,
+        access_token,
+        max_age=ACCESS_TOKEN_EXPIRE_SECONDS,
+        path=_ACCESS_COOKIE_PATH,
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite="lax",
+    )
+
+
+def clear_access_cookie(response: Response) -> None:
+    """HttpOnly라 JS가 못 지운다 — 로그아웃 응답이 지운다(set_access_cookie와 같은 path·속성)."""
+    response.delete_cookie(
+        ACCESS_COOKIE_NAME,
+        path=_ACCESS_COOKIE_PATH,
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite="lax",
+    )
 
 
 def ensure_owner_or_admin(current_user: dict, owner_id: Optional[str]) -> None:

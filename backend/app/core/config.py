@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     # JWT 서명 키. 운영 배포 시 반드시 .env/Secrets Manager로 재정의할 것 —
     # 기본값은 로컬 개발용이고 절대 이 값으로 배포하지 않는다.
     JWT_SECRET_KEY: str = "dev-insecure-secret-change-me"
+    # 이미지·파일 GET용 access 쿠키의 Secure 속성 (REQ-B15). 로컬 http 개발에서만 False로 끈다.
+    AUTH_COOKIE_SECURE: bool = True
 
     # ── CORS (REQ-27 Phase 3) ───────────────────────────────
     # 허용 origin 목록. PLAN-27 § 결정 — "CORS 허용 도메인 | dev 프론트 도메인 +

@@ -553,7 +553,7 @@ def get_thumbnail(
     job_id: str,
     page_num: int,
     dpi: int = Query(default=96, ge=72, le=300),
-    current_user: dict = Depends(auth_service.get_current_user),
+    current_user: dict = Depends(auth_service.get_current_user_allow_cookie),
 ):
     """썸네일 PNG 반환 — 캐시 우선, 없으면 생성 후 캐시 저장"""
     job = _get_owned_job(job_id, current_user)
@@ -1124,7 +1124,7 @@ def get_question_thumbnail_endpoint(
     job_id: str,
     page_num: int,
     question_num: int,
-    current_user: dict = Depends(auth_service.get_current_user),
+    current_user: dict = Depends(auth_service.get_current_user_allow_cookie),
 ):
     """
     문항 크롭 썸네일 PNG 반환.
@@ -1182,7 +1182,7 @@ def get_manual_question_thumbnail(
     job_id: str,
     page_num: int,
     manual_id: str,
-    current_user: dict = Depends(auth_service.get_current_user),
+    current_user: dict = Depends(auth_service.get_current_user_allow_cookie),
 ):
     """
     수동 추가 문항의 크롭 썸네일 PNG 반환.
