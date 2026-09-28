@@ -40,6 +40,14 @@ const TILES = [
     clickable: true,
   },
   {
+    // 분석 슬롯 대기 (REQ-B17) — "분석중 파일수"(PROCESSING)와 따로 센다
+    field: "queued_count",
+    label: "대기 중 파일수",
+    icon: "material-symbols:hourglass-empty-rounded",
+    color: "primary",
+    clickable: true,
+  },
+  {
     field: "undetected_page_count",
     label: "미탐지 페이지 수",
     icon: "material-symbols:visibility-off-outline-rounded",

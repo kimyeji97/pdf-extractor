@@ -76,6 +76,7 @@ function UploadCard({ onClick }) {
 // 감지 상태 → 표지 위 배지
 const BOUNDARY_BADGE = {
   PROCESSING: { label: "분석 중", color: "warning" },
+  QUEUED:     { label: "대기 중", color: "info" },     // 분석 슬롯 대기 (REQ-B17)
   PENDING:    { label: "처리 중", color: "warning" },
   FAILED:     { label: "분석 실패", color: "error" },
 };

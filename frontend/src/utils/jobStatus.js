@@ -24,5 +24,6 @@ export function isEntryBlocked(job) {
  */
 export function isRefreshBlocked(job) {
   const status = job?.boundaries_status;
-  return status === "PENDING" || status === "PROCESSING";
+  // QUEUED(분석 슬롯 대기, REQ-B17)도 이미 감지가 걸려 있는 상태다. 진입은 PENDING과 같이 허용한다.
+  return status === "PENDING" || status === "QUEUED" || status === "PROCESSING";
 }
