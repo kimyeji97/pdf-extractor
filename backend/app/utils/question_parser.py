@@ -463,11 +463,20 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     # ── Step 4: 연속 증분 패턴으로 정규식 누락 보완 ──────────
     # 정규식 11개 패턴으로 못 찾은 번호를 형식-독립 수열 탐지로 보완한다.
     # pages_data를 그대로 넘기므로 PDF 재오픈 비용 없음.
+    # ⚠️ 병합은 **번호가 아니라 위치(페이지·컬럼·y)** 로 한다 (REQ-B18). 같은 번호가 목차·"유형 N" 제목·
+    #    회차별 반복으로 여러 번 나오는 게 정상이라, 번호로 합치면 정규식이 먼저 잡은 목차 1~4 가
+    #    다른 쪽의 진짜 1~4 를 밀어낸다. 두 경로는 같은 단어의 top 을 쓰므로 위치가 정확히 일치한다.
+    # adaptive 가 결과를 냈는데 거기 없는 정규식 경계는 오탐으로 **표시**한다(지우지 않는다 — REQ-15 방침).
+    # 표시는 5-b 뒤에 한다: 5-b 가 is_false_positive 를 덮어쓴다.
     adaptive_raw = _run_adaptive_detection(pages_data)
+    regex_only: list[QuestionBoundary] = []
     if adaptive_raw:
-        # 이미 정규식으로 찾은 번호는 중복 추가하지 않음
-        pattern_nums = {b.number for b in raw}
-        raw.extend(b for b in adaptive_raw if b.number not in pattern_nums)
+        def _pos(b: QuestionBoundary) -> tuple:
+            return (b.page_index, b.col, b.y_top)
+        adaptive_pos = {_pos(b) for b in adaptive_raw}
+        regex_pos = {_pos(b) for b in raw}
+        regex_only = [b for b in raw if _pos(b) not in adaptive_pos]
+        raw.extend(b for b in adaptive_raw if _pos(b) not in regex_pos)
 
     # ── Step 5: y_bottom 보정 ─────────────────────────────────
     # 현재 문항의 끝 = 같은 컬럼 내 다음 문항의 시작 y좌표 (없으면 페이지 하단)
@@ -478,6 +487,9 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     # _fill_y_bottom으로 y_bottom이 확정된 뒤 단어 범위를 알 수 있으므로 이 시점에 처리.
     # x 좌표 정밀화, y_bottom 조임, 오탐지 마킹을 순서대로 수행.
     _apply_precision_improvements(raw, pages_data, pages_graphics)
+    # 정규식만 잡은 경계 = 오탐 의심. 5-b 가 덮어쓴 뒤라야 남는다 (REQ-B18)
+    for b in regex_only:
+        b.is_false_positive = True
 
     # ── Step 5-c: 배경색 필터 — 비백색 배경 오탐지 마킹 ────────
     # x/y 정밀화가 완료된 최종 bbox로 픽셀을 렌더링해야 정확하므로 5-b 이후에 실행.
