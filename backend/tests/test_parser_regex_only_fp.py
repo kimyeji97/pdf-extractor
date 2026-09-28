@@ -134,10 +134,14 @@ def test_B18_03_type_headers_marked_false_positive(tmp_path):
 
 
 def test_B18_04_false_positive_header_still_cuts_previous_question(tmp_path):
-    """제목이 자르기에서 빠지면 1번 단어 범위에 `유형 2` 가 들어와 하단이 제목 아래로 내려간다."""
+    """제목이 자르기에서 빠지면 1번 단어 범위에 `유형 2` 가 들어와 하단이 제목 아래로 내려간다.
+
+    기준은 경계가 붙는 **번호 단어 `2`** 의 top 이다 — `유형`(korea 폰트)과 `2`(helv)는 top 이
+    0.1pt 어긋나 `유형` 을 기준으로 재면 올바른 구현도 실패한다(/testrun 실측).
+    """
     path = _header_pdf(tmp_path)
     with pdfplumber.open(path) as pdf:
-        header_top = next(w["top"] for w in pdf.pages[0].extract_words() if w["text"] == "유형")
+        header_top = next(w["top"] for w in pdf.pages[0].extract_words() if w["text"] == "2")
     q1 = next(b for b in detect_question_boundaries(path) if b.page_index == 0 and b.number == 1)
     assert q1.y_bottom <= header_top
 
