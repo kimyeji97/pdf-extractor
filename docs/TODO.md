@@ -66,7 +66,13 @@
       공개 레포에 있는 값이라 **누구나 토큰 위조 가능**. Secrets Manager `pdf-extractor/dev`에 추가 →
       태스크 정의 새 리비전 → 서비스 갱신. admin 계정 승격·백필은 이 뒤에
 - [ ] **dev 배포 시 ECR `latest`를 안 가져감** (2026-09-28) — `backend-build.sh`로 새 `latest` 푸시 후
-      ECS 배포했는데 새 이미지가 반영되지 않았다. 원인 미조사
+      ECS 배포했는데 새 이미지가 반영되지 않았다.
+      **원인(조사 완료)**: 이번 배포는 AWS **콘솔**에서 했고(CloudTrail `UpdateService` 09-28 02:16Z, 브라우저 UA),
+      콘솔은 태스크 정의를 **최신 리비전 rev 3**으로 채운다. rev 3은 P04 Phase 0 프로브(08-18) 잔재로 이미지가
+      `:p04-probe`(08-18 빌드)에 고정돼 있다. 그래서 `latest`와 무관하게 프로브 이미지가 떴다(실행 중 태스크 digest
+      `2ddae2f5…` = `p04-probe`). 8월 배포는 CLI `--force-new-deployment`(태스크 정의 미지정 → 기존 rev 2 `:latest`
+      유지)라 문제가 없었다. **해결**: `:latest` + `JWT_SECRET_KEY`로 rev 4를 등록해 최신 리비전으로 만들고(1번과 묶음),
+      rev 3은 deregister해서 콘솔 기본값이 프로브를 가리키지 않게 한다
 - [ ] **밀린 dev 프론트 재배포** (위 배포 정책 — 로드맵 완료 시점 또는 백엔드 배포에 딸려서)
 - [ ] prod 환경 분리 (현재 dev 하나 — 백엔드 desired 0 토글 운영, 프론트 wrangler 수동 배포)
 - [ ] 프론트 자동 배포(CI/CD) / 백엔드 배포 파이프라인 — 현재 `.github/workflows` 없음. 프론트는
