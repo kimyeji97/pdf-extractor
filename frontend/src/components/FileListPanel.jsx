@@ -33,6 +33,7 @@ const STATUS_CHIP = {
 
 const BOUNDARIES_CHIP = {
   PENDING:    { label: "감지 대기", color: "default" },
+  QUEUED:     { label: "대기 중",  color: "info" },      // 분석 슬롯 대기 (REQ-B17)
   PROCESSING: { label: "감지 중…",  color: "warning" },
   FAILED:     { label: "감지 실패", color: "error" },
 };

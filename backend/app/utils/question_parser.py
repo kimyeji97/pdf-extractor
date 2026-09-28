@@ -356,8 +356,11 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
             )
             pages_data.append((page_w, page_h, words))
             # 머리말·꼬리말 띠에 걸치거나 페이지 절반보다 긴 것(단 구분선 등)은 장식이라 뺀다
+            # 좌표 네 개만 복사한다 — pdfplumber 객체(이미지는 원본 stream 참조까지)를 그대로 담으면
+            # 아래에서 페이지를 닫아도 리스트가 쪽수만큼 붙잡아 누수가 남는다 (REQ-B17)
             pages_graphics.append([
-                g for g in page.images + page.rects + page.curves + page.lines
+                {k: g[k] for k in ("x0", "x1", "top", "bottom")}
+                for g in page.images + page.rects + page.curves + page.lines
                 if g["top"] >= page_h * _HEADER_PERCENT
                 and g["bottom"] <= page_h * _FOOTER_PERCENT
                 and g["bottom"] - g["top"] <= page_h / 2
@@ -379,6 +382,10 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
                 # → 본문 텍스트(주로 소형)가 아닌 문항 번호 크기 분포를 파악
                 if _extract_question_number(w["text"]) is not None and size >= _Q_FONT_SIZE_MIN:
                     size_counts[round(size, 1)] += 1
+
+            # 다 읽은 페이지는 닫는다 — pdfplumber 가 파싱 캐시를 쥐고 있어 안 닫으면 쪽수에 비례해
+            # 메모리가 쌓인다(212쪽 1,032MB → 154MB, 결과 동일). 이 페이지 객체는 여기서 끝이다 (REQ-B17)
+            page.close()
 
     # ── Step 2: 글로벌 폰트 임계값 결정 ───────────────────────
     # 문항 번호에 가장 많이 사용된 폰트 크기의 92%를 임계값으로 설정.
@@ -1153,6 +1160,7 @@ def detect_question_boundaries_adaptive(pdf_path: str) -> list[QuestionBoundary]
                 extra_attrs=["size"],
             )
             pages_data.append((page.width, page.height, words))
+            page.close()  # 누수 방지 — detect_question_boundaries 의 Step 1 과 같은 이유 (REQ-B17)
 
     raw = _run_adaptive_detection(pages_data)
     if not raw:

@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from app.routers import upload, extract, browse, workbook, cover, notification, footnote, watermark, template, auth
 from app.core.config import settings
+from app.services import analysis_slots
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,10 +33,18 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
             )
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 죽은 태스크가 남긴 QUEUED·PROCESSING 을 FAILED + 실패 알림으로 (REQ-B17 — 태스크 1개 전제)
+    analysis_slots.fail_interrupted()
+    yield
+
+
 app = FastAPI(
     title="PDF Question Extractor",
     description="기출문제 PDF에서 원하는 문항만 추출하는 서비스",
     version="3.0.0",
+    lifespan=lifespan,
 )
 
 # 등록 순서 주의: 나중에 add_middleware된 것이 바깥쪽(outermost)이 된다.
