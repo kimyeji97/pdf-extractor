@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-09-21
+> 최종 갱신: 2026-09-28
 
 ## 요구사항 인덱스
 
@@ -122,6 +122,7 @@
 | REQ-B13 | 문항 크롭 여백을 네 변 10pt로 통일 (TODO 4단계 "서버 영역 버그") | [plan](plans/PLAN-B13-crop-margin-uniform.md) | 2026-09-21 | ✅ **Phase 1·2 전부 완료**. Phase 1(케이스 11/11 · `/testrun` 확인 · 회귀 없음 136) PR #15 **main 머지 완료(2026-09-18)**. Phase 2(2026-09-21) 실제 기출 PDF 4종·문항 1,141개로 오탐 실측 — 3종 0건 유지, 1종에서 1건 증가했으나 원인이 "유형 N 배지 오인식"이라는 기존 오탐지가 색상 필터에 정확히 걸린 것으로 확인돼 허용 오차 조정 없이 종결(사용자 확인) |
 | REQ-27 | 로그인/회원가입 — 인증(JWT) · CORS 제한 · D07 잔여 슬롯(auth-layout·account-popover) | [plan](plans/PLAN-27-login-registration.md) · [ADR](adr/0005-jwt-auth.md) | 2026-09-18 | ✅ **Phase 1~5 전부 완료**(케이스 68/68 · `/testrun` 확인 · 회귀 없음 백엔드 167/167·프론트 185/185). 착수 중 배경 서술 오류 발견 — `auth-layout`·`ProfileMenu`는 실제로 존재하지 않고 주석 한 줄뿐이었다(계획서 § 배경 정정). PR #16 **main 머지 완료(2026-09-18, `88ba7a3`)**, 브랜치 삭제됨. D07 잔여 슬롯도 이걸로 해소 |
 | REQ-B14 | 업로드/추출 생성 경로 무인증 + owner_id 미기입 (REQ-27 Phase 2 범위 밖에서 발견) | [plan](plans/PLAN-B14-upload-extract-auth-owner-id.md) | 2026-09-21 | ✅ **Phase 1~3 전부 완료**(케이스 16/16 · `/testrun` 확인 · 회귀 없음 백엔드 196/196·프론트 186/186). Phase 1이 남긴 REQ-30 회귀(`test_template_extract_wiring.py` 8건, fixture가 실제 job 없이 job_id만 참조)는 Phase 3에서 `_make_job`으로 해소. PR #17 **main 머지 완료(2026-09-21, `eeb79c4`)**, 브랜치 삭제됨 |
+| REQ-B15 | 이미지 요청 401 — `<img>`가 인증 헤더를 못 보냄 (REQ-27 후속, dev 배포 후 발견) → access 쿠키 병행 | [plan](plans/PLAN-B15-image-auth-cookie.md) | — | 🟡 **Phase 1 완료**(백엔드, 케이스 16/16 · `/testrun` 확인 · 회귀 없음 221/221). `feat/B15-image-auth-cookie` `cdc09ca` 푸시. Phase 2(프론트 credentials)·3(dev 확인) 남음 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -229,6 +230,70 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-09-28
+
+### dev 재배포 — 백엔드가 두 달 가까이 "배포돼도 안 바뀔 수 있는" 상태였다
+
+REQ-27·B14를 dev에 처음 올리는 날이었다. 순서대로 걸린 것 넷.
+
+**① `backend-build.sh`가 경로 때문에 빌드 실패** — 스크립트가 `scripts/deploy/`로 옮겨졌는데
+`cd ../backend`가 남아 있었고, 그마저 **실행 위치 기준**이라 어디서 돌리든 틀렸다. `set -e`가 없어
+실패한 `cd` 뒤에도 `docker login`·`buildx`가 계속 돌아 "Dockerfile 없음"으로 끝났다 — 원인이 한 줄
+위에 있는데 에러는 끝에서 난다. 스크립트 위치 기준 `cd` + `set -euo pipefail`로 고쳤다(`7c03bf2`).
+같은 커밋에서 **커밋 해시 버전 태그**(`[접두사-]해시[-dirty]`)와 **`--provenance=false`**를 넣었다.
+buildx 기본값은 푸시 1회에 ECR 행 3개(Index·이미지·0MB attestation)를 만든다 — 증명서를 읽는
+곳(서명 정책·감사)이 없고, 어느 커밋인지는 버전 태그가 대신한다. 무엇보다 **태그 없는 행 중 일부가
+살아 있는 이미지의 부속**이라 나중에 "untagged 삭제" lifecycle 규칙을 걸면 현재 이미지가 깨진다.
+
+**② 새 `latest`를 올렸는데 ECS가 옛 이미지를 띄웠다** — 원인은 이미지가 아니라 **태스크 정의
+리비전**이었다. rev 3은 2026-08-18 P04 Phase 0 프로브용으로 이미지를 `:p04-probe`에 고정한 잔재였고,
+그날 서비스를 rev 2로 되돌리면서 rev 3을 deregister하지 않았다. 8월 배포는 전부 CLI
+`--force-new-deployment`(태스크 정의 미지정 → 기존 rev 2 유지)라 문제가 없었는데, 이번엔 **콘솔**로
+배포했고 콘솔은 **최신 활성 리비전(rev 3)을 기본으로 채운다**(CloudTrail `UpdateService`
+`taskDefinition: …:3`, 브라우저 UA로 확인). 실행 중 태스크 digest가 `p04-probe`와 같았다.
+→ **실험용 리비전을 만들면 끝나고 반드시 deregister할 것.** 최신 리비전이 곧 콘솔 기본값이다.
+
+**③ JWT 서명 키가 코드 기본값이었다** — 태스크 정의 `secrets`에 `JWT_SECRET_KEY`가 없어
+`dev-insecure-secret-change-me`(공개 레포에 있는 값)로 서명하고 있었다. 누구나 토큰을 위조할 수 있는
+상태로 REQ-27을 올릴 뻔했다. Secrets Manager `pdf-extractor/dev`에 무작위 키를 추가하고, rev 2를
+바탕으로 **rev 4**(`:latest` + `JWT_SECRET_KEY`)를 등록·배포, rev 3은 deregister했다 — ②도 같이 닫힌다.
+실행 digest `6505e71d…` = `7c03bf2`. 위조 토큰 401도 봤지만, 위조 페이로드의 사용자가 없어서 나는
+401일 수도 있어 **서명 검증의 증거로는 약하다** — 실제 증거는 정상 로그인이 된다는 것뿐이다.
+
+**④ admin 계정이 없었다** — REQ-27은 가입 시 항상 `user`이고 admin을 만드는 경로가 없다(테스트는
+`users/{id}.json`을 직접 패치). `scripts/ops/promote-admin.sh`(승격 + `backfill_owner_id`)를 만들어
+dev R2에 실행했다 — 실행 전 `.env.dev`의 R2 대상이 Secrets Manager와 같은지 값 노출 없이 대조했다.
+백필 jobs 21 · workbooks 15 · covers 4 · footnotes/watermarks/templates 각 1, 재실행 시 전부 0(멱등).
+사용자가 기존 데이터 노출을 확인했다. 프론트도 이날 사용자가 재배포했다(로그인 화면 확인) — 밀려 있던
+C09~F13·REQ-27 프론트 변경이 한 번에 반영됐다.
+
+⚠️ dev 백엔드는 현재 **desired 1**(rev 4)로 떠 있다.
+
+### REQ-B15 — 이미지가 전부 401 (계획서 + Phase 1)
+
+admin 로그인 후 목록·이력 **데이터는 보이는데 이미지만** 401이었다. `<img>`는 `Authorization` 헤더를
+못 붙이는데 REQ-27 Phase 2가 썸네일 3종·표지·워터마크 이미지에도 헤더 전용 의존성을 걸었다(로컬 모드
+`/api/files`도 같음). 테스트가 못 잡은 이유는 기존 케이스가 전부 헤더를 붙이는 `authed_client`라서다 —
+**계약 #31(raw fetch)과 같은 계열이 브라우저 태그로 번진 것**이다.
+
+**방식 — 쿠키 병행**: login·refresh가 access token을 HttpOnly 쿠키로도 심고, 이미지·파일 GET 6개만
+헤더가 없을 때 쿠키를 본다. 기각: `?token=`(URL로 토큰 노출·1시간마다 URL이 바뀌어 캐시 파괴),
+fetch→blob(`<img>` 8곳+ 수정·캐시 상실), 이미지 인증 해제(공개 노출). 쿠키를 **GET 6개에만** 받는 건
+CSRF 때문이다 — 전체에 열면 쿠키만으로 POST/DELETE가 통하고, 같은 사이트의 다른 서브도메인발 요청은
+SameSite로도 못 막는다. 속성은 `Lax`·`Secure`(로컬은 `AUTH_COOKIE_SECURE=false`)·`Max-Age=3600`·`Path=/api`.
+"1시간 방치 후 첫 화면" 미결은 코드로 닫았다 — `<img>` URL을 만드는 3곳이 전부 `apiFetch`를 거친 응답으로
+URL을 만들어, 만료 시 401 → refresh(새 쿠키) → 재시도 후에 이미지가 그려진다. 대신 **B15 배포 전에
+로그인해 둔 세션**은 헤더로 API가 통하니 refresh가 안 일어나 최대 1시간 이미지만 401이다 — 재로그인으로
+해결하기로 했다(코드 없음).
+
+Phase 1(백엔드) 완료 — 케이스 16/16(parametrize 25), 전체 221/221. 테스트는 **헤더 없이 쿠키만 가진
+`https://testserver` 클라이언트**로 `<img>` 조건을 재현한다(`Secure` 쿠키는 http 요청에 안 실린다 —
+http로 띄우면 올바른 구현도 401). `AUTH_COOKIE_SECURE`는 케이스가 없어 자동 검증 밖이다.
+
+**ADR-0005 서술 정정**: 배경에 "프론트·백엔드가 다른 도메인이라 쿠키면 `SameSite=None; Secure`가
+필요하다"고 돼 있지만, 두 호스트는 `yejicraft-cf.com`의 서브도메인 = **같은 사이트**라 `Lax`로 실린다.
+ADR의 결정(서버 세션 쿠키 기각)은 그대로다 — B15는 무상태 JWT를 쿠키로도 운반할 뿐이다.
 
 ## 2026-09-21
 
