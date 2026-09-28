@@ -20,7 +20,7 @@ from app.models.schemas import BoundariesStatus, UploadResponse, JobStatusFile, 
 from app.services import auth_service
 from app.services import storage
 from app.services import thumbnail_service
-from app.services import prewarm_service
+from app.services import analysis_slots, prewarm_service
 from app.services import notification_service
 from app.services import question_stats_service
 from app.utils.question_parser import detect_question_boundaries
@@ -136,6 +136,16 @@ def _trigger_boundary_detection(job_id: str) -> None:
         logger.warning("[boundary] status 없음 — 종료 | job_id=%s", job_id)
         return
 
+    # 동시 분석 한도(REQ-B17) — 슬롯을 기다리는 동안은 QUEUED, 잡으면 PROCESSING.
+    # 슬롯은 감지 + 프리워밍 전체를 감싼다(프리워밍 12스레드도 메모리를 쓴다).
+    status_file.boundaries_status = BoundariesStatus.QUEUED
+    storage.put_status(status_file)
+    with analysis_slots.slots:
+        _detect_boundaries(job_id, status_file)
+
+
+def _detect_boundaries(job_id: str, status_file) -> None:
+    """`_trigger_boundary_detection` 본체 — 분석 슬롯을 잡은 뒤에만 불린다."""
     status_file.boundaries_status = BoundariesStatus.PROCESSING
     storage.put_status(status_file)
 

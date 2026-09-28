@@ -17,7 +17,8 @@ class JobType(str, Enum):
 
 
 class BoundariesStatus(str, Enum):
-    PENDING    = "PENDING"     # 감지 대기 중
+    PENDING    = "PENDING"     # 감지 대기 중 (업로드 notify 전)
+    QUEUED     = "QUEUED"      # 분석 슬롯 대기 중 — 동시 한도 초과분 (REQ-B17). 재시작 시 FAILED 로 전환
     PROCESSING = "PROCESSING"  # 감지 진행 중
     DONE       = "DONE"        # 감지 완료
     FAILED     = "FAILED"      # 감지 실패
@@ -26,6 +27,7 @@ class BoundariesStatus(str, Enum):
 class StatsDetailField(str, Enum):
     """GET /api/stats/detail?field=... 의 field 값 (REQ-F12 Phase 2)."""
     PROCESSING_COUNT       = "processing_count"
+    QUEUED_COUNT           = "queued_count"           # REQ-B17
     UNDETECTED_PAGE_COUNT  = "undetected_page_count"
     FALSE_POSITIVE_COUNT   = "false_positive_count"
     MANUAL_COUNT           = "manual_count"

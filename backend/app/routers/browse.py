@@ -34,6 +34,7 @@ from app.models.schemas import (
     BoundariesStatus, JobStatus, JobType, StatsDetailField,
     ManualQuestion, ManualQuestionCreate, QuestionTitleUpdate, RegionCoord,
 )
+from app.services import analysis_slots
 from app.services import auth_service
 from app.services import storage
 from app.services import thumbnail_service
@@ -89,6 +90,7 @@ class StatsResponse(BaseModel):
     workbook_count: int    # 생성한 문제집 수
     # ── 감지 품질 (REQ-F12) — SOURCE job의 캐시 필드만 합산, EXPORT는 제외 ──
     processing_count: int          # boundaries_status == PROCESSING인 job 수
+    queued_count: int              # boundaries_status == QUEUED인 job 수 (REQ-B17 — "대기 중" 타일)
     undetected_page_count: int     # 자동+수동 합쳐 문항 0개인 페이지 수 합산
     false_positive_count: int      # 오탐 문항 수 합산
     manual_count: int              # 수동 문항 수 합산
@@ -131,6 +133,7 @@ def get_stats():
         processing_count=sum(
             1 for j in sources if j.boundaries_status == BoundariesStatus.PROCESSING
         ),
+        queued_count=sum(1 for j in sources if j.boundaries_status == BoundariesStatus.QUEUED),
         undetected_page_count=sum(j.undetected_page_count or 0 for j in sources),
         false_positive_count=false_positive_count,
         manual_count=manual_count,
@@ -165,9 +168,11 @@ def get_stats_detail(field: StatsDetailField = Query(...)):
     sources = [j for j in storage.list_jobs() if j.job_type == JobType.SOURCE]
     items: List[StatsDetailJob] = []
 
-    if field == StatsDetailField.PROCESSING_COUNT:
+    if field in (StatsDetailField.PROCESSING_COUNT, StatsDetailField.QUEUED_COUNT):
+        target = (BoundariesStatus.PROCESSING if field == StatsDetailField.PROCESSING_COUNT
+                  else BoundariesStatus.QUEUED)
         for j in sources:
-            if j.boundaries_status == BoundariesStatus.PROCESSING:
+            if j.boundaries_status == target:
                 items.append(StatsDetailJob(
                     job_id=j.job_id, filename=j.filename, workbook_name=j.workbook_name,
                 ))
@@ -368,22 +373,22 @@ def refresh_job_questions(
     """
     job = _get_owned_job(job_id, current_user)
 
-    # 이미 처리 중이면 중복 요청 방지
-    if job.boundaries_status == BoundariesStatus.PROCESSING:
+    # 이미 처리 중·대기 중이면 중복 요청 방지 (QUEUED 는 REQ-B17)
+    if job.boundaries_status in (BoundariesStatus.PROCESSING, BoundariesStatus.QUEUED):
         return RefreshResponse(
             job_id=job_id,
-            boundaries_status=BoundariesStatus.PROCESSING,
+            boundaries_status=job.boundaries_status,
             message="이미 재감지가 진행 중입니다.",
         )
 
-    # 즉시 PROCESSING 상태로 업데이트 → 프론트 폴링 기준점
-    job.boundaries_status = BoundariesStatus.PROCESSING
+    # 즉시 QUEUED 로 업데이트 → 프론트 폴링 기준점. 분석 슬롯을 잡으면 PROCESSING (REQ-B17)
+    job.boundaries_status = BoundariesStatus.QUEUED
     storage.put_status(job)
 
     # 백그라운드에서 실제 감지 실행
     background_tasks.add_task(_run_refresh_detection, job_id)
 
-    return RefreshResponse(job_id=job_id, boundaries_status=BoundariesStatus.PROCESSING)
+    return RefreshResponse(job_id=job_id, boundaries_status=BoundariesStatus.QUEUED)
 
 
 def _run_refresh_detection(job_id: str) -> None:
@@ -400,6 +405,15 @@ def _run_refresh_detection(job_id: str) -> None:
     if job is None:
         return
 
+    # 동시 분석 한도(REQ-B17) — 최초 감지와 같은 슬롯을 나눠 쓴다. 대기 중엔 QUEUED(요청 시점에 이미 찍힘)
+    with analysis_slots.slots:
+        job.boundaries_status = BoundariesStatus.PROCESSING
+        storage.put_status(job)
+        _refresh_detection_body(job_id, job)
+
+
+def _refresh_detection_body(job_id: str, job) -> None:
+    """`_run_refresh_detection` 본체 — 분석 슬롯을 잡은 뒤에만 불린다."""
     notified = False  # 알림은 정확히 1회 (REQ-P05) — 성공 경로에서 이미 보냈으면 finally 는 건너뛴다
 
     try:

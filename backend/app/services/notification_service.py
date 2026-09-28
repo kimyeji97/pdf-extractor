@@ -86,8 +86,9 @@ def emit_detection(job: JobStatusFile) -> None:
     """
     문항 감지 완료/실패 알림.
 
-    ⚠️ **호출부는 2곳뿐이다** — `upload._trigger_boundary_detection`(최초 감지)와
-    `browse._run_refresh_detection`(재감지). `BoundariesStatus.DONE` 을 찍는 나머지
+    ⚠️ **호출부는 3곳뿐이다** — `upload._trigger_boundary_detection`(최초 감지)와
+    `browse._run_refresh_detection`(재감지), `analysis_slots.fail_interrupted`(서버 시작 시 중단된
+    분석을 FAILED 로 전환, REQ-B17). `BoundariesStatus.DONE` 을 찍는 나머지
     2곳(`list_all_questions`·`list_questions`)은 **조회 경로의 지연 감지**라
     붙이면 사용자가 지금 보고 있는 화면에 대해 "완료됐습니다"가 뜬다.
     성공만이 아니라 **FAILED 도 같은 기준으로 가른다.**
