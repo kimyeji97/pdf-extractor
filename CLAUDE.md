@@ -441,6 +441,9 @@ deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS
 8. **미들웨어 등록 순서** — `add_middleware`는 **나중에 등록한 것이 바깥쪽**이다.
    `TimeoutMiddleware`를 `CORSMiddleware`보다 **먼저** 등록해야 CORS가 바깥을 감싸고,
    타임아웃 504 응답에도 CORS 헤더가 붙어 프론트가 CORS 에러가 아닌 진짜 504로 인식한다.
+   ⚠️ **단, 앱 밖에서는 보장되지 않는다** — dev(Cloudflare Tunnel 경유)의 504에는 CORS 헤더가 없었다(같은 경로
+   401·200엔 있음, 로컬 uvicorn 504엔 있음). 순서가 맞아도 **Cloudflare 쪽 5xx는 브라우저에 CORS 에러로 보일 수 있다**
+   — "CORS 에러"를 보면 설정보다 상태 코드·백엔드 로그부터 볼 것. (REQ-B19 Phase 2, 대체 여부는 미확인)
 9. **`job_type` 쿼리는 대문자 enum** (`SOURCE`/`EXPORT`). 소문자는 422.
 10. **PDF 한글 텍스트는 `TextWriter` + `fitz.Font("korea")`** — PyMuPDF 1.25.5에는
     `Document.add_font`가 없어 helv로 폴백되고 한글이 점으로 깨진다.

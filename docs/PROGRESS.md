@@ -126,7 +126,7 @@
 | REQ-B16 | 문항 끝에 붙은 그림이 크롭 하단에서 잘림 (dev 육안 제보, `0928 테스트4` 3p 5번) | [plan](plans/PLAN-B16-trailing-figure-crop.md) | 2026-09-28 | ✅ **Phase 1 완료**(케이스 6/6 · `/testrun` 확인 · 회귀 없음 백엔드 227/227 · 기출 4종 1,141문항 실측). PR #19 **main 머지 완료(2026-09-28, `7498854`)**, 브랜치 삭제됨. **dev 백엔드 배포 전** — 배포 후 기존 파일은 재감지 필요 |
 | REQ-B17 | 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한 (dev 연속 업로드 중 530) | [plan](plans/PLAN-B17-analysis-oom.md) | — | 🟡 **Phase 1~3 완료**(누수 수정 · 동시 5개·`QUEUED`·시작 시 FAILED·알림·통계 · 프론트 "대기 중" 표시·타일, 케이스 23건 · `/testrun` 확인 · 회귀 없음 백엔드 246/246·프론트 198/198). PR #20 **main 머지 완료(2026-09-28, `6862b75`)**, 브랜치 삭제됨. **Phase 4 부분 확인**(dev `c17f884` — 멈춘 job FAILED+알림 ✅, 재감지는 FAILED 상세 504로 막힘 → TODO §7, 연속 업로드 미확인) |
 | REQ-B18 | 목차·"유형 N" 제목이 문항으로 잡히고, 번호만 보고 합쳐 진짜 문항이 사라짐 (dev `0928 테스트2` 1쪽 목차 4문항 · 2쪽 0문항) | [plan](plans/PLAN-B18-regex-only-false-positive.md) | — | 🟡 **Phase 1 완료**(위치 기준 병합 + 정규식 전용 경계 오탐 **표시**, 케이스 8/8 · `/testrun` 확인 · 회귀 없음 257/257 · 기출 4종 실측: 심화대비 복구, 내신마스터 "유형 N" 62건 오탐, Blue·Red 동일). PR #21 **main 머지 완료(2026-09-28, `c17f884`)**, 브랜치 삭제됨. dev 배포 완료 — **Phase 2 상세 화면 육안 확인 남음** |
-| REQ-B19 | 분석 실패 파일 상세가 30초 504 — 조회 경로가 캐시 미스 시 요청 안에서 동기 감지 (B17 Phase 4를 막음, TODO §7) | [plan](plans/PLAN-B19-lookup-path-sync-detection.md) | — | 🟡 **Phase 1 완료**(조회 3곳 캐시 미스 → 감지 없이 빈 결과·404, 상태 파일 안 씀 · 케이스 10/10 · `/testrun` 확인 · 회귀 없음 백엔드 266/266 · 전제 소멸한 F09-06·07·16 폐기). 브랜치 `fix/B19-lookup-no-sync-detection` — **Phase 2(504 CORS 헤더 조사)·Phase 3(dev 확인) 남음**, 미결 4건 |
+| REQ-B19 | 분석 실패 파일 상세가 30초 504 — 조회 경로가 캐시 미스 시 요청 안에서 동기 감지 (B17 Phase 4를 막음, TODO §7) | [plan](plans/PLAN-B19-lookup-path-sync-detection.md) | — | 🟡 **Phase 1·2 완료**(조회 3곳 캐시 미스 → 감지 없이 빈 결과·404, 상태 파일 안 씀 · 케이스 10/10 · `/testrun` 확인 · 회귀 없음 백엔드 266/266 · 전제 소멸한 F09-06·07·16 폐기). 브랜치 `fix/B19-lookup-no-sync-detection` — **Phase 2 종결**(504 CORS 헤더는 Cloudflare 쪽에서 빠짐 — 구간 특정까지). **Phase 3(dev 확인) 남음** — `내신마스터`는 이미 DONE이라 캐시 없는 FAILED job이 따로 필요, 미결 3건 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -264,6 +264,15 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 
 미결 4건(계획서): FAILED 상세 안내 문구(지금은 "0문항"으로만 보임) · DONE인데 캐시 없는 job · extract-v2
 Step 2의 캐시 미스 감지(B17 한도 밖) · CORS 조사 결과 수정 범위.
+
+**Phase 2 — 504에서 CORS 헤더가 빠지는 곳은 앱 밖이다(구간 특정까지로 종결, 사용자 결정).** 앱(TestClient)과
+실제 uvicorn을 로컬에서 타임아웃 1초로 504를 내면 둘 다 `access-control-allow-origin`이 붙는다 — 계약 #8은 동작한다.
+dev에서 인증된 요청으로 재현하자 uvicorn 로그엔 `504`가 찍혔는데 받은 응답엔 헤더가 없었다. 같은 경로의 401·200에는
+있다. → **uvicorn 뒤(cloudflared 또는 Cloudflare 엣지)에서 5xx 응답의 헤더가 사라진다.** Cloudflare가 에러 페이지로
+통째 바꿨는지는 확인 못 했다 — 두 번째 요청이 200이었다. 첫 요청이 504로 끊긴 뒤에도 **서버 안 감지는 끝까지 돌아**
+캐시를 쓰고 FAILED를 DONE(820문항)으로 덮었기 때문이다. B19가 없애는 버그(계약 #34)가 dev에서 그대로 재현된 셈이고,
+그 탓에 **Phase 3·B17 Phase 4의 "FAILED `내신마스터` 재감지" 확인은 그 job으로 더는 못 한다**(캐시 없는 FAILED job이
+따로 필요). 수정은 하지 않는다 — 원인이 앱 밖이고, Phase 1로 30초 조회 경로가 사라졌다. 계약 #8에 한계만 적었다.
 
 ## 2026-09-28
 
