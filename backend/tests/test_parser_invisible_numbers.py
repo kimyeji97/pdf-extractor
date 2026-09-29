@@ -45,14 +45,14 @@ def _hidden_number_pdf(tmp_path) -> str:
     return str(path)
 
 
-def _invisible_positions(pdf_path: str) -> set[tuple[int, int]]:
-    """(쪽, 번호 글자 x0) — 1pt 이하 번호 글자의 위치."""
+def _invisible_positions(pdf_path: str, key: str = "x0") -> set[tuple[int, int]]:
+    """(쪽, 번호 글자 x0 또는 top) — 1pt 이하 번호 글자의 위치."""
     out = set()
     with pdfplumber.open(pdf_path) as pdf:
         for pi, page in enumerate(pdf.pages):
             for w in page.extract_words(extra_attrs=["size"]):
                 if w["size"] <= 1.0:
-                    out.add((pi, round(w["x0"])))
+                    out.add((pi, round(w[key])))
     return out
 
 
@@ -77,6 +77,9 @@ def test_B20_02_visible_numbers_not_false_positive(tmp_path):
 
 
 def test_B20_03_adaptive_alone_ignores_invisible(tmp_path):
+    # adaptive 단독 결과는 정밀화 전이라 col_x0 가 번호 x0 가 아니라 단 왼쪽 경계다 — `_at_invisible`(x0 비교)로는
+    # 수정 전 코드도 통과한다(/testrun B20 실측). 정밀화 전 y_top 은 번호 글자의 top 그대로라 그걸로 비교한다
     path = _hidden_number_pdf(tmp_path)
     bs = detect_question_boundaries_adaptive(path)
-    assert _at_invisible(bs, _invisible_positions(path)) == []
+    tops = _invisible_positions(path, key="top")
+    assert [b for b in bs if (b.page_index, round(b.y_top)) in tops] == []
