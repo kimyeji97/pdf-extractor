@@ -647,26 +647,11 @@ def list_all_questions(job_id: str, current_user: dict = Depends(auth_service.ge
     if job.boundaries_status == BoundariesStatus.PROCESSING:
         return AllQuestionsResponse(job_id=job_id, total_count=0, pages=[])
 
-    # 경계 캐시 — 1회 읽기
+    # 경계 캐시 — 1회 읽기. 없으면 감지하지 않고 빈 결과 (REQ-B19 — 감지는 업로드·재감지 경로만)
     cached = storage.get_boundaries_cache(job_id)
-    if cached is not None:
-        boundaries = [QuestionBoundary(**b) for b in cached]
-    else:
-        pdf_bytes = storage.read_file(storage.original_key(job_id))
-        with tempfile.TemporaryDirectory() as tmpdir:
-            pdf_path = str(Path(tmpdir) / "original.pdf")
-            Path(pdf_path).write_bytes(pdf_bytes)
-            boundaries = detect_question_boundaries(pdf_path)
-        storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
-
-        qpp: dict[str, int] = {}
-        for b in boundaries:
-            key = str(b.page_index)
-            qpp[key] = qpp.get(key, 0) + 1
-        job.boundaries_status = BoundariesStatus.DONE
-        job.total_question_count = len(boundaries)
-        job.questions_per_page = qpp
-        storage.put_status(job)
+    if cached is None:
+        return AllQuestionsResponse(job_id=job_id, total_count=0, pages=[])
+    boundaries = [QuestionBoundary(**b) for b in cached]
 
     # 수동 문항 — 1회 읽기
     manual_list = storage.get_manual_questions(job_id)
@@ -744,28 +729,11 @@ def list_questions(
     if job.boundaries_status == BoundariesStatus.PROCESSING:
         return QuestionListResponse(job_id=job_id, page_num=page_num, questions=[])
 
-    # 경계 캐시 확인 — 있으면 재사용, 없으면 감지 후 저장
+    # 경계 캐시 확인 — 없으면 감지하지 않고 빈 결과 (REQ-B19 — 감지는 업로드·재감지 경로만)
     cached = storage.get_boundaries_cache(job_id)
-    if cached is not None:
-        boundaries = [QuestionBoundary(**b) for b in cached]
-    else:
-        pdf_bytes = storage.read_file(storage.original_key(job_id))
-        with tempfile.TemporaryDirectory() as tmpdir:
-            pdf_path = str(Path(tmpdir) / "original.pdf")
-            Path(pdf_path).write_bytes(pdf_bytes)
-            boundaries = detect_question_boundaries(pdf_path)
-
-        storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
-
-        # boundaries_status 갱신 (처음 감지 완료)
-        qpp: dict[str, int] = {}
-        for b in boundaries:
-            key = str(b.page_index)
-            qpp[key] = qpp.get(key, 0) + 1
-        job.boundaries_status = BoundariesStatus.DONE
-        job.total_question_count = len(boundaries)
-        job.questions_per_page = qpp
-        storage.put_status(job)
+    if cached is None:
+        return QuestionListResponse(job_id=job_id, page_num=page_num, questions=[])
+    boundaries = [QuestionBoundary(**b) for b in cached]
 
     # 해당 페이지의 자동 감지 문항만 필터링
     page_boundaries = [b for b in boundaries if b.page_index == page_num]
@@ -1155,16 +1123,9 @@ def get_question_thumbnail_endpoint(
     # 경계 정보 조회
     cached_boundaries = storage.get_boundaries_cache(job_id)
     if cached_boundaries is None:
-        # 경계 캐시 없으면 직접 감지
-        pdf_bytes = storage.read_file(storage.original_key(job_id))
-        with tempfile.TemporaryDirectory() as tmpdir:
-            pdf_path = str(Path(tmpdir) / "original.pdf")
-            Path(pdf_path).write_bytes(pdf_bytes)
-            boundaries = detect_question_boundaries(pdf_path)
-        storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
-    else:
-        boundaries = [QuestionBoundary(**b) for b in cached_boundaries]
-        pdf_bytes = None
+        # 감지하지 않는다 (REQ-B19 — 감지는 업로드·재감지 경로만)
+        raise HTTPException(status_code=404, detail="문항 경계가 아직 없습니다.")
+    boundaries = [QuestionBoundary(**b) for b in cached_boundaries]
 
     target = next(
         (b for b in boundaries if b.page_index == page_num and b.number == question_num),
@@ -1173,8 +1134,7 @@ def get_question_thumbnail_endpoint(
     if target is None:
         raise HTTPException(status_code=404, detail=f"문항 {question_num}을 찾을 수 없습니다.")
 
-    if pdf_bytes is None:
-        pdf_bytes = storage.read_file(storage.original_key(job_id))
+    pdf_bytes = storage.read_file(storage.original_key(job_id))
 
     png_bytes = thumbnail_service.get_question_thumbnail(
         pdf_bytes=pdf_bytes,
