@@ -3,7 +3,7 @@
 ## Status
 
 <!-- proposed · accepted · deprecated · superseded -->
-accepted
+superseded → [ADR-0006](0006-question-id-same-number-ordinal.md) (2026-09-29)
 
 ---
 
