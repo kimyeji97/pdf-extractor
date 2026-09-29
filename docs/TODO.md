@@ -84,7 +84,7 @@
 - ❌ REQ-E01 감지 진행률 스트리밍 — 차후, P04(SSE) 위에 재검토 가능
 
 ### 7. dev 확인 중 발견 (2026-09-28, B17·B18 배포 `c17f884` 후 — B17 Phase 4를 막고 있음)
-- [ ] **분석 실패 파일 상세 화면이 "Failed to fetch"** (🔴 먼저) — 시작 시 FAILED로 바뀐 `내신마스터`(212쪽, job `5065d74a…`)
+- [ ] **분석 실패 파일 상세 화면이 "Failed to fetch"** (🔴 먼저) → **REQ-B19로 번호 부여**([계획서](plans/PLAN-B19-lookup-path-sync-detection.md)) — 2026-09-29 Phase 1 완료(조회 경로 감지 제거), Phase 2(CORS 조사)·3(dev 확인) 남음 — 시작 시 FAILED로 바뀐 `내신마스터`(212쪽, job `5065d74a…`)
       상세 진입 시 `/api/jobs/{id}/questions`·`/pages/0/questions`가 **30초 뒤 504**(`TimeoutMiddleware`, 백엔드 로그 확인),
       브라우저엔 CORS 에러로 보임. 그래서 재감지 버튼까지 못 가 **재감지 테스트 불가**.
       **원인(코드·로그 확인)**: FAILED job은 경계 캐시가 없어 두 엔드포인트가 **요청 안에서 동기 감지**로 폴백한다
