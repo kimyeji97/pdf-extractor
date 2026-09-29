@@ -2,12 +2,11 @@
 REQ-F09 Phase 1 — 알림 **쓰기 훅** 검증 계약
 
 검증 계약: docs/plans/PLAN-F09-completion-notification.md `## 검증 계약`
-케이스: F09-01 · F09-02 · F09-03 · F09-06 · F09-07 · F09-08 · F09-15 · F09-16
+케이스: F09-01 · F09-02 · F09-03 · F09-08 · F09-15
 
-이 파일이 지키는 것은 **알림을 쓰는 자리가 4곳이 아니라 2곳**이라는 계약이다.
-`BoundariesStatus.DONE` 을 찍는 곳은 4곳인데 뒤 2곳(`list_all_questions`,
-`list_questions`)은 **조회 경로의 지연 감지**라, 알림을 붙이면 사용자가 지금 보고 있는
-화면에 대해 "완료됐습니다" 가 뜬다. grep 으로 훑으면 4곳이 전부 잡히므로 놓치기 쉽다.
+F09-06 · F09-07 · F09-16(조회 경로의 지연 감지는 알리지 않는다)은 2026-09-29 폐기됐다 —
+REQ-B19가 조회 경로의 감지 자체를 없애 전제가 사라졌다. "조회는 감지하지 않는다"는
+`test_lookup_no_sync_detection.py`(B19-01·03)가 지킨다.
 """
 import pytest
 
@@ -74,45 +73,7 @@ def test_F09_03_문제집_생성_성공시_알림_1건(
     assert len(notif_files()) == 1
 
 
-# ── 회귀 — 조회 경로의 지연 감지는 알리지 않는다 ────────────
-
-def test_F09_06_전체문항_조회_반복해도_알림이_늘지_않는다(
-    make_job, stub_detection, fake_pdf, notif_files
-):
-    """근거: PLAN § 작업 단계 — "여러 번 호출해도 **늘지 않는다**" """
-    from app.routers.browse import list_all_questions
-    from app.services import storage
-
-    make_job("job-view-all")
-    stub_detection(count=2)
-
-    for _ in range(3):
-        # 캐시를 비워 매번 지연 감지 경로를 강제한다 — 캐시가 살아 있으면
-        # 2회차부터 감지가 아예 안 돌아 "안 늘었다"가 공짜로 참이 된다.
-        storage.clear_boundaries_cache("job-view-all")
-        # 라우터 함수를 직접 호출하므로 FastAPI Depends가 해석되지 않는다 —
-        # REQ-27 Phase 2로 추가된 current_user를 직접 채워 준다.
-        list_all_questions("job-view-all", current_user={"user_id": "test-admin", "role": "admin"})
-
-    assert notif_files() == []
-
-
-def test_F09_07_페이지문항_조회_반복해도_알림이_늘지_않는다(
-    make_job, stub_detection, fake_pdf, notif_files
-):
-    """근거: PLAN § 작업 단계 — "여러 번 호출해도 **늘지 않는다**" """
-    from app.routers.browse import list_questions
-    from app.services import storage
-
-    make_job("job-view-page")
-    stub_detection(count=2)
-
-    for _ in range(3):
-        storage.clear_boundaries_cache("job-view-page")
-        list_questions("job-view-page", 0, current_user={"user_id": "test-admin", "role": "admin"})
-
-    assert notif_files() == []
-
+# ── 회귀 — 동시 완료 ─────────────────────────────────────
 
 def test_F09_08_동시_완료_2건이_모두_보존된다(make_job, notif_files):
     """근거: PLAN § 제약·함정 — "하나가 조용히 사라진다."
@@ -174,22 +135,3 @@ def test_F09_15_감지_실패시_error_알림_1건(
     files = notif_files()
     assert len(files) == 1
     assert read_notif(files[0])["severity"] == "error"
-
-
-def test_F09_16_조회경로_지연감지_실패는_알리지_않는다(
-    make_job, stub_detection, fake_pdf, notif_files
-):
-    """근거: PLAN § 작업 단계 — "**`FAILED` 경로도 같은 2곳 기준으로 가른다**"
-
-    성공만 보고 위치를 잡으면 실패 쓰기를 `try/except` 에 무심코 달아 조회 경로까지
-    번진다. 조회 경로의 지연 감지가 실패해도 알림이 뜨면 안 되는 건 성공과 똑같다.
-    """
-    from app.routers.browse import list_all_questions
-
-    make_job("job-view-fail")
-    stub_detection(raises=RuntimeError("조회 중 감지 실패"))
-
-    with pytest.raises(RuntimeError):
-        list_all_questions("job-view-fail", current_user={"user_id": "test-admin", "role": "admin"})
-
-    assert notif_files() == []
