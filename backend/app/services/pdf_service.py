@@ -25,6 +25,7 @@ from app.utils.question_parser import (
     QuestionBoundary,
 )
 from app.services import textract_service
+from app.utils import question_key
 from app.utils.layout_spec import MIN_CELL_SCALE, MAX_CELL_SCALE
 
 
@@ -473,12 +474,12 @@ def extract_questions_v2(
             q_global -= 1
             continue
 
+        # k 는 선택의 question_id 마지막 자리 — 옛 3자리 형식·없음이면 0 (ADR-0006)
         boundaries = boundaries_map.get(sel.job_id, [])
-        target = next(
-            (b for b in boundaries
-             if b.page_index == sel.page_num and b.number == sel.question_num),
-            None,
+        idx = question_key.find_index(
+            boundaries, sel.page_num, sel.question_num, question_key.k_of(getattr(sel, "question_id", None))
         )
+        target = boundaries[idx] if idx is not None else None
         if target is None:
             q_global -= 1
             continue

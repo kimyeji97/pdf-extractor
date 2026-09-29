@@ -181,19 +181,24 @@ def clear_boundaries_cache(job_id: str) -> None:
             f.unlink()
 
 
-def get_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) -> Optional[bytes]:
-    path = _BASE / "thumbnails" / job_id / f"q_{page_num}_{question_num}.png"
+
+def _q_thumb_name(page_num: int, question_num: int, k: int) -> str:
+    """k=0 은 옛 이름 그대로(기존 캐시 호환), k≥1 만 접미사 (ADR-0006)."""
+    return f"q_{page_num}_{question_num}.png" if k == 0 else f"q_{page_num}_{question_num}_{k}.png"
+
+def get_question_thumbnail_cache(job_id: str, page_num: int, question_num: int, k: int = 0) -> Optional[bytes]:
+    path = _BASE / "thumbnails" / job_id / _q_thumb_name(page_num, question_num, k)
     return path.read_bytes() if path.exists() else None
 
 
-def save_question_thumbnail_cache(job_id: str, page_num: int, question_num: int, data: bytes) -> None:
-    path = _ensure(_BASE / "thumbnails" / job_id / f"q_{page_num}_{question_num}.png")
+def save_question_thumbnail_cache(job_id: str, page_num: int, question_num: int, data: bytes, k: int = 0) -> None:
+    path = _ensure(_BASE / "thumbnails" / job_id / _q_thumb_name(page_num, question_num, k))
     path.write_bytes(data)
 
 
-def delete_question_thumbnail_cache(job_id: str, page_num: int, question_num: int) -> None:
+def delete_question_thumbnail_cache(job_id: str, page_num: int, question_num: int, k: int = 0) -> None:
     """자동 감지 문항 삭제 시 썸네일 캐시도 함께 제거한다."""
-    path = _BASE / "thumbnails" / job_id / f"q_{page_num}_{question_num}.png"
+    path = _BASE / "thumbnails" / job_id / _q_thumb_name(page_num, question_num, k)
     if path.exists():
         path.unlink()
 

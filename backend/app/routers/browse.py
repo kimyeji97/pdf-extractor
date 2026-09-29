@@ -42,6 +42,7 @@ from app.services import prewarm_service
 from app.services import notification_service
 from app.services import question_stats_service
 from app.utils.question_parser import detect_question_boundaries, QuestionBoundary
+from app.utils import question_key
 
 router = APIRouter()
 
@@ -676,15 +677,15 @@ def list_all_questions(job_id: str, current_user: dict = Depends(auth_service.ge
             QuestionInfo(
                 question_num=b.number,
                 manual_id=None,
-                question_id=f"{job_id}:{page_num}:{b.number}",
-                thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/{b.number}/thumbnail",
+                question_id=question_key.question_id(job_id, page_num, b.number, k),
+                thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/{b.number}/thumbnail?k={k}",
                 bbox=BBox(x0=b.col_x0, y0=b.y_top, x1=b.col_x1, y1=b.y_bottom),
                 col=b.col,
                 title=b.title,
                 is_false_positive=b.is_false_positive,
                 is_manual=False,
             )
-            for b in page_boundaries
+            for b, k in zip(page_boundaries, question_key.ordinals(page_boundaries))
         ]
 
         # 수동 추가 문항
@@ -737,21 +738,22 @@ def list_questions(
 
     # 해당 페이지의 자동 감지 문항만 필터링
     page_boundaries = [b for b in boundaries if b.page_index == page_num]
+    ordered = sorted(page_boundaries, key=lambda x: (x.col, x.y_top))
 
     # 자동 감지 문항 → QuestionInfo 변환
     auto_questions = [
         QuestionInfo(
             question_num=b.number,
             manual_id=None,
-            question_id=f"{job_id}:{page_num}:{b.number}",
-            thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/{b.number}/thumbnail",
+            question_id=question_key.question_id(job_id, page_num, b.number, k),
+            thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/{b.number}/thumbnail?k={k}",
             bbox=BBox(x0=b.col_x0, y0=b.y_top, x1=b.col_x1, y1=b.y_bottom),
             col=b.col,
             title=b.title,
             is_false_positive=b.is_false_positive,
             is_manual=False,
         )
-        for b in sorted(page_boundaries, key=lambda x: (x.col, x.y_top))
+        for b, k in zip(ordered, question_key.ordinals(ordered))
     ]
 
     # 수동 추가 문항 병합 (REQ-13)
@@ -791,10 +793,11 @@ def update_question_title(
     page_num: int,
     question_num: int,
     body: QuestionTitleUpdate,
+    k: int = Query(0, ge=0),
     current_user: dict = Depends(auth_service.get_current_user),
 ):
     """
-    자동 감지 문항의 타이틀을 수정한다.
+    자동 감지 문항의 타이틀을 수정한다. k = 같은 쪽·번호 안 순번(생략 시 0, ADR-0006).
     변경사항은 boundaries/{job_id}.json 캐시에 직접 반영되어 서버에 영속 저장된다.
     """
     _get_owned_job(job_id, current_user)
@@ -803,15 +806,10 @@ def update_question_title(
         raise HTTPException(status_code=404, detail="경계 캐시가 없습니다. 먼저 문항 목록을 조회해 주세요.")
 
     # 해당 문항 검색 및 타이틀 업데이트
-    updated = False
-    for b in cached:
-        if b.get("page_index") == page_num and b.get("number") == question_num:
-            b["title"] = body.title
-            updated = True
-            break
-
-    if not updated:
+    idx = question_key.find_index(cached, page_num, question_num, k)
+    if idx is None:
         raise HTTPException(status_code=404, detail=f"문항 {question_num}을 찾을 수 없습니다.")
+    cached[idx]["title"] = body.title
 
     storage.save_boundaries_cache(job_id, cached)
     return {"question_num": question_num, "title": body.title}
@@ -824,10 +822,11 @@ def delete_question(
     job_id: str,
     page_num: int,
     question_num: int,
+    k: int = Query(0, ge=0),
     current_user: dict = Depends(auth_service.get_current_user),
 ):
     """
-    자동 감지 문항을 삭제한다.
+    자동 감지 문항을 삭제한다. k 로 지목한 경계 하나만 — 생략하면 k=0(ADR-0006).
     boundaries 캐시에서 제거하고 questions_per_page, total_question_count를 재계산한다.
     문항 썸네일 캐시도 함께 삭제한다.
     """
@@ -836,13 +835,10 @@ def delete_question(
     if cached is None:
         raise HTTPException(status_code=404, detail="경계 캐시가 없습니다.")
 
-    original_count = len(cached)
-    cached = [
-        b for b in cached
-        if not (b.get("page_index") == page_num and b.get("number") == question_num)
-    ]
-    if len(cached) == original_count:
+    idx = question_key.find_index(cached, page_num, question_num, k)
+    if idx is None:
         raise HTTPException(status_code=404, detail=f"문항 {question_num}을 찾을 수 없습니다.")
+    cached.pop(idx)
 
     storage.save_boundaries_cache(job_id, cached)
 
@@ -866,7 +862,7 @@ def delete_question(
         storage.put_status(job)
 
     # 썸네일 캐시 삭제
-    storage.delete_question_thumbnail_cache(job_id, page_num, question_num)
+    storage.delete_question_thumbnail_cache(job_id, page_num, question_num, k)
 
 
 # ── 수동 문항 추가 (REQ-13) ──────────────────────────────────
@@ -1009,10 +1005,17 @@ def delete_manual_question(
 
 # ── 문항 벌크(다중) 삭제 (REQ-B06) ───────────────────────────
 
+class QuestionRef(BaseModel):
+    """자동 문항 지목 — (번호, 같은 쪽·번호 안 순번 k). ADR-0006"""
+    num: int
+    k: int = 0
+
+
 class BulkDeleteRequest(BaseModel):
     """한 페이지에서 선택된 자동/수동 문항을 한 번에 삭제하기 위한 요청."""
-    question_nums: List[int] = []   # 자동 감지 문항 번호
-    manual_ids: List[str] = []      # 수동 문항 UUID
+    questions: List[QuestionRef] = []   # 자동 감지 문항 (번호, k)
+    question_nums: List[int] = []       # 옛 형식 — 각 번호의 k=0 (ADR-0006)
+    manual_ids: List[str] = []          # 수동 문항 UUID
 
 
 @router.post("/jobs/{job_id}/pages/{page_num}/questions/bulk-delete")
@@ -1039,16 +1042,16 @@ def bulk_delete_questions(
     deleted_manual = 0
 
     # ── 자동 문항 일괄 삭제 (boundaries 캐시 1회 read-modify-write) ──
-    if body.question_nums:
+    refs = list(body.questions) + [QuestionRef(num=n, k=0) for n in body.question_nums]
+    if refs:
         cached = storage.get_boundaries_cache(job_id)
         if cached is None:
             raise HTTPException(status_code=404, detail="경계 캐시가 없습니다.")
 
-        target_nums = set(body.question_nums)
-        remaining = [
-            b for b in cached
-            if not (b.get("page_index") == page_num and b.get("number") in target_nums)
-        ]
+        # 지우기 전 원본 기준으로 모두 지목해 둔다 — 하나씩 지우면 뒤 k 가 밀린다
+        hits = {(r.num, r.k): question_key.find_index(cached, page_num, r.num, r.k) for r in refs}
+        targets = {i for i in hits.values() if i is not None}
+        remaining = [b for i, b in enumerate(cached) if i not in targets]
         deleted_auto = len(cached) - len(remaining)
 
         if deleted_auto:
@@ -1066,8 +1069,9 @@ def bulk_delete_questions(
                 storage.put_status(job)
 
             # 썸네일 캐시 삭제 (idempotent)
-            for num in target_nums:
-                storage.delete_question_thumbnail_cache(job_id, page_num, num)
+            for (num, k), i in hits.items():
+                if i is not None:
+                    storage.delete_question_thumbnail_cache(job_id, page_num, num, k)
 
     # ── 수동 문항 일괄 삭제 (manual 목록 1회 read-modify-write) ──
     if body.manual_ids:
@@ -1106,17 +1110,18 @@ def get_question_thumbnail_endpoint(
     job_id: str,
     page_num: int,
     question_num: int,
+    k: int = Query(0, ge=0),
     current_user: dict = Depends(auth_service.get_current_user_allow_cookie),
 ):
     """
-    문항 크롭 썸네일 PNG 반환.
-    캐시 키: thumbnails/{job_id}/q_{page_num}_{question_num}.png
+    문항 크롭 썸네일 PNG 반환. k = 같은 쪽·번호 안 순번(생략 시 0, ADR-0006).
+    캐시 키: thumbnails/{job_id}/q_{page_num}_{question_num}.png (k≥1 이면 _{k} 접미사)
     경계 캐시가 없으면 404 반환 — 먼저 문항 목록 엔드포인트를 호출해야 한다.
     """
     job = _get_owned_job(job_id, current_user)
 
     # 문항 썸네일 캐시 확인
-    cached_thumb = storage.get_question_thumbnail_cache(job_id, page_num, question_num)
+    cached_thumb = storage.get_question_thumbnail_cache(job_id, page_num, question_num, k)
     if cached_thumb is not None:
         return Response(content=cached_thumb, media_type="image/png")
 
@@ -1127,12 +1132,10 @@ def get_question_thumbnail_endpoint(
         raise HTTPException(status_code=404, detail="문항 경계가 아직 없습니다.")
     boundaries = [QuestionBoundary(**b) for b in cached_boundaries]
 
-    target = next(
-        (b for b in boundaries if b.page_index == page_num and b.number == question_num),
-        None,
-    )
-    if target is None:
+    idx = question_key.find_index(boundaries, page_num, question_num, k)
+    if idx is None:
         raise HTTPException(status_code=404, detail=f"문항 {question_num}을 찾을 수 없습니다.")
+    target = boundaries[idx]
 
     pdf_bytes = storage.read_file(storage.original_key(job_id))
 
@@ -1145,7 +1148,7 @@ def get_question_thumbnail_endpoint(
         y1=target.y_bottom,
     )
 
-    storage.save_question_thumbnail_cache(job_id, page_num, question_num, png_bytes)
+    storage.save_question_thumbnail_cache(job_id, page_num, question_num, png_bytes, k)
     return Response(content=png_bytes, media_type="image/png")
 
 

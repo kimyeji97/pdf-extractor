@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.services import storage
 from app.services import thumbnail_service
+from app.utils import question_key
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ def _prewarm_page(job_id: str, pdf_bytes: bytes, page_num: int) -> None:
     storage.save_thumbnail_cache(job_id, page_num, png_bytes)
 
 
-def _prewarm_question(job_id: str, pdf_bytes: bytes, b) -> None:
+def _prewarm_question(job_id: str, pdf_bytes: bytes, b, k: int = 0) -> None:
     png_bytes = thumbnail_service.get_question_thumbnail(
         pdf_bytes=pdf_bytes,
         page_index=b.page_index,
@@ -31,7 +32,7 @@ def _prewarm_question(job_id: str, pdf_bytes: bytes, b) -> None:
         x1=b.col_x1,
         y1=b.y_bottom,
     )
-    storage.save_question_thumbnail_cache(job_id, b.page_index, b.number, png_bytes)
+    storage.save_question_thumbnail_cache(job_id, b.page_index, b.number, png_bytes, k)
 
 
 def prewarm_all_thumbnails(job_id: str, pdf_bytes: bytes, boundaries: list, page_count: int) -> None:
@@ -56,8 +57,8 @@ def prewarm_all_thumbnails(job_id: str, pdf_bytes: bytes, boundaries: list, page
                 )
 
         question_futures = {
-            executor.submit(_prewarm_question, job_id, pdf_bytes, b): b
-            for b in boundaries
+            executor.submit(_prewarm_question, job_id, pdf_bytes, b, k): b
+            for b, k in zip(boundaries, question_key.ordinals(boundaries))  # 공존 쌍이 한 키를 덮어쓰지 않게 (ADR-0006)
         }
         for future in question_futures:
             try:

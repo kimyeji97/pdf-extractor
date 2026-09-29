@@ -28,6 +28,7 @@ from app.models.schemas import (
 )
 from app.services import auth_service
 from app.services import storage
+from app.utils import question_key
 
 router = APIRouter()
 
@@ -102,7 +103,11 @@ def get_workbook(workbook_id: str, current_user: dict = Depends(auth_service.get
     if data is None:
         raise HTTPException(status_code=404, detail=f"문제집 {workbook_id}를 찾을 수 없습니다.")
     auth_service.ensure_owner_or_admin(current_user, data.get("owner_id"))
-    data["selections"] = [WorkbookSelectionItem(**s) for s in data.get("selections", [])]
+    # 옛 형식 question_id(`…:{번호}`)는 `…:{번호}:0` 으로 — 편집 복원이 새 목록 ID 와 맞는다 (ADR-0006)
+    data["selections"] = [
+        WorkbookSelectionItem(**{**s, "question_id": question_key.normalize_id(s.get("question_id"))})
+        for s in data.get("selections", [])
+    ]
     return WorkbookMeta(**data)
 
 
