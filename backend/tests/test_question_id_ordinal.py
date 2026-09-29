@@ -207,3 +207,11 @@ def test_B20_21_k_order_is_column_then_y(authed_client, make_job):
     res = authed_client.get(f"/api/jobs/{JOB}/pages/0/questions")
     k0 = next(q for q in res.json()["questions"] if q["question_id"] == f"{JOB}:0:1:0")
     assert k0["bbox"]["y0"] == 500.0
+
+
+# ── 목록 응답의 k 필드 (Phase 3 보완 — 프론트가 q.k 로 읽는다) ──
+
+def test_B20_22_page_list_exposes_k_field(authed_client, dup_job):
+    res = authed_client.get(f"/api/jobs/{JOB}/pages/0/questions")
+    got = sorted((q["bbox"]["y0"], q.get("k")) for q in res.json()["questions"] if not q["is_manual"])
+    assert got == [(100.0, 0), (400.0, 1)]

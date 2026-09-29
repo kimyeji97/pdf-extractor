@@ -607,6 +607,7 @@ class QuestionInfo(BaseModel):
     자동 감지 문항과 수동 추가 문항을 하나의 형식으로 표현한다.
     """
     question_num: Optional[int] = None      # 자동 감지 문항 번호 (수동이면 None)
+    k: Optional[int] = None                 # 같은 쪽·번호 안 순번 (ADR-0006, 수동이면 None) — 수정·삭제에 ?k= 로 되싣는다
     manual_id: Optional[str] = None         # 수동 문항 UUID (자동이면 None)
     question_id: str                         # 고유 ID — UI 키값으로 사용
     thumbnail_url: str
@@ -676,6 +677,7 @@ def list_all_questions(job_id: str, current_user: dict = Depends(auth_service.ge
         auto_questions = [
             QuestionInfo(
                 question_num=b.number,
+                k=k,
                 manual_id=None,
                 question_id=question_key.question_id(job_id, page_num, b.number, k),
                 thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/{b.number}/thumbnail?k={k}",
@@ -744,6 +746,7 @@ def list_questions(
     auto_questions = [
         QuestionInfo(
             question_num=b.number,
+            k=k,
             manual_id=None,
             question_id=question_key.question_id(job_id, page_num, b.number, k),
             thumbnail_url=f"/api/jobs/{job_id}/pages/{page_num}/questions/{b.number}/thumbnail?k={k}",
