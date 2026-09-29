@@ -471,12 +471,13 @@ export async function addManualQuestion(jobId, pageNum, { title, region }) {
 }
 
 /**
- * PATCH /api/jobs/{jobId}/pages/{pageNum}/questions/{questionNum}
+ * PATCH /api/jobs/{jobId}/pages/{pageNum}/questions/{questionNum}?k=
  * 자동 감지 문항 타이틀 수정 (REQ-12)
+ * k = 같은 쪽·번호 안 순번(목록 응답의 `k`). 한 쪽에 같은 번호가 공존할 수 있다 (ADR-0006)
  */
-export async function updateQuestionTitle(jobId, pageNum, questionNum, title) {
+export async function updateQuestionTitle(jobId, pageNum, questionNum, title, k = 0) {
   const res = await apiFetch(
-    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/${questionNum}`,
+    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/${questionNum}?k=${k}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -505,12 +506,12 @@ export async function updateManualQuestionTitle(jobId, pageNum, manualId, title)
 }
 
 /**
- * DELETE /api/jobs/{jobId}/pages/{pageNum}/questions/{questionNum}
- * 자동 감지 문항 삭제 (REQ-14)
+ * DELETE /api/jobs/{jobId}/pages/{pageNum}/questions/{questionNum}?k=
+ * 자동 감지 문항 삭제 (REQ-14) — k 로 지목한 경계 하나만 (ADR-0006)
  */
-export async function deleteQuestion(jobId, pageNum, questionNum) {
+export async function deleteQuestion(jobId, pageNum, questionNum, k = 0) {
   const res = await apiFetch(
-    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/${questionNum}`,
+    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/${questionNum}?k=${k}`,
     { method: "DELETE" }
   );
   if (!res.ok && res.status !== 204) throw new Error("문항 삭제 실패");
@@ -533,13 +534,14 @@ export async function deleteManualQuestion(jobId, pageNum, manualId) {
  * 자동/수동 문항을 한 번에 삭제 (REQ-B06)
  * 단건 DELETE 동시 호출의 경쟁 상태를 피하기 위해 캐시별 1회 갱신으로 처리한다.
  */
-export async function bulkDeleteQuestions(jobId, pageNum, questionNums = [], manualIds = []) {
+export async function bulkDeleteQuestions(jobId, pageNum, questions = [], manualIds = []) {
   const res = await apiFetch(
     `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/bulk-delete`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question_nums: questionNums, manual_ids: manualIds }),
+      // 자동 문항은 (번호, k) 쌍 — 옛 question_nums 는 백엔드가 k=0 으로만 읽는다 (ADR-0006)
+      body: JSON.stringify({ questions, manual_ids: manualIds }),
     }
   );
   if (!res.ok) throw new Error("문항 삭제 실패");

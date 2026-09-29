@@ -265,7 +265,7 @@ export default function QuestionAnalysisPanel({
       if (q.is_manual) {
         await updateManualQuestionTitle(jobId, pageNum, q.manual_id, newTitle);
       } else {
-        await updateQuestionTitle(jobId, pageNum, q.question_num, newTitle);
+        await updateQuestionTitle(jobId, pageNum, q.question_num, newTitle, q.k ?? 0);
       }
       setQuestions((prev) =>
         prev.map((item) =>
@@ -293,15 +293,16 @@ export default function QuestionAnalysisPanel({
     setCheckedIds(new Set());
 
     // 자동/수동을 분리해 벌크 삭제 1회 호출 (단건 동시 호출의 경쟁 상태 회피)
-    const questionNums = deletedItems
+    // 같은 쪽에 같은 번호가 공존할 수 있어 (번호, k) 로 지목한다 (ADR-0006)
+    const autoRefs = deletedItems
       .filter((q) => !q.is_manual)
-      .map((q) => q.question_num);
+      .map((q) => ({ num: q.question_num, k: q.k ?? 0 }));
     const manualIds = deletedItems
       .filter((q) => q.is_manual)
       .map((q) => q.manual_id);
 
     try {
-      await bulkDeleteQuestions(jobId, pageNum, questionNums, manualIds);
+      await bulkDeleteQuestions(jobId, pageNum, autoRefs, manualIds);
     } catch {
       // 실패 시 서버 상태로 목록 복원
       await fetchQuestions();
