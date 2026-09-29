@@ -886,7 +886,12 @@ def _build_gap_map(
         # 헤더/푸터 제외 (_run_adaptive_detection과 동일 기준)
         header_y = page_h * 0.11
         footer_y = page_h * 0.91
-        content_words = [w for w in words if header_y <= w["top"] <= footer_y]
+        # 1pt 이하(보이지 않는 글자)는 정규식 경로와 같이 뺀다 (REQ-B20) — HWP 출력 PDF 의 0.1pt 번호가
+        # 빈틈없는 수열이라 최고 점수 그룹이 되고, B18 위치 병합이 보이는 진짜 번호를 오탐으로 뒤집는다
+        content_words = [
+            w for w in words
+            if header_y <= w["top"] <= footer_y and w.get("size", 0) > 1.0
+        ]
         if not content_words:
             continue
 
@@ -1028,7 +1033,12 @@ def _run_adaptive_detection(
 
         header_y = page_h * 0.11
         footer_y = page_h * 0.91
-        content_words = [w for w in words if header_y <= w["top"] <= footer_y]
+        # 1pt 이하(보이지 않는 글자)는 정규식 경로와 같이 뺀다 (REQ-B20) — HWP 출력 PDF 의 0.1pt 번호가
+        # 빈틈없는 수열이라 최고 점수 그룹이 되고, B18 위치 병합이 보이는 진짜 번호를 오탐으로 뒤집는다
+        content_words = [
+            w for w in words
+            if header_y <= w["top"] <= footer_y and w.get("size", 0) > 1.0
+        ]
         if not content_words:
             continue
 
