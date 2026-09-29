@@ -311,6 +311,9 @@ def _detect_column_split(words: list[dict], page_width: float) -> float:
 
 _HEADER_PERCENT = 0.11
 _FOOTER_PERCENT = 0.91
+# 정규식 전용 경계를 오탐에서 풀어 주는 조임 후(최종) 높이 (REQ-B20). 실측: 제목·목차·단원 표지 26~98pt,
+# 두 번째 형식의 진짜 문항 440~648pt — 양쪽 여유를 비슷하게. 조임 전 값으로 재면 단원 표지가 413pt까지 커진다
+_REGEX_ONLY_REAL_HEIGHT = 200.0
 
 def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     """
@@ -488,8 +491,11 @@ def detect_question_boundaries(pdf_path: str) -> list[QuestionBoundary]:
     # x 좌표 정밀화, y_bottom 조임, 오탐지 마킹을 순서대로 수행.
     _apply_precision_improvements(raw, pages_data, pages_graphics)
     # 정규식만 잡은 경계 = 오탐 의심. 5-b 가 덮어쓴 뒤라야 남는다 (REQ-B18)
+    # 단 조임 후 높이가 _REGEX_ONLY_REAL_HEIGHT 이상이면 제목이 아니라 형식이 다른 두 번째 번호 그룹의 진짜 문항이다
+    # (REQ-B20 — adaptive 는 최고 점수 한 그룹만 인정해 테스트02 20pt 기본문제가 통째로 "정규식 전용"이 된다)
     for b in regex_only:
-        b.is_false_positive = True
+        if b.y_bottom - b.y_top < _REGEX_ONLY_REAL_HEIGHT:
+            b.is_false_positive = True
 
     # ── Step 5-c: 배경색 필터 — 비백색 배경 오탐지 마킹 ────────
     # x/y 정밀화가 완료된 최종 bbox로 픽셀을 렌더링해야 정확하므로 5-b 이후에 실행.
@@ -886,7 +892,12 @@ def _build_gap_map(
         # 헤더/푸터 제외 (_run_adaptive_detection과 동일 기준)
         header_y = page_h * 0.11
         footer_y = page_h * 0.91
-        content_words = [w for w in words if header_y <= w["top"] <= footer_y]
+        # 1pt 이하(보이지 않는 글자)는 정규식 경로와 같이 뺀다 (REQ-B20) — HWP 출력 PDF 의 0.1pt 번호가
+        # 빈틈없는 수열이라 최고 점수 그룹이 되고, B18 위치 병합이 보이는 진짜 번호를 오탐으로 뒤집는다
+        content_words = [
+            w for w in words
+            if header_y <= w["top"] <= footer_y and w.get("size", 0) > 1.0
+        ]
         if not content_words:
             continue
 
@@ -1028,7 +1039,12 @@ def _run_adaptive_detection(
 
         header_y = page_h * 0.11
         footer_y = page_h * 0.91
-        content_words = [w for w in words if header_y <= w["top"] <= footer_y]
+        # 1pt 이하(보이지 않는 글자)는 정규식 경로와 같이 뺀다 (REQ-B20) — HWP 출력 PDF 의 0.1pt 번호가
+        # 빈틈없는 수열이라 최고 점수 그룹이 되고, B18 위치 병합이 보이는 진짜 번호를 오탐으로 뒤집는다
+        content_words = [
+            w for w in words
+            if header_y <= w["top"] <= footer_y and w.get("size", 0) > 1.0
+        ]
         if not content_words:
             continue
 
