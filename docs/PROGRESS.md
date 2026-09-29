@@ -127,7 +127,7 @@
 | REQ-B17 | 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한 (dev 연속 업로드 중 530) | [plan](plans/PLAN-B17-analysis-oom.md) | 2026-09-29 | ✅ **Phase 1~4 완료**(누수 수정 212쪽 1,033→170MB · 동시 5개·`QUEUED`·시작 시 FAILED·알림 · 프론트 "대기 중", 케이스 23건). PR #20 main 머지 `6862b75`. dev 확인 2026-09-29 `f93e525` — FAILED+알림·재감지 DONE, 9건 연달아 분석 태스크 생존·메모리 최대 65% |
 | REQ-B18 | 목차·"유형 N" 제목이 문항으로 잡히고, 번호만 보고 합쳐 진짜 문항이 사라짐 (dev `0928 테스트2` 1쪽 목차 4문항 · 2쪽 0문항) | [plan](plans/PLAN-B18-regex-only-false-positive.md) | 2026-09-29 | ✅ **Phase 1·2 완료**(위치 기준 병합 + 정규식 전용 경계 오탐 **표시**, 케이스 8/8 · 기출 4종 실측: 심화대비 복구, 내신마스터 "유형 N" 62건 오탐). PR #21 main 머지 `c17f884`. dev 상세 육안 2026-09-29 `f93e525` |
 | REQ-B19 | 분석 실패 파일 상세가 30초 504 — 조회 경로가 캐시 미스 시 요청 안에서 동기 감지 (B17 Phase 4를 막음, TODO §7) | [plan](plans/PLAN-B19-lookup-path-sync-detection.md) | 2026-09-29 | ✅ **Phase 1~3 완료**(조회 3곳 캐시 미스 → 감지 없이 빈 결과·404, 상태 파일 안 씀 · 케이스 10/10 · `/testrun` 확인 · 회귀 없음 백엔드 266/266 · 전제 소멸한 F09-06·07·16 폐기 · 504 CORS 헤더는 Cloudflare 쪽에서 빠짐 — 구간 특정까지). PR #22 main 머지 `46c464e`, dev 배포 `f93e525` 확인(FAILED 상세 즉시 200·재감지 DONE·stats 9s→0.9s). `/api/jobs`·`/api/notifications` 재측정과 미결 3건은 TODO §7·§9로 이관 |
-| REQ-B20 | HWP 출력 PDF가 전부 오탐 — 보이지 않는 0.1pt 번호 글자 + 같은 쪽·같은 번호 식별자 충돌 (B18 회귀, dev `테스트02` 840경계·오탐 378) | [plan](plans/PLAN-B20-invisible-number-and-id-collision.md) | — | 🟡 **Phase 1~3 완료**(adaptive 1pt 이하 제외 · 정규식 전용 높이 규칙 200pt · 문항 ID에 같은 쪽·번호 순번 k — ADR-0006 · 케이스 21/21 · `/testrun` 확인 · 회귀 없음 백엔드 287/287). Phase 1·2 PR #23 **main 머지 `0d8c5d4`**. Phase 3 브랜치 `fix/B20-question-id-ordinal` — **Phase 4(프론트 k 전달)·5(dev) 남음** |
+| REQ-B20 | HWP 출력 PDF가 전부 오탐 — 보이지 않는 0.1pt 번호 글자 + 같은 쪽·같은 번호 식별자 충돌 (B18 회귀, dev `테스트02` 840경계·오탐 378) | [plan](plans/PLAN-B20-invisible-number-and-id-collision.md) | — | 🟡 **Phase 1~4 완료**(adaptive 1pt 이하 제외 · 정규식 전용 높이 규칙 200pt · 문항 ID 순번 k — ADR-0006 · 프론트 k 전달 · 케이스 27/27 · `/testrun` 확인 · 회귀 없음 백엔드 288/288·프론트 203/203). Phase 1·2 PR #23 **main 머지 `0d8c5d4`**. Phase 3·4 브랜치 `fix/B20-question-id-ordinal` — **PR·머지·Phase 5(dev 재감지 확인) 남음** |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -375,6 +375,15 @@ PDF 생성은 "그 쪽 그 번호의 **첫** 경계", 삭제·벌크 삭제는 *
 k를 안 싣는 제목 수정·삭제는 그동안 k=0에만 적용된다(Phase 4).
 테스트: 구현 전부터 녹색인 회귀 방지 3건(B20-11·18·20)은 막으려는 틀린 구현(k=0에도 접미사 · 옛 ID 번호를 k로 · 모든 ID에 `:0`)을
 주입해 각각 빨강이 되는 것을 확인했다.
+
+**계획 대비 이탈 — Phase 3 완료 체크를 한 번 되돌렸다.** Phase 4 `/testgen` 중, 완료 기준 "`question_id`…**와 k를 갖고**"인데
+목록 응답에 `k` **필드가 없다**는 걸 발견했다(k는 ID·썸네일 URL 문자열 안에만). B20-06이 ID만 봐서 못 잡았다 — 완료 기준의 **명사 하나하나**가
+케이스로 옮겨졌는지 대조해야 했다. 프론트가 ID를 쪼개 k를 읽는 안(기각 — "프론트는 ID를 만들거나 쪼개지 않는다" 구조를 깬다) 대신
+**응답에 `k` 필드**(사용자 결정, B20-22)로 보완했다.
+
+**Phase 4 — 프론트 k 전달.** 호출부는 분석 패널 하나(제목 수정·벌크 삭제)였다. 함수 형태(사용자 결정): `updateQuestionTitle`·`deleteQuestion`은
+끝 인자 `k=0`(기존 호출 호환)을 `?k=`로, `bulkDeleteQuestions`는 자동 문항을 `questions:[{num,k}]`로(옛 `question_nums` 미사용). 이 패널은
+렌더 테스트가 있어 **실제 더블클릭 수정·체크 후 삭제**로 검증했다. `deleteQuestion`은 현재 호출부가 없다(형태만 맞춤).
 
 ## 2026-09-28
 
