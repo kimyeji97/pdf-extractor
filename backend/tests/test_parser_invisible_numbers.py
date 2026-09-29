@@ -83,3 +83,53 @@ def test_B20_03_adaptive_alone_ignores_invisible(tmp_path):
     bs = detect_question_boundaries_adaptive(path)
     tops = _invisible_positions(path, key="top")
     assert [b for b in bs if (b.page_index, round(b.y_top)) in tops] == []
+
+
+# ── Phase 2 — 두 번째 번호 형식: 정규식 전용 경계의 높이 규칙 (200pt) ──
+# 테스트02 의 20pt `0N` 기본문제처럼, adaptive 가 인정한 주 그룹(13pt `N.`)과 형식이 다른 보이는 번호는
+# 전부 "정규식 전용"이 된다. 쪽을 채우는 문항(키 큼)은 오탐이 아니고, 바로 아래 문항이 붙는 제목(키 작음)은
+# 오탐으로 남아야 한다(내신마스터 "유형 01" 과 같은 모양). 높이 190/210 같은 경계값은 측정 기준(하단 조임
+# 전·후)이 계획서 미결이라 쓰지 않는다 — 두 경계는 기준에서 멀다(약 470pt / 약 76pt, 시제작 실측).
+
+def _body(page, x, y, lines: int) -> None:
+    for k in range(lines):
+        page.insert_text((x, y + 18 * k), "다음 식의 값을 구하시오", fontsize=10, fontname="korea")
+
+
+def _two_format_pdf(tmp_path) -> str:
+    """1~4쪽 13pt `N.` 3문항씩(주 그룹) · 5~7쪽 쪽을 채우는 20pt `01~03` · 8쪽 20pt 제목 `04` + 바로 아래 13pt 문항."""
+    doc = fitz.open()
+    n = 1
+    for _ in range(4):
+        p = doc.new_page(width=W, height=H)
+        for y in (150, 380, 610):
+            p.insert_text((50, y), f"{n}.", fontsize=13)
+            _body(p, 75, y, 3)
+            n += 1
+    for k in range(1, 4):
+        p = doc.new_page(width=W, height=H)
+        p.insert_text((50, 150), f"{k:02d}", fontsize=20)
+        _body(p, 85, 150, 25)
+    p = doc.new_page(width=W, height=H)
+    p.insert_text((50, 150), "04", fontsize=20)
+    p.insert_text((85, 150), "삼각비의 값", fontsize=14, fontname="korea")
+    for y in (210, 440, 670):
+        p.insert_text((50, y), f"{n}.", fontsize=13)
+        _body(p, 75, y, 3)
+        n += 1
+    path = tmp_path / "two_format.pdf"
+    doc.save(path)
+    doc.close()
+    return str(path)
+
+
+def test_B20_04_tall_second_format_not_false_positive(tmp_path):
+    bs = detect_question_boundaries(_two_format_pdf(tmp_path))
+    tall = sorted((b.page_index, b.number, b.is_false_positive) for b in bs if b.page_index in (4, 5, 6))
+    assert tall == [(4, 1, False), (5, 2, False), (6, 3, False)]
+
+
+def test_B20_05_short_second_format_title_stays_false_positive(tmp_path):
+    bs = detect_question_boundaries(_two_format_pdf(tmp_path))
+    title = [b for b in bs if b.page_index == 7 and b.number == 4]
+    assert [b.is_false_positive for b in title] == [True]
