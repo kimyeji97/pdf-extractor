@@ -363,7 +363,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ### 배포 상태 (세션마다 필요한 사실)
 
-⚠️ **dev 백엔드는 2026-09-30 main `f18c495`(B21·B22·F14·F15 포함, 이미지 태그 `b21-f18c495`)로 배포됐다 — 현재 `desired 1`(2026-09-30 dev 확인 끝, 내릴 것)**
+⚠️ **dev 백엔드는 2026-09-30 main `f18c495`(B21·B22·F14·F15 포함, 이미지 태그 `b21-f18c495`)로 배포됐다 — 현재 `desired 0`(2026-09-30 확인 끝 후 내림)**
 (켜면 ~$23/월, 꺼 두면 ~$2/월 — 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 4**(`:latest` +
 `JWT_SECRET_KEY` secret). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
