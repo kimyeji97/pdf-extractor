@@ -1,7 +1,7 @@
 # PLAN-B23 · 결과 PDF 상태 조회가 401 — `getStatus` raw fetch에 인증 헤더 누락
 
 > 출처: `docs/TODO.md` §10 원문(2026-09-30 추가, 다른 세션 — 원 대화는 transcript에 없음) + 2026-09-30 세션 raw fetch 전수 확인 ·
-> 작성: 2026-09-30 · 상태: 🟡 진행 (Phase 1 완료 2026-09-30 · PR #25 main 머지 `4f26daf` — Phase 2 dev 확인 남음)
+> 작성: 2026-09-30 · 상태: ✅ 완료 (Phase 1·2 2026-09-30 · PR #25 main 머지 `4f26daf`)
 
 ## 배경
 
@@ -49,8 +49,9 @@ SSE `EventSource`는 헤더를 붙일 수 없지만 `/notifications/stream`도 �
       완료 기준: `getStatus` 요청에 `Authorization` 헤더가 실린다. 기존 raw fetch 성격(`GlobalDim`을 켜지 않음)은 유지한다.
       `client.js`의 raw fetch 함수는 모두 `_authHeaders()`를 쓰거나 무인증 예외 목록(`listNotifications`·`markNotificationsRead`·`logout`)에 있다
       → ✅ 2026-09-30 `2c19016`: B23-01~03 통과(`/testrun` — 틀린 구현 3종 각각에서 해당 케이스만 빨강 확인, B23-03 주석 오인 (a) 수정) · 프론트 206/206 · `npm run build` 성공
-- [ ] **Phase 2** — dev 배포 후 확인 (코드 작업 아님)
+- [x] **Phase 2** — dev 배포 후 확인 (코드 작업 아님)
       완료 기준: 생성 화면에서 PDF 생성 → 상태 폴링이 200으로 완료까지 가고, 결과 화면이 상태를 불러온다
+      → ✅ 2026-09-30 dev 프론트 배포(번들의 `getStatus`에 `{headers:…}` 확인) 후 사용자 확인 — PDF 생성 → 상태 폴링 200 → 결과 화면 정상
 
 ## 검증 계약
 
