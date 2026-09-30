@@ -41,6 +41,7 @@ import { isRefreshBlocked } from "utils/jobStatus";
 import { columnsForWidth } from "utils/questionGrid";
 import { resolveDocumentName } from "utils/documentName";
 import { resolveTargetPage } from "utils/targetPage";
+import { detectionNotice } from "utils/detectionNotice";
 import { tintBg } from "theme/tint";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
@@ -115,9 +116,11 @@ export default function AnalysisWorkPage() {
   // 목록에는 없다. 전체 문항 일괄 API(REQ-P01)가 둘 다 갖고 있으므로
   // 여기서 한 번 받아 페이지별로 집계한다.
   const [pageStats, setPageStats] = useState({});
+  // 자동 감지 문항 수(수동 제외) — 감지 안내 판정용 (REQ-B22). 받기 전엔 null(안내 보류)
+  const [autoCount, setAutoCount] = useState(null);
 
   useEffect(() => {
-    if (!jobId) { setPageStats({}); return; }
+    if (!jobId) { setPageStats({}); setAutoCount(null); return; }
     let alive = true;
     getAllQuestions(jobId)
       .then((data) => {
@@ -131,8 +134,10 @@ export default function AnalysisWorkPage() {
           };
         }
         setPageStats(stats);
+        setAutoCount((data.pages || []).reduce(
+          (n, p) => n + (p.questions || []).filter((q) => !q.is_manual).length, 0));
       })
-      .catch(() => { if (alive) setPageStats({}); });   // 실패 시 기존 question_count로 폴백
+      .catch(() => { if (alive) { setPageStats({}); setAutoCount(null); } });   // 실패 시 기존 question_count로 폴백
     return () => { alive = false; };
   }, [jobId, panelRefreshTrigger]);
 
@@ -153,6 +158,12 @@ export default function AnalysisWorkPage() {
   // 대기 중(PENDING)이면 재감지가 이미 걸려 있다 — 버튼만 막는다 (REQ-F11 Phase 2).
   // 목록과 같은 판정 함수를 쓴다.
   const refreshQueued = isRefreshBlocked(jobInfo);
+  const [detectedAfterRefresh, setDetectedAfterRefresh] = useState(false);
+  useEffect(() => { setDetectedAfterRefresh(false); }, [jobId]);
+  // 경계 캐시가 없어 문항이 0개로만 보이던 FAILED·DONE 파일 안내 (REQ-B22). 재감지 중엔 숨긴다
+  const notice = refreshing
+    ? null
+    : detectionNotice(detectedAfterRefresh ? { boundaries_status: "DONE" } : jobInfo, autoCount);
 
   useEffect(() => {
     setPdfUrlLoading(guardLoading);
@@ -167,6 +178,9 @@ export default function AnalysisWorkPage() {
   useJobCompletion(refreshing ? jobId : null, {
     onDone: () => {
       setRefreshing(false);
+      // 진입 가드의 jobInfo 는 진입 시점 상태라 재감지 성공 뒤에도 FAILED 로 남는다 — 안내는 DONE 기준으로 다시 본다 (REQ-B22)
+      setDetectedAfterRefresh(true);
+      setPanelRefreshTrigger((t) => t + 1);
       fetchPages(jobId);
     },
     // 실패 문구의 출처는 서버 알림 하나다 (REQ-C09) — 화면이 자체 문자열을 들면
@@ -461,6 +475,16 @@ export default function AnalysisWorkPage() {
 
           {refreshError && <Alert severity="error" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>{refreshError}</Alert>}
           {pagesError   && <Alert severity="error" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>{pagesError}</Alert>}
+          {notice && (
+            <Alert severity="warning" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>
+              {notice.message}
+              {notice.detail && (
+                <Typography component="div" sx={{ fontSize: 10, color: "text.secondary", mt: 0.25, wordBreak: "break-all" }}>
+                  {notice.detail}
+                </Typography>
+              )}
+            </Alert>
+          )}
 
           <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 0.75 }}>
             {pagesLoading && (
