@@ -129,10 +129,10 @@
 | REQ-B19 | 분석 실패 파일 상세가 30초 504 — 조회 경로가 캐시 미스 시 요청 안에서 동기 감지 (B17 Phase 4를 막음, TODO §7) | [plan](plans/PLAN-B19-lookup-path-sync-detection.md) | 2026-09-29 | ✅ **Phase 1~3 완료**(조회 3곳 캐시 미스 → 감지 없이 빈 결과·404, 상태 파일 안 씀 · 케이스 10/10 · `/testrun` 확인 · 회귀 없음 백엔드 266/266 · 전제 소멸한 F09-06·07·16 폐기 · 504 CORS 헤더는 Cloudflare 쪽에서 빠짐 — 구간 특정까지). PR #22 main 머지 `46c464e`, dev 배포 `f93e525` 확인(FAILED 상세 즉시 200·재감지 DONE·stats 9s→0.9s). `/api/jobs`·`/api/notifications` 재측정과 미결 3건은 TODO §7·§9로 이관 |
 | REQ-B20 | HWP 출력 PDF가 전부 오탐 — 보이지 않는 0.1pt 번호 글자 + 같은 쪽·같은 번호 식별자 충돌 (B18 회귀, dev `테스트02` 840경계·오탐 378) | [plan](plans/PLAN-B20-invisible-number-and-id-collision.md) | 2026-09-30 | ✅ **Phase 1~5 완료**(adaptive 1pt 이하 제외 · 정규식 전용 높이 규칙 200pt · 문항 ID 순번 k — ADR-0006 · 목록 k 필드 · 프론트 k 전달 · 케이스 27/27 · 백엔드 288/288·프론트 203/203). PR #23 `0d8c5d4`·PR #24 `ee27f2c` main 머지, dev 배포 `fe3d971` 사용자 확인 |
 | REQ-B23 | 결과 PDF 상태 조회(`GET /api/status/{job_id}`)가 401 — `getStatus` raw fetch에 인증 헤더 누락(계약 #31 누락) | [plan](plans/PLAN-B23-status-poll-401.md) | 2026-09-30 | ✅ **Phase 1·2 완료**(`getStatus`에 `_authHeaders()` · raw fetch 인증 스캔 테스트 · 케이스 3/3 · 프론트 206/206). PR #25 main 머지 `4f26daf`, dev 프론트 배포 후 사용자 확인 |
-| REQ-B21 | 크롭 하단 여백이 문항마다 다름 — 하단 조임이 다음 문항 번호를 제 것으로 잡았다 | [plan](plans/PLAN-B21-crop-bottom-next-number.md) | — | 🟡 **Phase 1 완료**(조임엔 bottom ≤ 다음 문항 시작만 · B21-01~04 · 실측 Red 3쪽 6번 425.2→315.1). Phase 2 dev 확인 남음 |
-| REQ-B22 | 경계 캐시가 없는 job 처리 — FAILED·DONE 0문항 화면 안 안내 · extract-v2 캐시 미스 감지 제거 | [plan](plans/PLAN-B22-missing-boundaries-cache.md) | — | 🟡 **Phase 0~2 완료**(B22-01~10). Phase 3 dev 확인 남음 |
-| REQ-F14 | 현황판 개선 + 시스템 전체 뱃지 색 — 감지 상태 SSE `status` 이벤트 · 목록·현황판 함께 배경 재조회 · `utils/badges` 단일 정의 · 상세 영역 닫기·목록 우측 | [plan](plans/PLAN-F14-stats-board-and-badges.md) | — | 🟡 **Phase 1~3 완료**(F14-01~26). Phase 4 dev 확인 남음 |
-| REQ-F15 | 문제집 이름·파일명 표시 — 감지 알림 제목 문제집 이름 우선 · 목록 카드·작업 화면 헤더에 파일명 병기 | [plan](plans/PLAN-F15-workbook-name-and-filename.md) | — | 🟡 **Phase 1~2 완료**(F15-01~11). Phase 3 dev 확인 남음 |
+| REQ-B21 | 크롭 하단 여백이 문항마다 다름 — 하단 조임이 다음 문항 번호를 제 것으로 잡았다 | [plan](plans/PLAN-B21-crop-bottom-next-number.md) | 2026-09-30 | ✅ **완료**(B21-01~04 · PR #26 `f18c495` · dev 확인) |
+| REQ-B22 | 경계 캐시가 없는 job 처리 — FAILED·DONE 0문항 화면 안 안내 · extract-v2 캐시 미스 감지 제거 | [plan](plans/PLAN-B22-missing-boundaries-cache.md) | 2026-09-30 | ✅ **완료**(B22-01~10 · PR #26 `f18c495` · dev 확인) |
+| REQ-F14 | 현황판 개선 + 시스템 전체 뱃지 색 — 감지 상태 SSE `status` 이벤트 · 목록·현황판 함께 배경 재조회 · `utils/badges` 단일 정의 · 상세 영역 닫기·목록 우측 | [plan](plans/PLAN-F14-stats-board-and-badges.md) | 2026-09-30 | ✅ **완료**(F14-01~26 · PR #26 `f18c495` · dev 확인) |
+| REQ-F15 | 문제집 이름·파일명 표시 — 감지 알림 제목 문제집 이름 우선 · 목록 카드·작업 화면 헤더에 파일명 병기 | [plan](plans/PLAN-F15-workbook-name-and-filename.md) | 2026-09-30 | ✅ **완료**(F15-01~11 · PR #26 `f18c495` · dev 확인) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -245,6 +245,14 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-09-30
+
+### REQ-B21·B22·F14·F15 — PR #26 머지, dev 배포·확인, 네 건 완료
+
+PR #26 main 머지(`f18c495`) → 백엔드 이미지 `b21-f18c495`(rev 4 `:latest`, `desired 0→1`) + 프론트 Workers 배포 → 사용자 육안 **전부 확인**.
+- ⚠️ 배포 직후 `describe-tasks`가 **옛 이미지 digest(`b20-fe3d971`)**를 보였다 — 18:07:24에 잠깐 뜬 다른 태스크였고, 서비스 리비전은 새 digest(`a5ea…`)로
+  고정돼 있었으며 곧 새 이미지 태스크 하나만 남았다. **배포 확인은 태스크 하나가 아니라 서비스 리비전 `containerImages`와 최종 태스크로 본다**
+- 프론트 번들 확인은 **지연 로딩 조각까지** 받아야 한다 — 화면 코드(`work`·목록)는 `index.html`이 부르는 메인 번들에 없다
+- dev 백엔드는 확인 끝 — 내릴 것(`desired 0`)
 
 ### REQ-B21·B22·F14·F15 — 코드 Phase 전부 완료, 네 건 몰아서 `/testrun` (dev 확인은 함께)
 
