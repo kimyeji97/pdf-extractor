@@ -98,7 +98,9 @@ def emit_detection(job: JobStatusFile) -> None:
         job_id=job.job_id,
         kind=NotificationKind.DETECTION,
         severity=NotificationSeverity.ERROR if failed else NotificationSeverity.SUCCESS,
-        title=job.filename,
+        # 문제집 이름 우선 — 사용자는 파일을 이 이름으로 기억한다(생성 알림과 같은 규칙, REQ-F15).
+        # 제목은 발행 시점에 저장된다: 옛 알림·이름을 나중에 바꾼 경우는 그때 이름 그대로다
+        title=job.workbook_name or job.filename,
         message="문항 감지에 실패했습니다." if failed else "문항 감지가 완료되었습니다.",
     )
 
