@@ -90,12 +90,12 @@ function formatValue(field, stats) {
 }
 
 /**
- * @param {{ refreshTrigger?: number, onSelectFile?: (jobId: string, page1Based?: number) => void }} props
+ * @param {{ refreshTrigger?: number, backgroundRefreshTrigger?: number, onSelectFile?: (jobId: string, page1Based?: number) => void }} props
  *   `onSelectFile`의 `page1Based`는 파일 이름 클릭이면 없고(문서만 이동), 개별 페이지
  *   번호 클릭이면 그 페이지(1-based)가 온다(REQ-F12 Phase 3 — "페이지 클릭 → 작업 화면
  *   진입 + 해당 페이지로 스크롤·포커스").
  */
-export default function StatsBoard({ refreshTrigger = 0, onSelectFile }) {
+export default function StatsBoard({ refreshTrigger = 0, backgroundRefreshTrigger = 0, onSelectFile }) {
   const [stats, setStats] = useState(null);
   const [failed, setFailed] = useState(false);
 
@@ -112,6 +112,18 @@ export default function StatsBoard({ refreshTrigger = 0, onSelectFile }) {
       alive = false;
     };
   }, [refreshTrigger]);
+
+  // 알림·SSE 로 다시 읽을 때는 전역 딤을 켜지 않는다 (REQ-F14, 계약 #26). 0 = 첫 렌더 — 위 효과가 이미 읽는다
+  useEffect(() => {
+    if (backgroundRefreshTrigger === 0) return undefined;
+    let alive = true;
+    getStats({ background: true })
+      .then((d) => alive && setStats(d))
+      .catch(() => {});   // 배경 재조회 실패로 이미 보이는 현황판을 지우지 않는다
+    return () => {
+      alive = false;
+    };
+  }, [backgroundRefreshTrigger]);
 
   const handleTileClick = (tile) => {
     if (!tile.clickable) return;

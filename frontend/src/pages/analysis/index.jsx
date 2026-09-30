@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
@@ -24,6 +24,7 @@ import BookCard, { BOOK_CARD_W } from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
+import { useStatusEvents } from "contexts/NotificationContext";
 import { isEntryBlocked } from "utils/jobStatus";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
@@ -157,8 +158,12 @@ export default function AnalysisFilePage() {
   const debouncedName = useDebouncedValue(searchName, 300);
   const debouncedType = useDebouncedValue(searchType, 300);
 
+  // 배경 재조회 표시 — reload 가 fetchPage 를 **동기로** 부르는 동안만 켠다(usePaginatedList.loadPage 첫 await 전)
+  const backgroundRef = useRef(false);
   const fetchPage = useCallback(
-    (skip, limit) => listJobs({ skip, limit, name: debouncedName, types: debouncedType }),
+    (skip, limit) => listJobs({
+      skip, limit, name: debouncedName, types: debouncedType, background: backgroundRef.current,
+    }),
     [debouncedName, debouncedType],
   );
 
@@ -169,13 +174,27 @@ export default function AnalysisFilePage() {
   // 감지가 끝나면 새로고침 없이 목록이 갱신된다 (REQ-F09 Phase 4).
   // 종전에는 업로드 후 fetchJobs()를 한 번 부르고 끝이라 "분석 중" 배지가 붙은 카드는
   // 새로고침 전까지 영원히 그 상태였고, isAnalyzing()이 클릭까지 막았다.
-  useNotificationRefresh(fetchJobs, { kind: 'detection' }); // 감지 완료에만 반응 (REQ-C09)
-
   const hasSearch = Boolean(debouncedName.trim() || debouncedType.trim());
 
   // 업로드·삭제로 개수가 바뀌면 통계 카드도 다시 받는다.
   const [statsTrigger, setStatsTrigger] = useState(0);
   const bumpStats = useCallback(() => setStatsTrigger((t) => t + 1), []);
+
+  // 감지 완료 알림·SSE `status` 이벤트 → 목록과 현황판을 **같은 콜백에서**, 전역 딤 없이 다시 읽는다 (REQ-F14).
+  // 따로 읽으면 한쪽은 "대기 중", 한쪽은 "분석 중"을 본다 — 완료 알림이 목록만 다시 읽던 것도 같은 어긋남이었다.
+  const [bgStatsTrigger, setBgStatsTrigger] = useState(0);
+  const refreshInBackground = useCallback(() => {
+    backgroundRef.current = true;
+    fetchJobs();
+    backgroundRef.current = false;
+    setBgStatsTrigger((t) => t + 1);
+  }, [fetchJobs]);
+  useNotificationRefresh(refreshInBackground, { kind: 'detection' }); // 감지 완료에만 반응 (REQ-C09)
+  const statusEvents = useStatusEvents();
+  useEffect(() => {
+    if (statusEvents > 0) refreshInBackground();   // 0 = 첫 렌더 — 첫 로드와 겹친다
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 이벤트 수가 바뀔 때만
+  }, [statusEvents]);
 
   // ── 이름/유형 편집 (문제집 편집 ①에서 이동) ──────────
   const [editJob, setEditJob]         = useState(null);
@@ -286,6 +305,7 @@ export default function AnalysisFilePage() {
           별도 홈 라우트가 없어 진입 화면인 이곳에 얹는다. 기존 StatCards(3타일)를 대체한다. */}
       <StatsBoard
         refreshTrigger={statsTrigger}
+        backgroundRefreshTrigger={bgStatsTrigger}
         onSelectFile={(jobId, page) =>
           navigate(page ? `/analysis/${jobId}?page=${page}` : `/analysis/${jobId}`)
         }

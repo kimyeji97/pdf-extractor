@@ -385,6 +385,7 @@ def refresh_job_questions(
     # 즉시 QUEUED 로 업데이트 → 프론트 폴링 기준점. 분석 슬롯을 잡으면 PROCESSING (REQ-B17)
     job.boundaries_status = BoundariesStatus.QUEUED
     storage.put_status(job)
+    notification_service.emit_status(job)   # 목록·현황판 동기화 (REQ-F14)
 
     # 백그라운드에서 실제 감지 실행
     background_tasks.add_task(_run_refresh_detection, job_id)
@@ -410,6 +411,7 @@ def _run_refresh_detection(job_id: str) -> None:
     with analysis_slots.slots:
         job.boundaries_status = BoundariesStatus.PROCESSING
         storage.put_status(job)
+        notification_service.emit_status(job)
         _refresh_detection_body(job_id, job)
 
 

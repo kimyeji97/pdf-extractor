@@ -40,6 +40,9 @@ const NotificationContext = createContext(null);
 // 기준선 GET 완료 여부. 값 컨텍스트와 분리한 이유: `useNotifications()` 반환 형태 `{notifications, unreadCount}`
 // 를 바꾸지 않기 위해서다(P04-26 · F09 표면 계약).
 const NotificationReadyContext = createContext(false);
+// SSE `status` 이벤트(감지 상태 전환)를 받은 횟수 (REQ-F14). 알림이 아니라 "다시 읽으라"는 신호라 알림 목록·미읽음 수에
+// 넣지 않는다 — 넣으면 벨 뱃지·스낵바에 뜬다. 같은 이유로 값 컨텍스트와 분리한다. Provider 밖에선 0.
+const StatusEventsContext = createContext(0);
 
 /** 알림 1건의 안정적인 키. job_id 하나로는 재감지·재생성이 같은 키가 된다(계약 #16 계열). */
 const keyOf = (n) => `${n.job_id}:${n.created_at}`;
@@ -48,6 +51,7 @@ export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [ready, setReady] = useState(false);
+  const [statusEvents, setStatusEvents] = useState(0);
 
   // 기준선 GET 과 스트림 이벤트가 같은 dedup 집합을 본다 — 재연결 복구분(Last-Event-ID)이
   // 기준선과 겹쳐 와도 한 번만 누적된다.
@@ -108,13 +112,18 @@ export function NotificationProvider({ children }) {
 
     // 재연결(`onerror` 후 브라우저 자동 재시도)에는 손대지 않는다 — 끊긴 동안의 알림은
     // 브라우저가 붙이는 `Last-Event-ID` 로 서버가 복구한다(백엔드 Phase 1).
+    // 본문은 읽지 않는다 — 소비처는 "바뀌었다"만 알면 되고 현재 상태는 다시 읽어서 얻는다
+    const onStatus = () => setStatusEvents((n) => n + 1);
+
     es.addEventListener('notification', onNotification);
     es.addEventListener('read', onRead);
+    es.addEventListener('status', onStatus);
 
     return () => {
       cancelled = true;
       es.removeEventListener('notification', onNotification);
       es.removeEventListener('read', onRead);
+      es.removeEventListener('status', onStatus);
       es.close();
     };
   }, []);
@@ -126,7 +135,9 @@ export function NotificationProvider({ children }) {
 
   return (
     <NotificationReadyContext.Provider value={ready}>
-      <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>
+      <StatusEventsContext.Provider value={statusEvents}>
+        <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>
+      </StatusEventsContext.Provider>
     </NotificationReadyContext.Provider>
   );
 }
@@ -137,6 +148,14 @@ export function NotificationProvider({ children }) {
  */
 export function useNotificationsReady() {
   return useContext(NotificationReadyContext);
+}
+
+/**
+ * SSE `status` 이벤트(감지 상태 `QUEUED`·`PROCESSING` 전환)를 받은 횟수 (REQ-F14). 값이 바뀌면 목록·현황판을 다시 읽는다.
+ * 첫 렌더는 0 — 0 에서는 다시 읽지 말 것(첫 로드와 겹친다).
+ */
+export function useStatusEvents() {
+  return useContext(StatusEventsContext);
 }
 
 export function useNotifications() {

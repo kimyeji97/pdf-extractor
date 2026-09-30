@@ -75,6 +75,13 @@ function _authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// 배경 재조회(알림·SSE `status` 이벤트로 다시 읽기)는 전역 딤을 켜지 않는다 (REQ-F14, 계약 #26) —
+// 사용자가 시키지 않은 요청에 딤이 켜지면 이벤트마다 화면이 번쩍인다. 인증 헤더는 직접 붙인다(계약 #31).
+// 사용자가 누른 조회(옵션 없음)는 그대로 apiFetch — 딤·토큰 갱신이 그대로다.
+function _backgroundAwareGet(url, background) {
+  return background ? fetch(url, { headers: _authHeaders() }) : apiFetch(url);
+}
+
 async function _tryRefresh(refreshToken) {
   try {
     const res = await fetch(`${BASE_URL}/auth/refresh`, {
@@ -193,8 +200,8 @@ export async function requestUploadUrl(filename, meta = {}) {
  * 목록 API가 페이지네이션되므로 프론트에서 합계를 낼 수 없어 서버가 전체를 세서 준다.
  * @returns {Promise<{source_count:number, question_count:number, workbook_count:number}>}
  */
-export async function getStats() {
-  const res = await apiFetch(`${BASE_URL}/stats`);
+export async function getStats({ background = false } = {}) {
+  const res = await _backgroundAwareGet(`${BASE_URL}/stats`, background);
   if (!res.ok) throw new Error("통계 조회 실패");
   return res.json();
 }
@@ -213,12 +220,12 @@ export async function getStatsDetail(field) {
 }
 
 export async function listJobs(opts = {}) {
-  const { jobType = "SOURCE", skip = 0, limit = 20, name = "", types = "" } = opts;
+  const { jobType = "SOURCE", skip = 0, limit = 20, name = "", types = "", background = false } = opts;
   const qs = new URLSearchParams({ job_type: jobType, skip: String(skip), limit: String(limit) });
   if (name.trim()) qs.set("name", name.trim());
   if (types.trim()) qs.set("types", types.trim());
 
-  const res = await apiFetch(`${BASE_URL}/jobs?${qs}`);
+  const res = await _backgroundAwareGet(`${BASE_URL}/jobs?${qs}`, background);
   if (!res.ok) throw new Error("파일 목록 조회 실패");
   return res.json(); // { items: [...], total, skip, limit }
 }
