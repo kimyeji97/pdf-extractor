@@ -63,6 +63,7 @@ function thicknessOf(count) {
  * @param {{
  *   coverUrl?: string,
  *   title: string,
+ *   caption?: string | null,   // 제목 바로 아래 작은 글씨(파일명 병기, REQ-F15)
  *   subtitle?: string,
  *   tags?: string[],
  *   badge?: { label: string, color?: string },
@@ -78,6 +79,7 @@ function thicknessOf(count) {
 export default function BookCard({
   coverUrl,
   title,
+  caption = null,
   subtitle,
   tags = [],
   badge,
@@ -243,6 +245,12 @@ export default function BookCard({
         <Typography variant="body2" fontWeight={700} sx={{ lineHeight: 1.35, wordBreak: 'break-word' }} title={title}>
           {title}
         </Typography>
+
+        {caption && (
+          <Typography variant="caption" color="text.secondary" noWrap title={caption} sx={{ mt: -0.5 }}>
+            {caption}
+          </Typography>
+        )}
 
         {subtitle && (
           <Typography variant="caption" color="text.disabled" noWrap>

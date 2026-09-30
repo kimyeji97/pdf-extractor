@@ -15,11 +15,12 @@ import { Link as RouterLink } from "react-router";
 /**
  * @param {{
  *   title: string,
+ *   caption?: string | null,                           // 제목 아래 작은 글씨(파일명 병기, REQ-F15)
  *   crumbs?: Array<{ label: string, to?: string }>,  // 마지막 항목은 링크 없이 현재 위치
  *   actions?: React.ReactNode,                        // 우측 버튼 영역
  * }} props
  */
-export default function PageHeader({ title, crumbs = [], actions = null }) {
+export default function PageHeader({ title, caption = null, crumbs = [], actions = null }) {
   return (
     <Box
       sx={{
@@ -34,6 +35,11 @@ export default function PageHeader({ title, crumbs = [], actions = null }) {
         <Typography variant="h6" noWrap title={title} sx={{ lineHeight: 1.3 }}>
           {title}
         </Typography>
+        {caption && (
+          <Typography variant="caption" color="text.secondary" noWrap title={caption} sx={{ display: "block" }}>
+            {caption}
+          </Typography>
+        )}
         {crumbs.length > 0 && (
           <Breadcrumbs
             separator="·"

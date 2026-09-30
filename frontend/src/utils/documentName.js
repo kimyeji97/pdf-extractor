@@ -13,3 +13,16 @@ export function resolveDocumentName(jobInfo, jobId) {
   if (!jobInfo) return NAME_LOADING_LABEL;
   return jobInfo.workbook_name || jobInfo.filename || jobId;
 }
+
+/**
+ * 문제집 이름 아래 작은 글씨로 붙일 파일명 (REQ-F15). 같은 글자를 두 번 쓰지 않는다 —
+ * 이름이 없으면 파일명이 이미 제목이고, 이름이 파일명에서 확장자만 뺀 것과 같아도 생략(null).
+ * 이름은 고유하지 않아(계약 #17) 파일명이 구분 단서가 된다 — 표시용일 뿐 키로 쓰지 않는다.
+ */
+export function resolveFileSubtitle(jobInfo) {
+  const name = jobInfo?.workbook_name;
+  const filename = jobInfo?.filename;
+  if (!name || !filename) return null;
+  if (name === filename || name === filename.replace(/\.[^.]+$/, "")) return null;
+  return filename;
+}

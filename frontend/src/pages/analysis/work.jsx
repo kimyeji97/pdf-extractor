@@ -39,7 +39,7 @@ import { useJobCompletion } from "hooks/useJobCompletion";
 import { useAnalysisEntryGuard } from "hooks/useAnalysisEntryGuard";
 import { isRefreshBlocked } from "utils/jobStatus";
 import { columnsForWidth } from "utils/questionGrid";
-import { resolveDocumentName } from "utils/documentName";
+import { resolveDocumentName, resolveFileSubtitle } from "utils/documentName";
 import { resolveTargetPage } from "utils/targetPage";
 import { detectionNotice } from "utils/detectionNotice";
 import { INFO_CHIP, MARK_COLOR, RESULT_COLOR } from "utils/badges";
@@ -409,6 +409,7 @@ export default function AnalysisWorkPage() {
       {/* ── 페이지 헤더 + 브레드크럼 ─────────────────── */}
       <PageHeader
         title={displayName}
+        caption={resolveFileSubtitle(jobInfo)}
         crumbs={[
           { label: "홈", to: "/" },
           { label: "분석", to: "/" },
