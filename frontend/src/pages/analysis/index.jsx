@@ -174,6 +174,7 @@ export default function AnalysisFilePage() {
 
   // 업로드·삭제로 개수가 바뀌면 통계 카드도 다시 받는다.
   const [statsTrigger, setStatsTrigger] = useState(0);
+  const [detailHost, setDetailHost] = useState(null);   // 현황판 상세가 붙는 목록 줄 (REQ-F14 Phase 3)
   const bumpStats = useCallback(() => setStatsTrigger((t) => t + 1), []);
 
   // 감지 완료 알림·SSE `status` 이벤트 → 목록과 현황판을 **같은 콜백에서**, 전역 딤 없이 다시 읽는다 (REQ-F14).
@@ -302,10 +303,26 @@ export default function AnalysisFilePage() {
       <StatsBoard
         refreshTrigger={statsTrigger}
         backgroundRefreshTrigger={bgStatsTrigger}
+        detailContainer={detailHost}
         onSelectFile={(jobId, page) =>
           navigate(page ? `/analysis/${jobId}?page=${page}` : `/analysis/${jobId}`)
         }
       />
+
+      {/* ── 목록 줄: 좌 = 목록 영역(검색란 + 카드), 우 = 현황판 상세 (REQ-F14 Phase 3) ──
+          상세는 현황판이 이 줄에 포털로 붙인다 — 상세 상태는 현황판이 들고 있고, 목록 옆이 파일을 찾는 자리다.
+          좁은 화면에선 상세가 목록 위로(column-reverse). 높이 체인(계약 #1)은 이 줄과 목록 영역이 이어 받는다. */}
+      <Box
+        ref={setDetailHost}
+        sx={{
+          flex: 1, minHeight: 0, display: "flex", gap: 2,
+          flexDirection: { xs: "column-reverse", md: "row" },
+        }}
+      >
+      <Box
+        data-testid="analysis-list-area"
+        sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 2 }}
+      >
 
       {/* ── 검색 바 ────────────────────────────────────── */}
       <Box sx={{
@@ -413,6 +430,8 @@ export default function AnalysisFilePage() {
             </>
           )}
         </Box>
+      </Box>
+      </Box>
       </Box>
 
       {/* ── 삭제 확인 다이얼로그 ───────────────────────── */}
