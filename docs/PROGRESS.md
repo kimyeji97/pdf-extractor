@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-09-29
+> 최종 갱신: 2026-09-30
 
 ## 요구사항 인덱스
 
@@ -127,7 +127,7 @@
 | REQ-B17 | 분석 중 백엔드 OOM — pdfplumber 페이지 누수 + 동시 분석 무제한 (dev 연속 업로드 중 530) | [plan](plans/PLAN-B17-analysis-oom.md) | 2026-09-29 | ✅ **Phase 1~4 완료**(누수 수정 212쪽 1,033→170MB · 동시 5개·`QUEUED`·시작 시 FAILED·알림 · 프론트 "대기 중", 케이스 23건). PR #20 main 머지 `6862b75`. dev 확인 2026-09-29 `f93e525` — FAILED+알림·재감지 DONE, 9건 연달아 분석 태스크 생존·메모리 최대 65% |
 | REQ-B18 | 목차·"유형 N" 제목이 문항으로 잡히고, 번호만 보고 합쳐 진짜 문항이 사라짐 (dev `0928 테스트2` 1쪽 목차 4문항 · 2쪽 0문항) | [plan](plans/PLAN-B18-regex-only-false-positive.md) | 2026-09-29 | ✅ **Phase 1·2 완료**(위치 기준 병합 + 정규식 전용 경계 오탐 **표시**, 케이스 8/8 · 기출 4종 실측: 심화대비 복구, 내신마스터 "유형 N" 62건 오탐). PR #21 main 머지 `c17f884`. dev 상세 육안 2026-09-29 `f93e525` |
 | REQ-B19 | 분석 실패 파일 상세가 30초 504 — 조회 경로가 캐시 미스 시 요청 안에서 동기 감지 (B17 Phase 4를 막음, TODO §7) | [plan](plans/PLAN-B19-lookup-path-sync-detection.md) | 2026-09-29 | ✅ **Phase 1~3 완료**(조회 3곳 캐시 미스 → 감지 없이 빈 결과·404, 상태 파일 안 씀 · 케이스 10/10 · `/testrun` 확인 · 회귀 없음 백엔드 266/266 · 전제 소멸한 F09-06·07·16 폐기 · 504 CORS 헤더는 Cloudflare 쪽에서 빠짐 — 구간 특정까지). PR #22 main 머지 `46c464e`, dev 배포 `f93e525` 확인(FAILED 상세 즉시 200·재감지 DONE·stats 9s→0.9s). `/api/jobs`·`/api/notifications` 재측정과 미결 3건은 TODO §7·§9로 이관 |
-| REQ-B20 | HWP 출력 PDF가 전부 오탐 — 보이지 않는 0.1pt 번호 글자 + 같은 쪽·같은 번호 식별자 충돌 (B18 회귀, dev `테스트02` 840경계·오탐 378) | [plan](plans/PLAN-B20-invisible-number-and-id-collision.md) | — | 🟡 **Phase 1~4 완료**(adaptive 1pt 이하 제외 · 정규식 전용 높이 규칙 200pt · 문항 ID 순번 k — ADR-0006 · 프론트 k 전달 · 케이스 27/27 · `/testrun` 확인 · 회귀 없음 백엔드 288/288·프론트 203/203). Phase 1·2 PR #23 **main 머지 `0d8c5d4`**. Phase 3·4 PR #24 **main 머지 `ee27f2c`**. dev 미배포(`f93e525`) — **Phase 5(백엔드+프론트 배포 후 재감지 확인) 남음** |
+| REQ-B20 | HWP 출력 PDF가 전부 오탐 — 보이지 않는 0.1pt 번호 글자 + 같은 쪽·같은 번호 식별자 충돌 (B18 회귀, dev `테스트02` 840경계·오탐 378) | [plan](plans/PLAN-B20-invisible-number-and-id-collision.md) | 2026-09-30 | ✅ **Phase 1~5 완료**(adaptive 1pt 이하 제외 · 정규식 전용 높이 규칙 200pt · 문항 ID 순번 k — ADR-0006 · 목록 k 필드 · 프론트 k 전달 · 케이스 27/27 · 백엔드 288/288·프론트 203/203). PR #23 `0d8c5d4`·PR #24 `ee27f2c` main 머지, dev 배포 `fe3d971` 사용자 확인 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -235,6 +235,14 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-09-30
+
+### REQ-B20 Phase 5 — dev 확인, B20 완료
+
+백엔드(이미지 `b20-fe3d971`, rev 4 `:latest`)와 프론트(Workers, 번들에 `?k=` 호출 확인)를 **함께** 배포했다 — 이번엔 프론트도 바뀌어
+백엔드만 올리면 수정·삭제가 k=0에만 적용된다. 사용자가 테스트02 재감지, 내신마스터 4쪽 "유형 01" ↔ "1." 썸네일 분리·한쪽만 삭제,
+저장된 옛 문제집 편집 복원을 확인했다. B20 ✅.
 
 ## 2026-09-29
 
