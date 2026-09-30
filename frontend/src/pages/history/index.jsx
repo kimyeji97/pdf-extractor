@@ -35,6 +35,7 @@ import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 import { toPreviewUrl } from "utils/previewUrl";
 import paths from "routes/paths";
+import { INFO_CHIP } from "utils/badges";
 
 function fmtDate(iso) {
   if (!iso) return "-";
@@ -240,7 +241,7 @@ export default function HistoryPage() {
                 title={wb.name || wb.filename || `문제집 #${idx + 1}`}
                 subtitle={fmtDate(wb.created_at)}
                 tags={[wb.layout || "-"]}
-                badge={{ label: `${wb.question_count ?? "?"}문항`, color: "primary" }}
+                badge={{ label: `${wb.question_count ?? "?"}문항`, ...INFO_CHIP }}
                 questionCount={wb.question_count ?? null}
                 colorKey={wb.workbook_id}
                 selected={selectedWb?.workbook_id === wb.workbook_id}
@@ -326,8 +327,8 @@ export default function HistoryPage() {
               <Typography variant="subtitle2" fontWeight={700} noWrap>
                 {selectedWb.name || selectedWb.filename || "문제집 미리보기"}
               </Typography>
-              <Chip label={selectedWb.layout} size="small" variant="outlined" />
-              <Chip label={`${selectedWb.question_count}문항`} size="small" variant="outlined" />
+              <Chip label={selectedWb.layout} size="small" {...INFO_CHIP} />
+              <Chip label={`${selectedWb.question_count}문항`} size="small" {...INFO_CHIP} />
             </PanelCardHeader>
             <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {pdfLoading ? (

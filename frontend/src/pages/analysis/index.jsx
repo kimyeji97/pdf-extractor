@@ -25,6 +25,7 @@ import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { useStatusEvents } from "contexts/NotificationContext";
+import { detectionBadge } from "utils/badges";
 import { isEntryBlocked } from "utils/jobStatus";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
@@ -74,13 +75,7 @@ function UploadCard({ onClick }) {
 //
 // `PENDING`(대기)은 이제 눌린다 — 아직 시작되지 않아 기존 문항이 그대로 유효하다.
 
-// 감지 상태 → 표지 위 배지
-const BOUNDARY_BADGE = {
-  PROCESSING: { label: "분석 중", color: "warning" },
-  QUEUED:     { label: "대기 중", color: "info" },     // 분석 슬롯 대기 (REQ-B17)
-  PENDING:    { label: "처리 중", color: "warning" },
-  FAILED:     { label: "분석 실패", color: "error" },
-};
+// 감지 상태 → 표지 위 배지 — 색·이름은 `utils/badges` 단일 정의 (REQ-F14)
 
 function JobCard({ job, onClick, onEdit, onDelete }) {
   // 썸네일 URL은 결정적(deterministic)이라 /pages 호출 없이 직접 조립한다 (REQ-P02-02).
@@ -89,9 +84,10 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
   const analyzing = isEntryBlocked(job);
   const done = job.boundaries_status === "DONE";
 
-  const badge = done && job.total_question_count != null
-    ? { label: `${job.total_question_count}문항`, color: "primary" }
-    : BOUNDARY_BADGE[job.boundaries_status];
+  // 완료인데 문항 수를 모르면(옛 상태 파일) 배지를 달지 않는다 — 종전과 같다
+  const badge = done && job.total_question_count == null
+    ? null
+    : detectionBadge(job.boundaries_status, job.total_question_count);
 
   const actionSx = {
     bgcolor: "background.paper", opacity: 0.92,

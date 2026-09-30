@@ -35,6 +35,7 @@ import {
   updateManualQuestionTitle,
   bulkDeleteQuestions,
 } from "../api/client";
+import { INFO_CHIP, MARK_COLOR } from "utils/badges";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 const API_ROOT = BASE_URL.replace(/\/api$/, "");
@@ -115,10 +116,10 @@ const QuestionCard = memo(
           </Tooltip>
 
           {q.is_manual && (
-            <Chip label="수동" size="small" color="info" variant="outlined" sx={{ height: 18, fontSize: 10, flexShrink: 0 }} />
+            <Chip label="수동" size="small" color={MARK_COLOR.manual} variant="outlined" sx={{ height: 18, fontSize: 10, flexShrink: 0 }} />
           )}
           {fp && (
-            <Chip label="오탐지 의심" size="small" color="warning" sx={{ height: 18, fontSize: 10, flexShrink: 0 }} />
+            <Chip label="오탐지 의심" size="small" color={MARK_COLOR.falsePositive} sx={{ height: 18, fontSize: 10, flexShrink: 0 }} />
           )}
 
           {isEditing ? (
@@ -329,7 +330,7 @@ export default function QuestionAnalysisPanel({
         <Icon icon="material-symbols:list-alt-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
         <Typography variant="subtitle2" fontWeight={700} noWrap>문항 목록</Typography>
         {questions.length > 0 && (
-          <Chip label={questions.length} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
+          <Chip label={questions.length} size="small" {...INFO_CHIP} sx={{ height: 18, fontSize: 10 }} />
         )}
 
         <Box sx={{ flex: 1 }} />

@@ -23,6 +23,7 @@ import { listJobs } from "../api/client";
 import usePaginatedList from "../hooks/usePaginatedList";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { tintBg } from "theme/tint";
+import { INFO_CHIP, detectionBadge } from "utils/badges";
 
 // 상태 → MUI 시맨틱 컬러 (하드코딩 hex 대신 팔레트를 쓴다)
 const STATUS_CHIP = {
@@ -31,12 +32,6 @@ const STATUS_CHIP = {
   FAILED:     { label: "실패",    color: "error" },
 };
 
-const BOUNDARIES_CHIP = {
-  PENDING:    { label: "감지 대기", color: "default" },
-  QUEUED:     { label: "대기 중",  color: "info" },      // 분석 슬롯 대기 (REQ-B17)
-  PROCESSING: { label: "감지 중…",  color: "warning" },
-  FAILED:     { label: "감지 실패", color: "error" },
-};
 
 function relativeTime(isoString) {
   if (!isoString) return "";
@@ -55,12 +50,11 @@ const chipSx = { fontSize: 10, height: 18 };
 function BoundariesBadge({ boundariesStatus, totalQuestionCount }) {
   if (!boundariesStatus) return null;
 
-  if (boundariesStatus === "DONE") {
-    return <Chip label={`${totalQuestionCount ?? 0}문항`} size="small" color="primary" sx={chipSx} />;
-  }
-  const entry = BOUNDARIES_CHIP[boundariesStatus];
+  // 감지 상태 색·이름은 `utils/badges` 단일 정의 (REQ-F14). 완료(문항 수)는 채움형, 진행·실패는 테두리형
+  const entry = detectionBadge(boundariesStatus, totalQuestionCount);
   if (!entry) return null;
-  return <Chip label={entry.label} size="small" color={entry.color} variant="outlined" sx={chipSx} />;
+  const variant = boundariesStatus === "DONE" ? "filled" : "outlined";
+  return <Chip label={entry.label} size="small" color={entry.color} variant={variant} sx={chipSx} />;
 }
 
 function JobCard({ job, isSelected, selectedCount = 0, onSelect }) {
@@ -122,7 +116,7 @@ function JobCard({ job, isSelected, selectedCount = 0, onSelect }) {
           <Chip
             label={`${selectedCount}개 선택됨`}
             size="small"
-            color="primary"
+            {...INFO_CHIP}
             sx={{ ...chipSx, ml: "auto" }}
           />
         )}

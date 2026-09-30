@@ -51,6 +51,7 @@ import IconButton from "@mui/material/IconButton";
 import { Icon } from "@iconify/react";
 
 import { spineColorOf } from "./BookCard";
+import { INFO_CHIP } from "utils/badges";
 
 const API_ROOT = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"
@@ -320,14 +321,13 @@ export default function SelectionOrderPanel({
           gap: 0.75,
         }}
       >
-        <Chip label={`${items.length}개 선택됨`} size="small" variant="outlined" />
+        <Chip label={`${items.length}개 선택됨`} size="small" {...INFO_CHIP} />
         {/* 여러 파일을 섞어 담았다는 사실 자체를 요약으로 먼저 알린다 */}
         {showSource && (
           <Chip
             label={`${sourceCount}개 파일`}
             size="small"
-            color="primary"
-            variant="outlined"
+            {...INFO_CHIP}
           />
         )}
       </Box>

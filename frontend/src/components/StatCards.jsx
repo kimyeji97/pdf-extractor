@@ -30,13 +30,20 @@ import { Icon } from "@iconify/react";
 
 import { getStats, getStatsDetail } from "api/client";
 import { tintSx } from "theme/tint";
+import { MARK_COLOR, detectionBadge } from "utils/badges";
+
+// 타일 색은 `utils/badges` 단일 정의를 따른다 (REQ-F14) — 목록 뱃지와 같은 상태가 같은 색이어야 한다.
+// "대기"(default)는 팔레트 키가 아니라 tintSx 에 넣으면 죽는다 — 모드별로 갈리는 action·text 토큰으로 회색을 칠한다(계약 #20)
+const tileSx = (color) => (theme) => (color === "default"
+  ? { bgcolor: theme.vars.palette.action.selected, color: theme.vars.palette.text.secondary }
+  : tintSx(color)(theme));
 
 const TILES = [
   {
     field: "processing_count",
     label: "분석중 파일수",
     icon: "material-symbols:autorenew-rounded",
-    color: "info",
+    color: detectionBadge("PROCESSING").color,
     clickable: true,
   },
   {
@@ -44,7 +51,7 @@ const TILES = [
     field: "queued_count",
     label: "대기 중 파일수",
     icon: "material-symbols:hourglass-empty-rounded",
-    color: "primary",
+    color: detectionBadge("QUEUED").color,
     clickable: true,
   },
   {
@@ -58,14 +65,14 @@ const TILES = [
     field: "false_positive_count",
     label: "오탐 문항 수",
     icon: "material-symbols:error-outline-rounded",
-    color: "error",
+    color: MARK_COLOR.falsePositive,
     clickable: true,
   },
   {
     field: "manual_count",
     label: "수동 문항 수",
     icon: "material-symbols:edit-note-rounded",
-    color: "secondary",
+    color: MARK_COLOR.manual,
     clickable: true,
   },
   {
@@ -167,7 +174,7 @@ export default function StatsBoard({ refreshTrigger = 0, backgroundRefreshTrigge
               borderRadius: 2,
               boxShadow: theme.customShadows?.card,
               cursor: t.clickable ? "pointer" : "default",
-              ...tintSx(t.color)(theme),
+              ...tileSx(t.color)(theme),
             })}
           >
             <Icon icon={t.icon} style={{ fontSize: 26, flexShrink: 0, opacity: 0.85 }} />

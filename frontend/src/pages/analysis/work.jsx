@@ -42,6 +42,7 @@ import { columnsForWidth } from "utils/questionGrid";
 import { resolveDocumentName } from "utils/documentName";
 import { resolveTargetPage } from "utils/targetPage";
 import { detectionNotice } from "utils/detectionNotice";
+import { INFO_CHIP, MARK_COLOR, RESULT_COLOR } from "utils/badges";
 import { tintBg } from "theme/tint";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
@@ -416,7 +417,7 @@ export default function AnalysisWorkPage() {
         actions={
           <>
             {selectedPage !== null && (
-              <Chip label={`${selectedPage + 1}페이지`} size="small" variant="outlined" color="primary" />
+              <Chip label={`${selectedPage + 1}페이지`} size="small" {...INFO_CHIP} />
             )}
             <Button
               size="small" variant="outlined" color="inherit"
@@ -450,7 +451,7 @@ export default function AnalysisWorkPage() {
             <Icon icon="material-symbols:auto-stories-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
             <Typography variant="subtitle2" fontWeight={700} noWrap>페이지</Typography>
             {pages.length > 0 && (
-              <Chip label={pages.length} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
+              <Chip label={pages.length} size="small" {...INFO_CHIP} sx={{ height: 18, fontSize: 10 }} />
             )}
             <Box sx={{ flex: 1 }} />
             {/* 대기 중이면 재감지가 이미 걸려 있다 — 다시 걸지 못하게 막고 그 사실을 보여준다
@@ -533,13 +534,13 @@ export default function AnalysisWorkPage() {
                       <Tooltip title={`오탐 의심 ${fpCount}건`}>
                         <Chip
                           label={`오탐 ${fpCount}`}
-                          size="small" color="warning" variant="filled"
+                          size="small" color={MARK_COLOR.falsePositive} variant="filled"
                           sx={{ fontSize: 10, height: 18 }}
                         />
                       </Tooltip>
                     )}
                     {questionCount != null && (
-                      <Chip label={`${questionCount}문항`} size="small" variant="outlined" color={isSelected ? "primary" : "default"} sx={{ fontSize: 10, height: 18 }} />
+                      <Chip label={`${questionCount}문항`} size="small" variant={isSelected ? "filled" : "outlined"} color={RESULT_COLOR} sx={{ fontSize: 10, height: 18 }} />
                     )}
                   </Box>
                 </Box>
