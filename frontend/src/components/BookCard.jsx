@@ -21,6 +21,8 @@ import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import { Icon } from '@iconify/react';
 
+import { INFO_CHIP } from 'utils/badges';
+
 export const BOOK_CARD_W = 172;
 const COVER_H = 226;
 const SPINE_W = 10;
@@ -61,6 +63,7 @@ function thicknessOf(count) {
  * @param {{
  *   coverUrl?: string,
  *   title: string,
+ *   caption?: string | null,   // 제목 바로 아래 작은 글씨(파일명 병기, REQ-F15)
  *   subtitle?: string,
  *   tags?: string[],
  *   badge?: { label: string, color?: string },
@@ -76,6 +79,7 @@ function thicknessOf(count) {
 export default function BookCard({
   coverUrl,
   title,
+  caption = null,
   subtitle,
   tags = [],
   badge,
@@ -199,7 +203,11 @@ export default function BookCard({
           {/* 상태 배지 */}
           {badge && (
             <Box sx={{ position: 'absolute', top: 6, left: SPINE_W + 8 }}>
-              <Chip label={badge.label} size="small" color={badge.color ?? 'default'} sx={{ fontSize: 10, height: 18 }} />
+              <Chip
+                label={badge.label} size="small" color={badge.color ?? 'default'} variant={badge.variant ?? 'filled'}
+                // 테두리형(정보성 칩, REQ-F14)은 배경이 비어 표지 그림 위에서 안 읽힌다 — 지면색을 깐다
+                sx={{ fontSize: 10, height: 18, ...(badge.variant === 'outlined' && { bgcolor: 'background.paper' }) }}
+              />
             </Box>
           )}
 
@@ -238,6 +246,12 @@ export default function BookCard({
           {title}
         </Typography>
 
+        {caption && (
+          <Typography variant="caption" color="text.secondary" noWrap title={caption} sx={{ mt: -0.5 }}>
+            {caption}
+          </Typography>
+        )}
+
         {subtitle && (
           <Typography variant="caption" color="text.disabled" noWrap>
             {subtitle}
@@ -247,7 +261,7 @@ export default function BookCard({
         {tags.length > 0 && (
           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
             {tags.slice(0, 3).map((t) => (
-              <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+              <Chip key={t} label={t} size="small" {...INFO_CHIP} sx={{ fontSize: 10, height: 18 }} />
             ))}
           </Box>
         )}

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
@@ -24,6 +24,9 @@ import BookCard, { BOOK_CARD_W } from "components/BookCard";
 import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
+import { useStatusEvents } from "contexts/NotificationContext";
+import { detectionBadge } from "utils/badges";
+import { resolveFileSubtitle } from "utils/documentName";
 import { isEntryBlocked } from "utils/jobStatus";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
@@ -73,13 +76,7 @@ function UploadCard({ onClick }) {
 //
 // `PENDING`(대기)은 이제 눌린다 — 아직 시작되지 않아 기존 문항이 그대로 유효하다.
 
-// 감지 상태 → 표지 위 배지
-const BOUNDARY_BADGE = {
-  PROCESSING: { label: "분석 중", color: "warning" },
-  QUEUED:     { label: "대기 중", color: "info" },     // 분석 슬롯 대기 (REQ-B17)
-  PENDING:    { label: "처리 중", color: "warning" },
-  FAILED:     { label: "분석 실패", color: "error" },
-};
+// 감지 상태 → 표지 위 배지 — 색·이름은 `utils/badges` 단일 정의 (REQ-F14)
 
 function JobCard({ job, onClick, onEdit, onDelete }) {
   // 썸네일 URL은 결정적(deterministic)이라 /pages 호출 없이 직접 조립한다 (REQ-P02-02).
@@ -88,9 +85,10 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
   const analyzing = isEntryBlocked(job);
   const done = job.boundaries_status === "DONE";
 
-  const badge = done && job.total_question_count != null
-    ? { label: `${job.total_question_count}문항`, color: "primary" }
-    : BOUNDARY_BADGE[job.boundaries_status];
+  // 완료인데 문항 수를 모르면(옛 상태 파일) 배지를 달지 않는다 — 종전과 같다
+  const badge = done && job.total_question_count == null
+    ? null
+    : detectionBadge(job.boundaries_status, job.total_question_count);
 
   const actionSx = {
     bgcolor: "background.paper", opacity: 0.92,
@@ -101,6 +99,7 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
     <BookCard
       coverUrl={coverUrl}
       title={job.workbook_name || job.filename || "unknown.pdf"}
+      caption={resolveFileSubtitle(job)}
       subtitle={relativeTime(job.uploaded_at)}
       tags={job.workbook_types || []}
       badge={badge}
@@ -157,8 +156,12 @@ export default function AnalysisFilePage() {
   const debouncedName = useDebouncedValue(searchName, 300);
   const debouncedType = useDebouncedValue(searchType, 300);
 
+  // 배경 재조회 표시 — reload 가 fetchPage 를 **동기로** 부르는 동안만 켠다(usePaginatedList.loadPage 첫 await 전)
+  const backgroundRef = useRef(false);
   const fetchPage = useCallback(
-    (skip, limit) => listJobs({ skip, limit, name: debouncedName, types: debouncedType }),
+    (skip, limit) => listJobs({
+      skip, limit, name: debouncedName, types: debouncedType, background: backgroundRef.current,
+    }),
     [debouncedName, debouncedType],
   );
 
@@ -169,13 +172,28 @@ export default function AnalysisFilePage() {
   // 감지가 끝나면 새로고침 없이 목록이 갱신된다 (REQ-F09 Phase 4).
   // 종전에는 업로드 후 fetchJobs()를 한 번 부르고 끝이라 "분석 중" 배지가 붙은 카드는
   // 새로고침 전까지 영원히 그 상태였고, isAnalyzing()이 클릭까지 막았다.
-  useNotificationRefresh(fetchJobs, { kind: 'detection' }); // 감지 완료에만 반응 (REQ-C09)
-
   const hasSearch = Boolean(debouncedName.trim() || debouncedType.trim());
 
   // 업로드·삭제로 개수가 바뀌면 통계 카드도 다시 받는다.
   const [statsTrigger, setStatsTrigger] = useState(0);
+  const [detailHost, setDetailHost] = useState(null);   // 현황판 상세가 붙는 목록 줄 (REQ-F14 Phase 3)
   const bumpStats = useCallback(() => setStatsTrigger((t) => t + 1), []);
+
+  // 감지 완료 알림·SSE `status` 이벤트 → 목록과 현황판을 **같은 콜백에서**, 전역 딤 없이 다시 읽는다 (REQ-F14).
+  // 따로 읽으면 한쪽은 "대기 중", 한쪽은 "분석 중"을 본다 — 완료 알림이 목록만 다시 읽던 것도 같은 어긋남이었다.
+  const [bgStatsTrigger, setBgStatsTrigger] = useState(0);
+  const refreshInBackground = useCallback(() => {
+    backgroundRef.current = true;
+    fetchJobs();
+    backgroundRef.current = false;
+    setBgStatsTrigger((t) => t + 1);
+  }, [fetchJobs]);
+  useNotificationRefresh(refreshInBackground, { kind: 'detection' }); // 감지 완료에만 반응 (REQ-C09)
+  const statusEvents = useStatusEvents();
+  useEffect(() => {
+    if (statusEvents > 0) refreshInBackground();   // 0 = 첫 렌더 — 첫 로드와 겹친다
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 이벤트 수가 바뀔 때만
+  }, [statusEvents]);
 
   // ── 이름/유형 편집 (문제집 편집 ①에서 이동) ──────────
   const [editJob, setEditJob]         = useState(null);
@@ -286,10 +304,27 @@ export default function AnalysisFilePage() {
           별도 홈 라우트가 없어 진입 화면인 이곳에 얹는다. 기존 StatCards(3타일)를 대체한다. */}
       <StatsBoard
         refreshTrigger={statsTrigger}
+        backgroundRefreshTrigger={bgStatsTrigger}
+        detailContainer={detailHost}
         onSelectFile={(jobId, page) =>
           navigate(page ? `/analysis/${jobId}?page=${page}` : `/analysis/${jobId}`)
         }
       />
+
+      {/* ── 목록 줄: 좌 = 목록 영역(검색란 + 카드), 우 = 현황판 상세 (REQ-F14 Phase 3) ──
+          상세는 현황판이 이 줄에 포털로 붙인다 — 상세 상태는 현황판이 들고 있고, 목록 옆이 파일을 찾는 자리다.
+          좁은 화면에선 상세가 목록 위로(column-reverse). 높이 체인(계약 #1)은 이 줄과 목록 영역이 이어 받는다. */}
+      <Box
+        ref={setDetailHost}
+        sx={{
+          flex: 1, minHeight: 0, display: "flex", gap: 2,
+          flexDirection: { xs: "column-reverse", md: "row" },
+        }}
+      >
+      <Box
+        data-testid="analysis-list-area"
+        sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 2 }}
+      >
 
       {/* ── 검색 바 ────────────────────────────────────── */}
       <Box sx={{
@@ -397,6 +432,8 @@ export default function AnalysisFilePage() {
             </>
           )}
         </Box>
+      </Box>
+      </Box>
       </Box>
 
       {/* ── 삭제 확인 다이얼로그 ───────────────────────── */}

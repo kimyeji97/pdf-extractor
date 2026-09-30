@@ -98,9 +98,28 @@ def emit_detection(job: JobStatusFile) -> None:
         job_id=job.job_id,
         kind=NotificationKind.DETECTION,
         severity=NotificationSeverity.ERROR if failed else NotificationSeverity.SUCCESS,
-        title=job.filename,
+        # 문제집 이름 우선 — 사용자는 파일을 이 이름으로 기억한다(생성 알림과 같은 규칙, REQ-F15).
+        # 제목은 발행 시점에 저장된다: 옛 알림·이름을 나중에 바꾼 경우는 그때 이름 그대로다
+        title=job.workbook_name or job.filename,
         message="문항 감지에 실패했습니다." if failed else "문항 감지가 완료되었습니다.",
     )
+
+
+def emit_status(job: JobStatusFile) -> None:
+    """
+    감지 상태 전환(`QUEUED`·`PROCESSING`)을 SSE `status` 이벤트로 알린다 (REQ-F14).
+
+    **알림이 아니다** — 저장하지 않고 `id`도 없다(`read` 이벤트와 같은 방식). 목록·현황판에 "다시 읽으라"는 신호일 뿐이라
+    피드·미읽음 수·벨 뱃지에 섞이면 안 되고, 재연결 때 되찾을 필요도 없다(다시 읽으면 현재 상태가 나온다).
+    감지 **시작** 신호가 없어 업로드 직후 목록은 "대기 중", 현황판은 "분석 중"으로 완료 전까지 어긋났다.
+    """
+    try:
+        broker.publish({
+            "event": "status",
+            "data": {"job_id": job.job_id, "boundaries_status": job.boundaries_status.value},
+        })
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[notification] 상태 푸시 실패(무시) | job_id=%s error=%s", job.job_id, e)
 
 
 def emit_export(job: JobStatusFile, workbook_name: Optional[str] = None) -> None:

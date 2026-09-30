@@ -423,6 +423,12 @@ deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS
     ⚠️ `tintSx`/`tintFg`는 **함수를 반환**한다. 객체 sx에 `...tintSx('primary')`로 스프레드하면
     **아무것도 안 들어가고 에러도 안 난다** — `sx={(theme) => ({ ...tintSx('primary')(theme) })}`.
     (REQ-D08. 계약 #18과 같은 "조용히 틀린 색" 계열)
+36. **뱃지·칩의 색과 이름은 `frontend/src/utils/badges.js` 한 곳에서만 정한다** — 감지 상태(`detectionBadge`: 대기 default
+    "대기 중" · 분석 중 info · 실패 error "분석 실패" · 완료 success "N문항") · 표식(`MARK_COLOR`: 오탐 warning · 수동 secondary) ·
+    그 외 정보성 칩(`INFO_CHIP`: primary 테두리형). 화면마다 표를 들고 있다가 **같은 "분석 중"이 info·warning·"감지 중…" 세 가지**가
+    됐고 "수동"은 세 색이었다(REQ-F14). 새 칩은 여기서 가져다 쓴다 — F14-18·19가 import와 옛 이름을 스캔하지만 칩 하나하나는 못 본다.
+    ⚠️ **`default`(회색)는 MUI 팔레트 키가 아니다** — `tintSx('default')`/`tintBg('default')`는 `palette.default` 가 없어 **화면이 죽는다.**
+    회색 배경은 모드별로 갈리는 `action.selected`·`text.secondary` 토큰으로 칠한다(현황판 대기 타일, 계약 #20과 같은 이유)
 
 ### PDF 뷰어
 
@@ -590,6 +596,12 @@ deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS
     요청에 쓰면 화면이 번쩍인다. `getStatus`·`getJobInfo`·`listNotifications`가 raw `fetch`이고
     `NotificationContext`가 raw `EventSource`인 것은 누락이 아니라 이 때문이다 — **관례를 따를수록
     틀리는 자리**라 명시해 둔다. (REQ-F09 Phase 2 · REQ-P04 Phase 2에서 폴링→SSE로 바뀌어도 동일)
+    ⚠️ **알림·SSE 이벤트로 목록을 다시 읽는 것도 배경 요청이다** — `listJobs`·`getStats`는 `apiFetch`라 그대로 부르면
+    **완료 알림이 올 때마다 전역 딤이 켜졌다**(REQ-F14에서 발견). 배경 재조회는 `{ background: true }`로 부른다(raw fetch +
+    `_authHeaders()`, 계약 #31). 사용자가 누른 조회(검색·새로고침 버튼)는 옵션 없이 — 딤·토큰 갱신이 그대로다.
+    그리고 **저장하지 않는 SSE 이벤트**(`read`·`status`)는 알림 목록·미읽음 수에 넣지 않는다 — 넣으면 벨 뱃지·스낵바에 뜬다.
+    `status`(감지 상태 전환, REQ-F14)는 받은 횟수만 `useStatusEvents()`로 내고, **별도 컨텍스트**다(`useNotifications()` 값 키는
+    `notifications,unreadCount`로 P04 테스트에 고정 · Provider 밖 0).
 
 27. **알림 피드를 구독할 때는 기준선을 잡는다** — 피드는 **최근 30일치**를 담고 있어서
     (첫 진입 시 최신 50건) "내 `job_id`의 알림이 피드에 있나"로 판정하면 **작업을 시작하자마자

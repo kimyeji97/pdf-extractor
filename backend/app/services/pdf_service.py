@@ -11,7 +11,6 @@ PDF 처리 서비스 v2
   - 부분 영역   → show_pdf_page() : 벡터 기반 클리핑, 래스터화 없이 선명도 유지
 """
 
-import dataclasses
 import fitz         # pymupdf
 import pdfplumber
 from dataclasses import dataclass
@@ -414,9 +413,9 @@ def extract_questions_v2(
         if cached is not None:
             boundaries_map[job_id] = [QuestionBoundary(**b) for b in cached]
         else:
-            boundaries = detect_question_boundaries(pdf_path)
-            boundaries_map[job_id] = boundaries
-            storage.save_boundaries_cache(job_id, [dataclasses.asdict(b) for b in boundaries])
+            # 캐시 미스는 감지하지 않는다 (REQ-B22) — 여기서 감지하면 B17 동시 분석 한도 밖에서 돌고, 재감지 중인
+            # job 의 캐시를 덮어쓸 수 있다. 빈 경계로 두면 Step 3 이 그 선택을 건너뛴다. 감지는 업로드·재감지만 한다(계약 #34)
+            boundaries_map[job_id] = []
 
     # ── Step 3: selections → SourcedCropRegion 변환 ─────────
     # selections 순서가 곧 그리드 배치 순서가 된다 (REQ-19 DnD 순서 반영).

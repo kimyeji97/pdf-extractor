@@ -140,6 +140,7 @@ def _trigger_boundary_detection(job_id: str) -> None:
     # 슬롯은 감지 + 프리워밍 전체를 감싼다(프리워밍 12스레드도 메모리를 쓴다).
     status_file.boundaries_status = BoundariesStatus.QUEUED
     storage.put_status(status_file)
+    notification_service.emit_status(status_file)   # 목록·현황판 동기화 (REQ-F14)
     with analysis_slots.slots:
         _detect_boundaries(job_id, status_file)
 
@@ -148,6 +149,7 @@ def _detect_boundaries(job_id: str, status_file) -> None:
     """`_trigger_boundary_detection` 본체 — 분석 슬롯을 잡은 뒤에만 불린다."""
     status_file.boundaries_status = BoundariesStatus.PROCESSING
     storage.put_status(status_file)
+    notification_service.emit_status(status_file)
 
     notified = False  # 알림은 정확히 1회 (REQ-P05) — 성공 경로에서 이미 보냈으면 finally 는 건너뛴다
 

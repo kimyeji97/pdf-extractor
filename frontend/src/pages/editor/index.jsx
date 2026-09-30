@@ -42,6 +42,7 @@ import {
 } from "api/client";
 import { tintSx } from "theme/tint";
 import { useJobCompletion } from "hooks/useJobCompletion";
+import { INFO_CHIP } from "utils/badges";
 
 const LAYOUTS = ["세로 2단", "가로 2단", "4단", "6단"];
 
@@ -334,7 +335,7 @@ export default function EditorPage() {
                     : `${basket.length}개 선택`
                 }
                 size="small"
-                color="primary"
+                {...INFO_CHIP}
               />
             )}
             <Button
@@ -372,8 +373,7 @@ export default function EditorPage() {
               <Chip
                 label={`${sourceFileCount}개 파일`}
                 size="small"
-                color="primary"
-                variant="outlined"
+                {...INFO_CHIP}
                 sx={{ fontSize: 10, height: 18 }}
               />
             )}
@@ -414,7 +414,7 @@ export default function EditorPage() {
               <Chip
                 label={`${selectedCounts[jobId]}개`}
                 size="small"
-                color="primary"
+                {...INFO_CHIP}
                 sx={{ fontSize: 10, height: 18 }}
               />
             )}

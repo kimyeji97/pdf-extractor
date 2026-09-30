@@ -20,23 +20,32 @@
  *    컴포넌트를 옛 파일 경로에 얹는 쪽을 택했다.
  */
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Skeleton from "@mui/material/Skeleton";
 import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
+import IconButton from "@mui/material/IconButton";
 import { Icon } from "@iconify/react";
 
 import { getStats, getStatsDetail } from "api/client";
 import { tintSx } from "theme/tint";
+import { MARK_COLOR, detectionBadge } from "utils/badges";
+
+// 타일 색은 `utils/badges` 단일 정의를 따른다 (REQ-F14) — 목록 뱃지와 같은 상태가 같은 색이어야 한다.
+// "대기"(default)는 팔레트 키가 아니라 tintSx 에 넣으면 죽는다 — 모드별로 갈리는 action·text 토큰으로 회색을 칠한다(계약 #20)
+const tileSx = (color) => (theme) => (color === "default"
+  ? { bgcolor: theme.vars.palette.action.selected, color: theme.vars.palette.text.secondary }
+  : tintSx(color)(theme));
 
 const TILES = [
   {
     field: "processing_count",
     label: "분석중 파일수",
     icon: "material-symbols:autorenew-rounded",
-    color: "info",
+    color: detectionBadge("PROCESSING").color,
     clickable: true,
   },
   {
@@ -44,7 +53,7 @@ const TILES = [
     field: "queued_count",
     label: "대기 중 파일수",
     icon: "material-symbols:hourglass-empty-rounded",
-    color: "primary",
+    color: detectionBadge("QUEUED").color,
     clickable: true,
   },
   {
@@ -58,14 +67,14 @@ const TILES = [
     field: "false_positive_count",
     label: "오탐 문항 수",
     icon: "material-symbols:error-outline-rounded",
-    color: "error",
+    color: MARK_COLOR.falsePositive,
     clickable: true,
   },
   {
     field: "manual_count",
     label: "수동 문항 수",
     icon: "material-symbols:edit-note-rounded",
-    color: "secondary",
+    color: MARK_COLOR.manual,
     clickable: true,
   },
   {
@@ -90,12 +99,12 @@ function formatValue(field, stats) {
 }
 
 /**
- * @param {{ refreshTrigger?: number, onSelectFile?: (jobId: string, page1Based?: number) => void }} props
+ * @param {{ refreshTrigger?: number, backgroundRefreshTrigger?: number, detailContainer?: HTMLElement|null, onSelectFile?: (jobId: string, page1Based?: number) => void }} props
  *   `onSelectFile`의 `page1Based`는 파일 이름 클릭이면 없고(문서만 이동), 개별 페이지
  *   번호 클릭이면 그 페이지(1-based)가 온다(REQ-F12 Phase 3 — "페이지 클릭 → 작업 화면
  *   진입 + 해당 페이지로 스크롤·포커스").
  */
-export default function StatsBoard({ refreshTrigger = 0, onSelectFile }) {
+export default function StatsBoard({ refreshTrigger = 0, backgroundRefreshTrigger = 0, detailContainer = null, onSelectFile }) {
   const [stats, setStats] = useState(null);
   const [failed, setFailed] = useState(false);
 
@@ -112,6 +121,18 @@ export default function StatsBoard({ refreshTrigger = 0, onSelectFile }) {
       alive = false;
     };
   }, [refreshTrigger]);
+
+  // 알림·SSE 로 다시 읽을 때는 전역 딤을 켜지 않는다 (REQ-F14, 계약 #26). 0 = 첫 렌더 — 위 효과가 이미 읽는다
+  useEffect(() => {
+    if (backgroundRefreshTrigger === 0) return undefined;
+    let alive = true;
+    getStats({ background: true })
+      .then((d) => alive && setStats(d))
+      .catch(() => {});   // 배경 재조회 실패로 이미 보이는 현황판을 지우지 않는다
+    return () => {
+      alive = false;
+    };
+  }, [backgroundRefreshTrigger]);
 
   const handleTileClick = (tile) => {
     if (!tile.clickable) return;
@@ -134,55 +155,24 @@ export default function StatsBoard({ refreshTrigger = 0, onSelectFile }) {
   // 통계는 부가 정보다. 실패하면 목록 화면을 막지 않고 조용히 사라진다(종전과 동일 원칙).
   if (failed) return null;
 
-  return (
-    <Box sx={{ display: "flex", gap: 2, flexShrink: 0, minHeight: 0 }}>
-      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", flex: 1, alignContent: "flex-start" }}>
-        {TILES.map((t) => (
-          <Paper
-            key={t.field}
-            data-testid={`stat-tile-${t.field}`}
-            elevation={0}
-            onClick={() => handleTileClick(t)}
-            sx={(theme) => ({
-              flex: "1 1 160px",
-              minWidth: 160,
-              maxWidth: 220,
-              px: 2,
-              py: 1.75,
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-              borderRadius: 2,
-              boxShadow: theme.customShadows?.card,
-              cursor: t.clickable ? "pointer" : "default",
-              ...tintSx(t.color)(theme),
-            })}
-          >
-            <Icon icon={t.icon} style={{ fontSize: 26, flexShrink: 0, opacity: 0.85 }} />
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" sx={{ display: "block", opacity: 0.9 }} noWrap>
-                {t.label}
-              </Typography>
-              {stats ? (
-                <Typography variant="h6" sx={{ lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>
-                  {formatValue(t.field, stats)}
-                </Typography>
-              ) : (
-                <Skeleton width={48} height={26} />
-              )}
-            </Box>
-          </Paper>
-        ))}
-      </Box>
+  const closeDetail = () => {
+    setOpenField(null);
+    setDetail(null);
+  };
+  const openTile = TILES.find((t) => t.field === openField);
 
-      {/* ── 상세 아코디언 — 고르기 전에는 DOM에 없다(D09-01과 같은 원칙) ── */}
-      {openField && (
+  // ── 상세 영역 — 고르기 전에는 DOM에 없다(D09-01과 같은 원칙) ──
+  // 목록 영역 우측(detailContainer)에 포털로 붙는다 (REQ-F14 Phase 3). 제목 + 닫기 — 다시 눌러 닫는 토글은 보이지 않아
+  // "닫을 수 없다"로 읽혔다. 폭 320, 자기 안에서 스크롤. 좁은 화면(목록 위)에선 전체 폭·높이 제한
+  const detailPanel = openField && (
         <Paper
           data-testid="stat-detail-panel"
           elevation={0}
           sx={(theme) => ({
-            width: 320,
+            width: { xs: "100%", md: 320 },
+            maxHeight: { xs: "40%", md: "none" },
             flexShrink: 0,
+            minHeight: 0,
             borderRadius: 2,
             p: 1.5,
             boxShadow: theme.customShadows?.card,
@@ -192,6 +182,14 @@ export default function StatsBoard({ refreshTrigger = 0, onSelectFile }) {
             overflowY: "auto",
           })}
         >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1, flexShrink: 0 }}>
+            <Typography variant="subtitle2" sx={{ flex: 1, minWidth: 0 }} noWrap>
+              {openTile?.label}
+            </Typography>
+            <IconButton size="small" aria-label="닫기" onClick={closeDetail}>
+              <Icon icon="material-symbols:close-rounded" style={{ fontSize: 18 }} />
+            </IconButton>
+          </Box>
           {detailLoading ? (
             <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
               <CircularProgress size={20} />
@@ -248,7 +246,53 @@ export default function StatsBoard({ refreshTrigger = 0, onSelectFile }) {
             </>
           )}
         </Paper>
-      )}
+  );
+
+  return (
+    <Box data-testid="stats-board" sx={{ display: "flex", gap: 2, flexShrink: 0, minHeight: 0 }}>
+      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", flex: 1, alignContent: "flex-start" }}>
+        {TILES.map((t) => (
+          <Paper
+            key={t.field}
+            data-testid={`stat-tile-${t.field}`}
+            elevation={0}
+            onClick={() => handleTileClick(t)}
+            // 열린 타일 강조 — 다시 누르면 닫힌다는 것이 보이게 (REQ-F14 Phase 3)
+            role={t.clickable ? "button" : undefined}
+            aria-pressed={t.clickable ? openField === t.field : undefined}
+            sx={(theme) => ({
+              flex: "1 1 160px",
+              minWidth: 160,
+              maxWidth: 220,
+              px: 2,
+              py: 1.75,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              borderRadius: 2,
+              boxShadow: theme.customShadows?.card,
+              cursor: t.clickable ? "pointer" : "default",
+              ...tileSx(t.color)(theme),
+              ...(openField === t.field && { outline: "2px solid currentColor", outlineOffset: -2 }),
+            })}
+          >
+            <Icon icon={t.icon} style={{ fontSize: 26, flexShrink: 0, opacity: 0.85 }} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" sx={{ display: "block", opacity: 0.9 }} noWrap>
+                {t.label}
+              </Typography>
+              {stats ? (
+                <Typography variant="h6" sx={{ lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>
+                  {formatValue(t.field, stats)}
+                </Typography>
+              ) : (
+                <Skeleton width={48} height={26} />
+              )}
+            </Box>
+          </Paper>
+        ))}
+      </Box>
+      {detailContainer ? detailPanel && createPortal(detailPanel, detailContainer) : detailPanel}
     </Box>
   );
 }

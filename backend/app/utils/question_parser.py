@@ -795,7 +795,11 @@ def _apply_precision_improvements(
             if b.col_x0 <= g["x0"] and g["x1"] <= col_x1_raw
             and b.y_top <= g["top"] <= b.y_bottom
         ]
-        b.y_bottom = _calc_tight_y_bottom(question_words + graphics, b.y_bottom)
+        # ⚠️ 조임에는 **y_bottom 전에 끝나는 것만** 쓴다 (REQ-B21) — 다음 문항이 있으면 y_bottom 은
+        #    다음 문항 번호의 top 이라 위 필터(top ≤ y_bottom)에 그 번호가 걸리고, 조임이 늘 다음 문항
+        #    시작에서 멈췄다(기출 4종 1,145건 중 563건). x 정밀화는 위 question_words 그대로다.
+        tight_src = [o for o in question_words + graphics if o["bottom"] <= b.y_bottom]
+        b.y_bottom = _calc_tight_y_bottom(tight_src, b.y_bottom)
 
         # ── REQ-B13: y_top 정밀화 — 상단에도 같은 여유 ───────────
         # 단어 필터가 원래 y_top 을 기준으로 끝난 뒤에 넓힌다(먼저 넓히면 앞 문항 단어가
