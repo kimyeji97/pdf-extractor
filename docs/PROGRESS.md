@@ -128,6 +128,7 @@
 | REQ-B18 | 목차·"유형 N" 제목이 문항으로 잡히고, 번호만 보고 합쳐 진짜 문항이 사라짐 (dev `0928 테스트2` 1쪽 목차 4문항 · 2쪽 0문항) | [plan](plans/PLAN-B18-regex-only-false-positive.md) | 2026-09-29 | ✅ **Phase 1·2 완료**(위치 기준 병합 + 정규식 전용 경계 오탐 **표시**, 케이스 8/8 · 기출 4종 실측: 심화대비 복구, 내신마스터 "유형 N" 62건 오탐). PR #21 main 머지 `c17f884`. dev 상세 육안 2026-09-29 `f93e525` |
 | REQ-B19 | 분석 실패 파일 상세가 30초 504 — 조회 경로가 캐시 미스 시 요청 안에서 동기 감지 (B17 Phase 4를 막음, TODO §7) | [plan](plans/PLAN-B19-lookup-path-sync-detection.md) | 2026-09-29 | ✅ **Phase 1~3 완료**(조회 3곳 캐시 미스 → 감지 없이 빈 결과·404, 상태 파일 안 씀 · 케이스 10/10 · `/testrun` 확인 · 회귀 없음 백엔드 266/266 · 전제 소멸한 F09-06·07·16 폐기 · 504 CORS 헤더는 Cloudflare 쪽에서 빠짐 — 구간 특정까지). PR #22 main 머지 `46c464e`, dev 배포 `f93e525` 확인(FAILED 상세 즉시 200·재감지 DONE·stats 9s→0.9s). `/api/jobs`·`/api/notifications` 재측정과 미결 3건은 TODO §7·§9로 이관 |
 | REQ-B20 | HWP 출력 PDF가 전부 오탐 — 보이지 않는 0.1pt 번호 글자 + 같은 쪽·같은 번호 식별자 충돌 (B18 회귀, dev `테스트02` 840경계·오탐 378) | [plan](plans/PLAN-B20-invisible-number-and-id-collision.md) | 2026-09-30 | ✅ **Phase 1~5 완료**(adaptive 1pt 이하 제외 · 정규식 전용 높이 규칙 200pt · 문항 ID 순번 k — ADR-0006 · 목록 k 필드 · 프론트 k 전달 · 케이스 27/27 · 백엔드 288/288·프론트 203/203). PR #23 `0d8c5d4`·PR #24 `ee27f2c` main 머지, dev 배포 `fe3d971` 사용자 확인 |
+| REQ-B23 | 결과 PDF 상태 조회(`GET /api/status/{job_id}`)가 401 — `getStatus` raw fetch에 인증 헤더 누락(계약 #31 누락) | [plan](plans/PLAN-B23-status-poll-401.md) | — | 🟡 **Phase 1 완료**(`getStatus`에 `_authHeaders()` · raw fetch 인증 스캔 테스트 · 케이스 3/3 · `/testrun` 확인 · 프론트 206/206). 브랜치 `fix/B23-status-poll-401` — **PR·머지·Phase 2(dev 확인) 남음** |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -262,6 +263,22 @@ B21(Red 3쪽 크롭 여백) · **B22**(B19 미결 3건 — 셋 다 "경계 캐�
 TODO §10(사용자 육안)의 추정 "B16 실측 무대에 이 PDF가 없었는지"는 **틀렸다** — Red는 B16 기출 4종에 포함돼 있었다. 정정해 둠.
 `CLAUDE.md`의 넘버링 절(다음 번호·점유 범위·"REQ-30만 예약")과 「현재 위치(2026-09-18)」가 B14~B20을 반영하지 못해 현행화했고,
 `PLAN-B16` 상태 줄의 "dev 배포 전"(09-28 `c17f884`로 배포됨)도 고쳤다.
+
+### REQ-B23 — PDF 생성 후 상태 조회가 401 (계획서 + Phase 1)
+
+다른 세션이 TODO §10에 올린 항목(원 대화는 transcript에 없음)이다. `/api/status/{job_id}`는 보호 라우트인데 `getStatus`는 raw fetch(계약 #26)라
+인증 헤더가 없었다 — REQ-27 Phase 4가 `getJobInfo`·`uploadCover`·`uploadWatermark`에 헤더를 붙이며 계약 #31을 만들 때 **이 하나를 놓쳤다.**
+`client.js`의 raw fetch 8개를 전수 확인하니 헤더 없는 셋 중 실제로 깨지는 건 `getStatus`뿐이었다(알림 둘·`logout`은 백엔드가 무인증).
+고치는 방식은 계약대로 raw fetch 유지 + `_authHeaders()`(기각: `apiFetch` — 폴링마다 딤 · 백엔드 무인증화 — REQ-27 역행).
+재발 방지로 **`client.js` 소스 스캔 테스트**를 뒀다(사용자 결정) — raw fetch 함수는 헤더를 쓰거나 무인증 예외 목록에 있어야 통과.
+
+**기록 정정 둘.** ① 계획서 초안의 미결 "`get_status`에 소유자 확인이 없다"는 **틀렸다** — 함수 첫 몇 줄만 보고 적었고, 실제로는 조회 직후
+`ensure_owner_or_admin`을 부른다(미결 정리 때 발견·정정). ② 무인증 예외 목록에서 **`logout`이 빠져 있었다**(`/testgen`에서 발견) — 백엔드 `/auth/logout`은
+access 쿠키만 지우는 무인증 엔드포인트다.
+
+테스트 함정: **B23-03이 주석을 스캔해** `// raw fetch(계약 #26 …)` 설명문을 raw fetch 호출로 오인했다. `getStatus`를 `apiFetch`로 바꾸는 틀린 구현을 넣어
+보다 드러났다(헤더가 있는 지금 코드에선 우연히 통과) → 스캔 전 주석 제거((a) 수정). 틀린 구현 세 가지(원래 코드 · `apiFetch` 전환 · 헤더 없는
+raw fetch 추가)를 각각 넣으면 그 케이스만 빨강이 되는 것을 확인했다.
 
 ## 2026-09-29
 

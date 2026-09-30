@@ -627,6 +627,10 @@ deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS
     `get_current_user_allow_cookie`(헤더 우선, 없으면 access 쿠키)를 쓴다. **쿠키 인증은 GET 조회에만**
     — 상태를 바꾸는 엔드포인트에 쓰면 CSRF 표면이 생긴다. 테스트는 헤더 없이 쿠키만 가진 `https`
     클라이언트로 쓴다(`Secure` 쿠키는 http 요청에 안 실린다). (REQ-B15)
+    ⚠️ **이 규칙은 테스트가 강제한다** — `frontend/src/api/client.statusAuth.test.js`(B23-03)가 `client.js`를 스캔해 raw fetch
+    export 함수는 `_authHeaders()`를 부르거나 **무인증 예외 목록**(`listNotifications`·`markNotificationsRead`·`logout`)에 있어야
+    통과시킨다. 새 raw fetch를 만들면 헤더를 붙이거나, 백엔드가 정말 무인증일 때만 예외 목록에 **이유와 함께** 올린다.
+    문서만으로는 `getStatus`를 놓쳐 PDF 생성 폴링이 401이 됐다(REQ-B23).
 
 ## 상시 이슈
 

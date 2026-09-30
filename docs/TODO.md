@@ -131,7 +131,7 @@
       **단의 마지막 문항 7번은 선지 바로 아래에서 딱 맞게** 잘린다. B13(네 변 10pt·마지막 문항 규칙 통일)으로 닫았던 증상이 재발한 모양.
       **추정(미검증)**: 하단 조임(`_calc_tight_y_bottom`)이 이 문항에서 안 걸리고 다음 문항 시작까지 늘어났거나,
       B16이 y_bottom에 넣은 그래픽(`rects·curves·lines`) 중 이 PDF의 장식이 걸러지지 않았다. Red는 B16 실측 무대(기출 4종)에 **포함돼 있었다** — B16 실측은 main 대비 y_bottom 증가 92건만 확인했으므로, 이 문항이 그 92건에 드는지·B16 이전에도 같았는지부터 볼 것
-- [ ] **결과 PDF 상태 조회(`GET /api/status/{job_id}`)가 401 "인증이 필요합니다."** (2026-09-30 추가) — 생성 화면에서 PDF 생성 후 폴링이 401.
+- [ ] **→ REQ-B23**([계획서](plans/PLAN-B23-status-poll-401.md), 2026-09-30 Phase 1 완료) · **결과 PDF 상태 조회(`GET /api/status/{job_id}`)가 401 "인증이 필요합니다."** (2026-09-30 추가) — 생성 화면에서 PDF 생성 후 폴링이 401.
       **원인(코드 확인)**: 백엔드 `get_status`는 `get_current_user`를 요구하는데(`extract.py:60`), 프론트 `getStatus`는 계약 #26 raw fetch라
       `_authHeaders()`를 안 붙인다(`client.js:310`). 계약 #31과 같은 계열 — REQ-27 Phase 4에서 `getJobInfo`·`uploadCover`·`uploadWatermark`만 고치고 이것을 놓쳤다.
       호출처 3곳: `editor/index.jsx:86`(생성 폴링) · `history/index.jsx:145·163`(결과 화면). 다른 raw fetch(`listNotifications` 등)도 같이 전수 확인할 것
