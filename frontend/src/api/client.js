@@ -307,7 +307,8 @@ export async function startExtract(jobId, questionNumbers) {
  * 내보내기 작업 상태 조회 (extract-v2 폴링용)
  */
 export async function getStatus(jobId) {
-  const res = await fetch(`${BASE_URL}/status/${jobId}`);
+  // raw fetch(계약 #26 — 폴링이 딤을 켜지 않게)지만 /api/status 는 보호 라우트다 — 헤더만 직접 붙인다 (REQ-B23, 계약 #31)
+  const res = await fetch(`${BASE_URL}/status/${jobId}`, { headers: _authHeaders() });
   if (!res.ok) throw new Error("상태 조회 실패");
   return res.json();
 }
