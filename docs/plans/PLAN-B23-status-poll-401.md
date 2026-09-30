@@ -1,7 +1,7 @@
 # PLAN-B23 · 결과 PDF 상태 조회가 401 — `getStatus` raw fetch에 인증 헤더 누락
 
 > 출처: `docs/TODO.md` §10 원문(2026-09-30 추가, 다른 세션 — 원 대화는 transcript에 없음) + 2026-09-30 세션 raw fetch 전수 확인 ·
-> 작성: 2026-09-30 · 상태: 🟡 진행 (Phase 1 완료 2026-09-30 — Phase 2 dev 확인 남음)
+> 작성: 2026-09-30 · 상태: 🟡 진행 (Phase 1 완료 2026-09-30 · PR #25 main 머지 `4f26daf` — Phase 2 dev 확인 남음)
 
 ## 배경
 
