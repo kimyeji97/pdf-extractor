@@ -74,7 +74,11 @@ describe('client.js raw fetch 인증 스캔', () => {
         else if (src[i] === '}') depth -= 1;
         i += 1;
       }
-      const body = src.slice(head.lastIndex, i);
+      // 주석은 호출이 아니다 — `// raw fetch(계약 #26 …)` 같은 설명문이 raw fetch 로 오인됐다(/testrun B23 실측)
+      const body = src
+        .slice(head.lastIndex, i)
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '');
       const rawFetch = /(?<![\w.])fetch\(/.test(body);
       if (rawFetch && !body.includes('_authHeaders(') && !UNAUTHENTICATED_RAW_FETCH.has(m[1])) {
         offenders.push(m[1]);
