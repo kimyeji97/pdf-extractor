@@ -52,6 +52,7 @@ import { Icon } from "@iconify/react";
 
 import { spineColorOf } from "./BookCard";
 import { INFO_CHIP } from "utils/badges";
+import { questionDisplayName } from "utils/questionName";
 
 const API_ROOT = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"
@@ -65,7 +66,7 @@ const API_ROOT = (
 function labelOf(item) {
   const title =
     item.displayTitle ||
-    (item.isManual ? "(수동 문항)" : `문항 ${item.questionNum}`);
+    questionDisplayName({ is_manual: item.isManual, question_num: item.questionNum });
   return `${title} · ${item.pageNum + 1}p`;
 }
 

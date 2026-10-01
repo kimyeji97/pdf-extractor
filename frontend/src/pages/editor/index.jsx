@@ -43,6 +43,7 @@ import {
 import { tintSx } from "theme/tint";
 import { useJobCompletion } from "hooks/useJobCompletion";
 import { INFO_CHIP } from "utils/badges";
+import { questionDisplayName } from "utils/questionName";
 
 const LAYOUTS = ["세로 2단", "가로 2단", "4단", "6단"];
 
@@ -149,7 +150,7 @@ export default function EditorPage() {
               scale: s.scale ?? 1,
               displayTitle:
                 s.label ||
-                (s.manual_id ? "(수동 문항)" : `문항 ${s.question_num}`),
+                questionDisplayName({ is_manual: Boolean(s.manual_id), question_num: s.question_num }),
             })),
           );
         }
@@ -221,7 +222,7 @@ export default function EditorPage() {
             isManual: q.is_manual,
             manualId: q.manual_id,
             displayTitle:
-              q.title || (q.is_manual ? "(수동 문항)" : `문항 ${q.question_num}`),
+              questionDisplayName(q),
           },
         ];
       });

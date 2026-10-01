@@ -25,6 +25,7 @@ import {
   calcCellRect, topLeftFit, questionsPerPage,
   MIN_CELL_SCALE, MAX_CELL_SCALE, CELL_SCALE_STEP, clampCellScale,
 } from "../utils/workbookLayout";
+import { questionDisplayName } from "utils/questionName";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
 
@@ -225,7 +226,7 @@ function WorkbookPage({
                 >
                   <img
                     src={`${API_ROOT}${item.thumbnailUrl}`}
-                    alt={item.displayTitle || `문항 ${item.questionNum}`}
+                    alt={item.displayTitle || questionDisplayName({ is_manual: item.isManual, question_num: item.questionNum })}
                     className="wbp-cell-img"
                     style={{
                       display:        "block",

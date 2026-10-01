@@ -35,13 +35,14 @@ import { Icon } from "@iconify/react";
 import { getAllQuestions } from "../api/client";
 import { tintBg, tintFg } from "theme/tint";
 import { MARK_COLOR } from "utils/badges";
+import { questionDisplayName } from "utils/questionName";
 
 // 체크박스 하나만 토글해도 전체 목록이 리렌더되는 것을 막기 위해 항목을
 // 별도 컴포넌트로 분리하고 memo 처리한다 (REQ-P02-04). 대량 문항(600+)에서
 // isSelected·question_id가 바뀌지 않은 항목은 리렌더를 건너뛴다.
 const QuestionItem = memo(
   function QuestionItem({ q, pageNum, isSelected, onToggle }) {
-    const displayTitle = q.title || (q.is_manual ? "(수동 문항)" : `문항 ${q.question_num}`);
+    const displayTitle = questionDisplayName(q);
     return (
       <Box
         component="label"

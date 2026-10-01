@@ -24,6 +24,7 @@ import Alert from "@mui/material/Alert";
 import Checkbox from "@mui/material/Checkbox";
 import Skeleton from "@mui/material/Skeleton";
 import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
 import Tooltip from "@mui/material/Tooltip";
 import { Icon } from "@iconify/react";
 
@@ -36,6 +37,7 @@ import {
   bulkDeleteQuestions,
 } from "../api/client";
 import { INFO_CHIP, MARK_COLOR } from "utils/badges";
+import { QUESTION_PREFIX, questionDisplayName, questionNameRest } from "utils/questionName";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 const API_ROOT = BASE_URL.replace(/\/api$/, "");
@@ -77,6 +79,9 @@ function CardImg({ src, alt }) {
 }
 
 // 체크박스 하나만 토글해도 전체 카드 목록이 리렌더되는 것을 막기 위해
+/** 이름 수정 입력란의 처음 값 — 접두어 뒤에 보이는 그대로. 이름 없는 수동 문항은 빈칸 (REQ-C10) */
+const editStartValue = (q) => (q.is_manual && !q.title ? "" : questionNameRest(q));
+
 // 카드를 별도 컴포넌트로 분리하고 memo 처리한다 (REQ-P02-04). 편집 중인 카드만
 // isEditing/editingValue가 바뀌므로 나머지 카드는 리렌더를 건너뛴다.
 const QuestionCard = memo(
@@ -84,7 +89,7 @@ const QuestionCard = memo(
     q, isChecked, isEditing, editingValue,
     onToggleCheck, onStartEdit, onCommitEdit, onCancelEdit, onEditingValueChange,
   }) {
-    const displayTitle = q.title || (q.is_manual ? "(수동 문항)" : `문항 ${q.question_num}`);
+    const displayTitle = questionDisplayName(q);
     const fp = q.is_false_positive;
     return (
       <Paper
@@ -135,7 +140,13 @@ const QuestionCard = memo(
                 if (e.key === "Escape") onCancelEdit();
               }}
               onBlur={() => onCommitEdit(q)}
-              slotProps={{ input: { sx: { fontSize: 12 } } }}
+              slotProps={{
+                input: {
+                  sx: { fontSize: 12 },
+                  // 고정 접두어 — 수정 대상은 그 뒤만 (REQ-C10)
+                  startAdornment: <InputAdornment position="start" sx={{ mr: 0.5, "& p": { fontSize: 12 } }}>{QUESTION_PREFIX}</InputAdornment>,
+                },
+              }}
             />
           ) : (
             <Typography
@@ -255,13 +266,14 @@ export default function QuestionAnalysisPanel({
   // ── 인라인 타이틀 편집 (REQ-12) ───────────────────────
   const startEdit = (q) => {
     setEditingId(q.question_id);
-    setEditingValue(q.title ?? (q.is_manual ? q.title : `문항 ${q.question_num}`));
+    setEditingValue(editStartValue(q));
   };
 
   const commitEdit = async (q) => {
     const newTitle = editingValue.trim();
     setEditingId(null);
-    if (!newTitle || newTitle === (q.title ?? "")) return;
+    // 보이는 그대로 저장하면 원문이 사용자 이름으로 굳는다 — 바뀌지 않았으면 저장하지 않는다 (REQ-C10)
+    if (!newTitle || newTitle === editStartValue(q)) return;
     try {
       if (q.is_manual) {
         await updateManualQuestionTitle(jobId, pageNum, q.manual_id, newTitle);
