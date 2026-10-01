@@ -60,13 +60,13 @@ beforeEach(() => {
 describe('그리드 열 수 (columns prop → data-columns)', () => {
   it('[D10-05] columns={1} → 그리드 컨테이너 data-columns="1"', async () => {
     const { container } = renderPanel({ columns: 1 });
-    await screen.findByText(LONG_TITLE);
+    await screen.findByText(`문항 ${LONG_TITLE}`);
     expect(gridContainer(container)).toHaveAttribute('data-columns', '1');
   });
 
   it('[D10-06] columns={2} → 그리드 컨테이너 data-columns="2"', async () => {
     const { container } = renderPanel({ columns: 2 });
-    await screen.findByText(LONG_TITLE);
+    await screen.findByText(`문항 ${LONG_TITLE}`);
     expect(gridContainer(container)).toHaveAttribute('data-columns', '2');
   });
 });
@@ -76,7 +76,7 @@ describe('카드 제목 툴팁', () => {
     // 현행은 오탐 문항만 제목을 보여 주고 나머지는 "더블클릭하여 타이틀 수정" 고정이라
     // 말줄임된 긴 제목을 읽을 방법이 없었다. 2열(카드 ~192px)에서 매 긴 제목마다 드러난다.
     renderPanel({ columns: 2 });
-    const title = await screen.findByText(LONG_TITLE);
+    const title = await screen.findByText(`문항 ${LONG_TITLE}`);
     expect(title.getAttribute('title')).toContain(LONG_TITLE);
   });
 });

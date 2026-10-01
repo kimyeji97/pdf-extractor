@@ -22,6 +22,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import IconButton from "@mui/material/IconButton";
@@ -608,6 +609,7 @@ export default function AnalysisWorkPage() {
                 size="small" fullWidth autoFocus
                 placeholder="문항 타이틀 (필수)"
                 value={manualTitle}
+                slotProps={{ input: { startAdornment: <InputAdornment position="start">문항</InputAdornment> } }}
                 onChange={(e) => setManualTitle(e.target.value)}
                 error={!!manualTitleError}
                 helperText={manualTitleError}

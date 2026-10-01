@@ -57,7 +57,7 @@ beforeEach(() => {
 describe('같은 번호 공존 문항의 k', () => {
   it('[B20-26] 아래 문항(k=1) 제목 수정은 updateQuestionTitle 에 k=1 을 넘긴다', async () => {
     renderPanel();
-    fireEvent.doubleClick(await screen.findByText('아래제목'));
+    fireEvent.doubleClick(await screen.findByText('문항 아래제목'));  // 카드 제목은 고정 접두어 "문항"이 붙는다(C10)
     const input = await screen.findByDisplayValue('아래제목');
     fireEvent.change(input, { target: { value: '새제목' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -66,7 +66,7 @@ describe('같은 번호 공존 문항의 k', () => {
 
   it('[B20-27] 아래 문항만 체크해 삭제하면 bulkDeleteQuestions 에 [{num:1,k:1}] 을 넘긴다', async () => {
     renderPanel();
-    fireEvent.click(within(rowOf(await screen.findByText('아래제목'))).getByRole('checkbox'));
+    fireEvent.click(within(rowOf(await screen.findByText('문항 아래제목'))).getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /삭제/ }));
     expect(bulkDeleteQuestions).toHaveBeenCalledWith('job-a', 0, [{ num: 1, k: 1 }], []);
   });
