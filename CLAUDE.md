@@ -249,7 +249,7 @@ local_storage/
 - ECR: `pdf-extractor-backend`
 - ECS Cluster: `pdf-extractor-cluster`
 - ECS Service: `pdf-extractor-backend-dev-svc`
-- Task: Fargate 0.5 vCPU / 1GB Memory
+- Task: Fargate **2 vCPU / 4GB** (rev 8, 2026-10-01 상향 — 0.5 vCPU / 1GB는 오픈 기준 사용량 피크에서 OOM, [perf-infra-capacity.md](docs/infra/perf-infra-capacity.md))
 - Secrets Manager: `pdf-extractor/dev` (R2 자격증명 + 터널 토큰)
 - CloudWatch: `/ecs/pdf-extractor-dev` (30일 보존)
 
@@ -364,8 +364,8 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 ### 배포 상태 (세션마다 필요한 사실)
 
 ⚠️ **dev 백엔드는 2026-10-01 main `b6edc0f`(C10 포함, 이미지 태그 `c10-b6edc0f`)로 배포됐다 — 현재 `desired 0`(2026-10-01 확인 끝 후 내림)**
-(켜면 ~$23/월, 꺼 두면 ~$2/월 — 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 4**(`:latest` +
-`JWT_SECRET_KEY` secret). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
+(**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
+`JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
 ⚠️ **dev 프론트는 2026-10-01 main `b6edc0f` 빌드(C10까지)다** — 실체는 Pages가 아니라

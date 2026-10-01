@@ -107,7 +107,7 @@
 | REQ-B11 | 알림 기준선이 피드 도착 전에 잡힘 — 새로고침마다 직전 알림 토스트 | [plan](plans/PLAN-B11-notification-baseline-before-feed.md) | 2026-08-28 | ✅ **Phase 1~2 완료**(`useNotificationsReady` + 세 소비처 게이트, 10/10 · dev Worker 배포 후 새로고침 5회 토스트 0건 · 계약 #27 정정) — PR #3 **main 머지 완료(2026-08-28, `3d35d65`)**. 미결 1건(ready 동승 알림)은 후속 |
 | REQ-C09 | 알림 경로 후속 묶음 (실패 문구 서버 `message` 단일 출처 · `useNotificationRefresh` `kind` 필터 · 계약 #26 딤 회귀 케이스 · SSE `: connected` 선발송) | [plan](plans/PLAN-C09-notification-followups.md) | 2026-08-28 | ✅ Phase 1·2 완료 (10/10 · 백엔드 34/34 · 프론트 61/61 · dev 실측 warm `onopen` 0.2~0.8s) — PR #4 **main 머지 완료(2026-08-28, `91a911a`)**. Phase 1 육안 1건(실패 배너 문구) 미확인 |
 | REQ-P05 | 알림 전달 지연 (감지 완료 알림을 프리워밍 앞으로 · 피드 GET 병렬화) | [plan](plans/PLAN-P05-notification-latency.md) | 2026-08-28 | ✅ Phase 1~3 완료 (10/10 · 백엔드 44/44 · 프론트 61/61) — 발행 전 대기 **8.1s 단축**, 피드 GET 3.79s → 1.43s. PR #5 **main 머지(2026-08-28, `6fba551`)** |
-| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 최소 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | — | 🟡 **Phase 1·2 측정 완료**(원인 넷: 터널·앱 데이터 비례 API·분석 CPU·1GB OOM / 최소 1 vCPU·2GB, 여유 2 vCPU·4GB, 사양만으로는 목표 불가). Phase 3 조치 방향 미결 |
+| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API p90 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | — | 🟡 **Phase 1~4 완료**(측정 · 최소 사양 산정 · 터널 프로토콜 비교 = 차이 없음 · dev 2 vCPU/4GB rev 8 반영·피크 ② 생존). 남은 것: Phase 5 현황판 계열 API 개선(코드, 방식 미결) · Phase 6 최종 측정 |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | 2026-08-27 | ✅ **Phase 0~3 완료** — SSE, 폴링 0건, dev 실측 전송 0.3~1.3s·숨김 탭 즉시 · PR #2 main 머지(`d176596`) · 후속: 콜드 스타트 기준, `: connected` 선발송, 발행 전 서버 작업 ~6s |
@@ -246,6 +246,20 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-01
+
+### REQ-P06 — Phase 3·4: 터널 프로토콜은 무관, dev를 2 vCPU / 4GB로
+
+Phase 1·2 뒤 조치 범위·순서를 정했다(사용자 결정): **터널 → 사양 → 현황판 API 셋 다**, 사양 2 vCPU / 4GB, 판정은 **p90 < 1s**, 측정 데이터는 정리하지 않는다
+(데이터 비례 API엔 실사용에 가까운 양). 감지 프로세스 분리·동시 한도 축소는 택하지 않았다 — 2 vCPU에서 분석 CPU 포화가 풀려서.
+
+**Phase 3 — 프로토콜 차이 없음, 튐은 재현 안 됨.** 같은 0.5 vCPU에서 cloudflared만 바꾼 측정 리비전(rev 7 `--protocol http2`)과 rev 4(QUIC)를 비교:
+터널 경유 `/health` 100회 QUIC 0.21·0.30·0.38s / HTTP/2 0.20·0.29·0.42s(중앙값·p90·최대). 실제 연결 프로토콜은 cloudflared 로그 `Registered tunnel connection … protocol=`로 확인.
+오후 16:40~16:50의 p90 5.1s·최대 14s는 18시대에 **재현되지 않았다** — 간헐적이고 프로토콜과 무관, 원인 미상. QUIC 유지. 터널 고정 비용 ≈ 0.2s.
+간헐 튐은 Phase 6을 시간대를 나눠 재서 다시 보고, 재현될 때만 "다른 경로(ALB 등)" 미결을 연다. 지금 1s를 넘는 건 거의 앱 쪽이라 Phase 5에 표지 목록(`covers`, p90 1.2s)을 더했다.
+
+**Phase 4 — rev 8(2 vCPU / 4GB, QUIC) 반영, 피크 ② 생존**(CPU 최대 56%·메모리 28%·재시작 없음). rev 4 deregister → **최신 활성 리비전 = rev 8**(콘솔 기본값 함정 없음, rev 1·2는 옛것).
+dev는 **쓸 때만 켠다**(상시면 약 $85/월 추정). 피크 ② 응답 시간은 못 모았다 — 보안 그룹이 닫힌 채 측정 스크립트가 앱 직접 경로를 먼저 시도해 연결 타임아웃에 묶였고 그 사이 분석이 끝났다.
+⚠️ 측정 스크립트에서 직접 경로는 보안 그룹을 열었을 때만 켜야 한다.
 
 ### REQ-P06 — 계획서 + Phase 1·2 dev 실측: 원인은 넷, 사양만으로는 1s 못 맞춘다
 
