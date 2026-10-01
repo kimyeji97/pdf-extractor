@@ -617,6 +617,7 @@ class QuestionInfo(BaseModel):
     col: int
     # v3 신규 필드 ─────────────────────────────────────────────
     title: Optional[str] = None             # 사용자 지정 타이틀 (None이면 "문항 N" 표시)
+    source_text: Optional[str] = None       # 감지 원문 (REQ-C10, 수동·옛 캐시는 None)
     is_false_positive: bool = False          # 오탐지 의심 여부 (REQ-15)
     is_manual: bool = False                  # 수동 추가 문항 여부 (REQ-13)
 
@@ -686,6 +687,7 @@ def list_all_questions(job_id: str, current_user: dict = Depends(auth_service.ge
                 bbox=BBox(x0=b.col_x0, y0=b.y_top, x1=b.col_x1, y1=b.y_bottom),
                 col=b.col,
                 title=b.title,
+                source_text=b.source_text,
                 is_false_positive=b.is_false_positive,
                 is_manual=False,
             )
@@ -755,6 +757,7 @@ def list_questions(
             bbox=BBox(x0=b.col_x0, y0=b.y_top, x1=b.col_x1, y1=b.y_bottom),
             col=b.col,
             title=b.title,
+            source_text=b.source_text,
             is_false_positive=b.is_false_positive,
             is_manual=False,
         )
