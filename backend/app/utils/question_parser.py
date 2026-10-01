@@ -857,41 +857,56 @@ def _parse_candidate(text: str) -> Optional[tuple[str, int, str]]:
 
 # ── 원문 (REQ-C10) ───────────────────────────────────────
 
-# 원문 접두어로 인정하는 같은 줄 바로 앞 단어. 감지의 _PREFIX_KEYWORDS 와 공유하지 않는다 —
+# 원문 접두어로 인정하는 단어(같은 줄 바로 왼쪽 또는 번호 바로 위). 감지의 _PREFIX_KEYWORDS 와 공유하지 않는다 —
 # "유형"이 단어 병합에 들어가면 "유형01" 가상 단어가 생겨 B18 오탐 판정이 바뀐다(계약 #11)
 _SOURCE_PREFIX_KEYWORDS: frozenset[str] = frozenset({"유제", "예제", "확인예제", "문제", "유형"})
-_SAME_LINE_PT = 5  # _merge_prefix_keyword_pairs 와 같은 같은 줄 기준
+_SAME_LINE_PT = 5   # _merge_prefix_keyword_pairs 와 같은 같은 줄 기준
+_ABOVE_PT = 20      # 번호 바로 위 접두어의 top 간격 상한 — 내신마스터 "유형"은 번호 위 9.6pt
+
+
+def _source_prefix(num: dict, words: list[dict]) -> Optional[str]:
+    """번호 단어의 키워드 접두어. 같은 줄 바로 왼쪽이 우선, 없으면 x 가 겹치는 바로 위 단어."""
+    left = [w for w in words if abs(w["top"] - num["top"]) <= _SAME_LINE_PT and w["x1"] <= num["x0"]]
+    if left:
+        prev = max(left, key=lambda w: w["x1"])["text"].strip()
+        if prev in _SOURCE_PREFIX_KEYWORDS:
+            return prev
+    above = [
+        w for w in words
+        if _SAME_LINE_PT < num["top"] - w["top"] <= _ABOVE_PT
+        and w["x0"] < num["x1"] and num["x0"] < w["x1"]
+    ]
+    if above:
+        top = max(above, key=lambda w: w["top"])["text"].strip()
+        if top in _SOURCE_PREFIX_KEYWORDS:
+            return top
+    return None
 
 
 def _fill_source_text(
     boundaries: list[QuestionBoundary],
     pages_data: list[tuple[float, float, list[dict]]],
 ) -> None:
-    """경계마다 번호 글자 + 같은 줄 키워드 접두어를 source_text 로 채운다. 감지 결과는 건드리지 않는다.
+    """경계마다 번호 글자 + 키워드 접두어(같은 줄 왼쪽 또는 바로 위)를 source_text 로 채운다. 감지 결과는 건드리지 않는다.
 
     보이지 않는 글자(size <= 1.0)는 감지와 같이 본다(계약 #35) — 숨은 접두어·번호가 원문에 섞이지 않게.
     """
     for b in boundaries:
         words = [
             w for w in pages_data[b.page_index][2]
-            if w.get("size", 0) > 1.0
-            and abs(w["top"] - b.y_top) <= _SAME_LINE_PT
-            and b.col_x0 <= w["x0"] < b.col_x1
+            if w.get("size", 0) > 1.0 and b.col_x0 <= w["x0"] < b.col_x1
         ]
         nums = [
             w for w in words
-            if (c := _parse_candidate(w["text"])) is not None and c[1] == b.number
+            if abs(w["top"] - b.y_top) <= _SAME_LINE_PT
+            and (c := _parse_candidate(w["text"])) is not None and c[1] == b.number
         ]
         if not nums:
             continue
         num = min(nums, key=lambda w: (abs(w["top"] - b.y_top), w["x0"]))
         text = num["text"].strip()
-        left = [w for w in words if w["x1"] <= num["x0"]]
-        if left:
-            prev = max(left, key=lambda w: w["x1"])["text"].strip()
-            if prev in _SOURCE_PREFIX_KEYWORDS:
-                text = f"{prev} {text}"
-        b.source_text = text
+        prefix = _source_prefix(num, words)
+        b.source_text = f"{prefix} {text}" if prefix else text
 
 
 # ── v0.2: 여백 패턴 ──────────────────────────────────────────
