@@ -237,6 +237,7 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 | 관리 서버 API 분리 (Lambda 검토) | [plan-infra-backend-api.md](infra/plan-infra-backend-api.md) | ❌ ADR-0001로 ECS 채택 |
 | 추출 서버 분리 (Lambda 검토) | [plan-infra-backend-extractor.md](infra/plan-infra-backend-extractor.md) | ❌ ADR-0001로 ECS 채택 |
 | Java 전환 + DynamoDB 마이그레이션 | [plan-infra-backend-migration.md](infra/plan-infra-backend-migration.md) | ❌ 향후 |
+| 성능 측정 · 운영 사양 산정 (REQ-P06) | [perf-infra-capacity.md](infra/perf-infra-capacity.md) | ✅ 2026-10-01 측정 — 최소 1 vCPU/2GB · 권장 2 vCPU/4GB, 현 dev 0.5/1GB는 피크에서 OOM |
 | prod 환경 | (추후 결정) | ❌ 미착수 |
 | IaC / CI·CD 자동화 | — | ❌ 미착수 |
 
