@@ -1,7 +1,7 @@
 /**
  * REQ-B26 Phase 1 — 문항 삭제 지연 + [되돌리기] 복원
  *
- * 검증 계약: docs/plans/PLAN-B26-delete-undo-restore.md `## 검증 계약` (B26-01~09)
+ * 검증 계약: docs/plans/PLAN-B26-delete-undo-restore.md `## 검증 계약` (B26-01~11 · 13 · 15~18)
  *
  * 삭제는 화면에서 먼저 숨기고 4초 토스트가 닫힐 때 서버에 보낸다. 되돌리면 숨긴 것만 되살린다(서버 요청 없음).
  * 무대는 `QuestionAnalysisPanel.test.jsx` 와 같다(`ThemeProvider` 아래 렌더, 계약 #25).
@@ -11,6 +11,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import QuestionAnalysisPanel from 'components/QuestionAnalysisPanel';
+// flushPendingDeletes 는 재작업에서 생기는 export — 없을 때 파일 전체가 수집 단계에서 죽지 않게 네임스페이스로 읽는다
+import * as panelModule from 'components/QuestionAnalysisPanel';
 
 import { bulkDeleteQuestions, getPageQuestions } from 'api/client';
 import { ThemeProvider } from 'theme/theme-provider';
@@ -179,5 +181,109 @@ describe('삭제 지연 + 되돌리기 (B26)', () => {
     await elapse(4000);
 
     expect(bulkDeleteQuestions.mock.calls).toEqual([['job-a', 1, [{ num: 3, k: 1 }], ['m9']]]);
+  });
+
+});
+
+/** 다음 bulkDeleteQuestions 를 붙잡아 둔다 — release() 로 서버 처리(대역)를 끝낸다 */
+const holdNextDelete = () => {
+  const base = bulkDeleteQuestions.getMockImplementation();
+  let release;
+  bulkDeleteQuestions.mockImplementationOnce((...args) =>
+    new Promise((resolve) => { release = () => resolve(base(...args)); }));
+  return () => act(async () => { release(); await Promise.resolve(); await Promise.resolve(); });
+};
+
+describe('삭제 지연 재작업 — /review (b)·(c) (B26)', () => {
+  it('[B26-10] 토스트 중 같은 쪽을 다시 읽으면 대기 삭제가 끝난 뒤에 읽어 지운 문항이 안 보인다', async () => {
+    const { rerender } = await mount([auto(1), auto(2)]);
+    const release = holdNextDelete();
+
+    checkItem(0);
+    await pressDelete();
+    await act(async () => { rerender(ui({ refreshTrigger: 1 })); });
+    await flush();
+    await release();
+    await flush();
+
+    expect(screen.queryAllByText(/자동1/).length).toBe(0);
+  });
+
+  it('[B26-11] 토스트 중 pagehide(탭 닫기·새로고침)면 대기 삭제를 1회 보낸다', async () => {
+    await mount([auto(1)]);
+
+    checkItem(0);
+    await pressDelete();
+    await act(async () => { window.dispatchEvent(new Event('pagehide')); });
+
+    expect(bulkDeleteQuestions).toHaveBeenCalledTimes(1);
+  });
+
+  it('[B26-13] flushPendingDeletes 는 대기 삭제를 1회 보내고 그 요청이 끝난 뒤에 끝난다', async () => {
+    await mount([auto(1)]);
+    const release = holdNextDelete();
+
+    checkItem(0);
+    await pressDelete();
+    let done = false;
+    let flushing;
+    await act(async () => { flushing = Promise.resolve(panelModule.flushPendingDeletes?.()).then(() => { done = true; }); });
+    const doneBefore = done;
+    await release();
+    await act(async () => { await flushing; });
+
+    expect({ calls: bulkDeleteQuestions.mock.calls.length, doneBefore, doneAfter: done })
+      .toEqual({ calls: 1, doneBefore: false, doneAfter: true });
+  });
+
+  it('[B26-15] 지연 삭제가 실패하면 "삭제하지 못했습니다"를 보여 준다', async () => {
+    await mount([auto(1)]);
+    bulkDeleteQuestions.mockRejectedValueOnce(new Error('500'));
+
+    checkItem(0);
+    await pressDelete();
+    await elapse(4000);
+    await flush();
+
+    expect(screen.getByText(/삭제하지 못했습니다/)).toBeInTheDocument();
+  });
+
+  it('[B26-16] 실패한 삭제의 쪽을 보고 있으면 다시 읽어 서버에 남은 문항을 보여 준다', async () => {
+    await mount([auto(1)]);
+    bulkDeleteQuestions.mockRejectedValueOnce(new Error('500'));
+
+    checkItem(0);
+    await pressDelete();
+    await elapse(4000);
+    await flush();
+
+    expect(screen.queryAllByText(/자동1/).length).toBeGreaterThan(0);
+  });
+
+  it('[B26-17] 다른 쪽으로 옮긴 뒤 실패하면 원래 쪽을 다시 읽지 않는다', async () => {
+    const { rerender } = await mount([auto(1)]);
+    bulkDeleteQuestions.mockRejectedValueOnce(new Error('500'));
+
+    checkItem(0);
+    await pressDelete();
+    await act(async () => { rerender(ui({ pageNum: 2 })); });
+    await flush();
+    await flush();
+
+    expect(getPageQuestions.mock.calls.filter(([, page]) => page === 1).length).toBe(1);
+  });
+
+  it('[B26-18] 앞 삭제가 실패해도 뒤 삭제로 숨긴 문항은 계속 숨긴다', async () => {
+    await mount([auto(1), auto(2), auto(3)]);
+    bulkDeleteQuestions.mockRejectedValueOnce(new Error('500'));
+
+    checkItem(0); // 자동1
+    await pressDelete();
+    checkItem(0); // 자동2 — 앞 삭제(자동1)가 확정되며 실패
+    await pressDelete();
+    await flush();
+    await flush();
+
+    expect(screen.queryAllByText(/자동2/).length).toBe(0);
   });
 });

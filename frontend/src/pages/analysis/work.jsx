@@ -32,7 +32,7 @@ import Stack from "@mui/material/Stack";
 import { Icon } from "@iconify/react";
 
 import PageHeader from "components/PageHeader";
-import QuestionAnalysisPanel from "components/QuestionAnalysisPanel";
+import QuestionAnalysisPanel, { flushPendingDeletes } from "components/QuestionAnalysisPanel";
 import PdfPreviewPanel from "components/PdfPreviewPanel";
 import { WorkCanvas, CardRow, PanelCard, PanelCardHeader, CardResizeHandle } from "components/WorkCanvas";
 import { getPages, refreshJobQuestions, addManualQuestion, getAllQuestions } from "api/client";
@@ -198,6 +198,8 @@ export default function AnalysisWorkPage() {
     setRefreshing(true);
     setRefreshError("");
     try {
+      // 지연 삭제는 옛 경계의 (번호, k)로 지목한다 — 재감지보다 먼저 끝내야 새 경계의 다른 문항을 안 지운다 (REQ-B26)
+      await flushPendingDeletes();
       await refreshJobQuestions(jobId);
     } catch (e) {
       setRefreshError(e.message || "재감지 요청 실패");

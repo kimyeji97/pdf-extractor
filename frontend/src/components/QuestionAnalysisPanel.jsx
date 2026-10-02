@@ -191,6 +191,15 @@ const QuestionCard = memo(
     prev.editingValue === next.editingValue,
 );
 
+// 화면에 떠 있는 패널들의 "대기 삭제 확정" 함수 (REQ-B26). 재감지는 부모(work.jsx)에서 시작되므로,
+// 옛 경계의 (번호, k)로 지목한 지연 삭제가 새 경계에 적용되지 않게 부모가 먼저 이걸 기다린다.
+const pendingFlushers = new Set();
+
+/** 대기 중 삭제를 지금 보내고, 진행 중인 것까지 끝나면 끝난다 (재감지 전에 부른다) */
+export function flushPendingDeletes() {
+  return Promise.all([...pendingFlushers].map((flush) => flush())).then(() => undefined);
+}
+
 export default function QuestionAnalysisPanel({
   jobId,
   pageNum,
@@ -215,7 +224,10 @@ export default function QuestionAnalysisPanel({
   const undoTimerRef                = useRef(null);
   // 서버에 아직 안 보낸 삭제 (REQ-B26) — 토스트가 닫히거나·다시 삭제하거나·쪽을 옮기거나·화면을 떠날 때 보낸다
   const pendingDeleteRef            = useRef(null);
+  const inflightDeleteRef           = useRef(Promise.resolve()); // 보낸 삭제가 끝날 때까지 — 목록 읽기는 그 뒤에
   const fetchQuestionsRef           = useRef(null);
+  const viewRef                     = useRef({ jobId, pageNum, mounted: true });
+  viewRef.current = { ...viewRef.current, jobId, pageNum };
 
   // ── 문항 목록 로드 ─────────────────────────────────────
   const fetchQuestions = useCallback(async () => {
@@ -224,8 +236,12 @@ export default function QuestionAnalysisPanel({
     setError("");
     setCheckedIds(new Set());
     try {
+      // 방금 보낸 삭제보다 먼저 읽으면 지운 문항이 되살아나 보인다 (REQ-B26)
+      await inflightDeleteRef.current;
       const data = await getPageQuestions(jobId, pageNum);
-      setQuestions(data.questions || []);
+      // 아직 안 보낸 삭제로 숨긴 문항은 계속 숨긴다
+      const hidden = pendingDeleteRef.current?.ids ?? new Set();
+      setQuestions((data.questions || []).filter((q) => !hidden.has(q.question_id)));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -235,15 +251,28 @@ export default function QuestionAnalysisPanel({
 
   fetchQuestionsRef.current = fetchQuestions;
 
-  /** 대기 중 삭제를 서버에 보낸다. 쪽·job 은 삭제한 시점 값이다(쪽을 옮긴 뒤에도 원래 쪽을 지운다) */
+  /**
+   * 대기 중 삭제를 서버에 보내고 그 요청이 끝나는 Promise 를 돌려준다(없으면 진행 중인 것).
+   * 쪽·job 은 삭제한 시점 값이다(쪽을 옮긴 뒤에도 원래 쪽을 지운다).
+   */
   const commitPendingDelete = useCallback(() => {
     const p = pendingDeleteRef.current;
-    if (!p) return;
+    if (!p) return inflightDeleteRef.current;
     pendingDeleteRef.current = null;
     // 자동/수동을 분리해 벌크 삭제 1회 호출 (단건 동시 호출의 경쟁 상태 회피 — REQ-B06)
-    bulkDeleteQuestions(p.jobId, p.pageNum, p.autoRefs, p.manualIds)
-      // 실패 시 서버 상태로 목록 복원 (종전 동작 유지)
-      .catch(() => fetchQuestionsRef.current?.());
+    const request = bulkDeleteQuestions(p.jobId, p.pageNum, p.autoRefs, p.manualIds);
+    // 목록 읽기가 기다리는 건 요청 자체다 — 실패 처리(아래, 다시 읽기 포함)까지 기다리면 서로를 기다려 멈춘다
+    inflightDeleteRef.current = request.then(() => undefined, () => undefined);
+    return request.then(
+      () => undefined,
+      async () => {
+        const view = viewRef.current;
+        if (!view.mounted) return;
+        // 그 쪽을 보고 있을 때만 서버 상태로 다시 읽는다 — 다른 대기 삭제의 숨김은 fetchQuestions 가 유지
+        if (view.jobId === p.jobId && view.pageNum === p.pageNum) await fetchQuestionsRef.current?.();
+        setError("삭제하지 못했습니다");
+      },
+    );
   }, []);
 
   useEffect(() => {
@@ -251,9 +280,22 @@ export default function QuestionAnalysisPanel({
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
       setUndoToast(null);
-      commitPendingDelete(); // 쪽 이동·화면 이탈에도 대기 중 삭제가 사라지지 않게
+      commitPendingDelete(); // 쪽 이동·다시 읽기·화면 이탈에도 대기 중 삭제가 사라지지 않게
     };
   }, [fetchQuestions, refreshTrigger, commitPendingDelete]);
+
+  // 탭 닫기·새로고침엔 React 정리가 안 돈다 — pagehide 에 보낸다(요청은 keepalive) · 재감지 전 확정 통로 등록
+  useEffect(() => {
+    viewRef.current.mounted = true;
+    const onPageHide = () => { commitPendingDelete(); };
+    window.addEventListener("pagehide", onPageHide);
+    pendingFlushers.add(commitPendingDelete);
+    return () => {
+      viewRef.current.mounted = false;
+      window.removeEventListener("pagehide", onPageHide);
+      pendingFlushers.delete(commitPendingDelete);
+    };
+  }, [commitPendingDelete]);
 
   // ── 체크박스 토글 ──────────────────────────────────────
   const toggleCheck = (id) => {
@@ -334,6 +376,7 @@ export default function QuestionAnalysisPanel({
     const pending = {
       jobId,
       pageNum,
+      ids: deletedIds,
       autoRefs: deletedItems.filter((q) => !q.is_manual).map((q) => ({ num: q.question_num, k: q.k ?? 0 })),
       manualIds: deletedItems.filter((q) => q.is_manual).map((q) => q.manual_id),
     };
