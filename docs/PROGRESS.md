@@ -136,6 +136,7 @@
 | REQ-F14 | 현황판 개선 + 시스템 전체 뱃지 색 — 감지 상태 SSE `status` 이벤트 · 목록·현황판 함께 배경 재조회 · `utils/badges` 단일 정의 · 상세 영역 닫기·목록 우측 | [plan](plans/PLAN-F14-stats-board-and-badges.md) | 2026-09-30 | ✅ **완료**(F14-01~26 · PR #26 `f18c495` · dev 확인) |
 | REQ-F15 | 문제집 이름·파일명 표시 — 감지 알림 제목 문제집 이름 우선 · 목록 카드·작업 화면 헤더에 파일명 병기 | [plan](plans/PLAN-F15-workbook-name-and-filename.md) | 2026-09-30 | ✅ **완료**(F15-01~11 · PR #26 `f18c495` · dev 확인) |
 | REQ-C10 | 감지 문항 이름을 원문으로 표시("문항 유형 01" — 고정 접두어 "문항" + 사용자 이름 \|\| 원문 \|\| 번호) | [plan](plans/PLAN-C10-question-source-title.md) | 2026-10-01 | ✅ **Phase 1~3 완료**(백엔드 감지 원문 `source_text` + 조회 API · 프론트 `utils/questionName` 단일 표시 이름·입력란 고정 접두어, 케이스 30/30 · 백엔드 317 · 프론트 273 · 기출 4종·테스트02 경계 불변 실측). PR #27 main 머지 `b6edc0f`, dev 배포 `c10-b6edc0f` 후 사용자 육안 확인. 원문은 재감지한 파일부터 |
+| REQ-B27 | 알림 사용자별 분리 + 알림별 읽음 — 알림 API 3종 무인증·전 사용자 알림 노출, 전역 읽음 커서 | [plan](plans/PLAN-B27-notification-per-user.md) | — | 🟡 **Phase 1·2 코드 완료**(케이스 35/35 · 백엔드 374/374·프론트 290/290 · 리뷰 게이트 통과 `206af9b`). Phase 2 완료 기준 "dev에서 계정 둘로 확인" 남음 — PR·배포(백엔드+프론트 동반) 후 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -212,6 +213,10 @@
 |-----|--------|------|------|:----:|
 | REQ-28 | 공유 기능 (분석 파일·생성 문제집을 계정에 공유) | [TODO](TODO.md) | 대 — REQ-27 선행 | ⏸ 보류 |
 | REQ-C11 | "유제"(보이는 번호 없는 하위 문항) 감지 — HWP 출력 기본문제 PDF | [TODO §8](TODO.md) · B20에서 분리 | — | ❌ **기각(2026-10-01)** — 2026-10-06 오픈 후 실사용 케이스를 보고 넣을지 다시 정한다. 그때 새 번호로(번호 재사용 안 함) |
+| REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 | [plan](plans/PLAN-B25-stats-page-jump.md) · 2026-10-02 dev 확인 | — | 📝 계획서만 |
+| REQ-B26 | 문항 삭제 [되돌리기]가 복원하지 않음 | [plan](plans/PLAN-B26-delete-undo-restore.md) · 2026-10-02 dev 확인 | — | 📝 계획서만 |
+| REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) · 2026-10-02 dev 확인 | — | 📝 계획서만 |
+| REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." | [plan](plans/PLAN-F17-source-label-format.md) · 2026-10-02 dev 확인 | — | 📝 계획서만 |
 
 **D10은 REQ-D01("문항 이미지 대형화")과 상충 소지가 있었다.** D01이 이미지를 키운 요구였고 D10은
 "과도하게 커지면 너비 조절 의미가 사라진다"는 반대 방향이다. **2026-09-03 계획서 배경 절에
@@ -247,6 +252,31 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-02
+
+### REQ-B27 — 알림 사용자별 분리: 코드 완료, 리뷰 세 바퀴 (dev 계정 둘 확인 남음)
+
+- 출처: 같은 날 dev 전체 확인 중 사용자 요청 2건 + B24가 남긴 "알림 피드 사용자 구분 확인 안 함". 같은 확인에서 **B25·B26·F16·F17** 계획서도 나왔다(전부 미착수)
+- **소유자는 알림 본문이 아니라 job 상태의 `owner_id`로 판정** — 본문에 넣으면 거를 때 파일을 다 열어 F09-09(평상시 GET 0회)가 깨진다. 읽음 기록은 `notification_reads/{user_id}.json` — 계획서의 `notifications/read/…`에서 바꿨다(그 아래 `.json`은 알림 키로 세어진다). 옛 전역 커서는 이전 없이 버림(계획서 결정) → **배포 직후 모든 사용자 뱃지가 30일치 전부 미확인**으로 보인다
+- F09-41·42·47(벨 열기 = 전체 읽음)은 결정이 바뀌어 폐기 → B27-19·21·22
+- **`/review`가 세 바퀴 돌았다** — 리뷰 (b)를 고칠 때마다 수정 코드가 새 (b)를 만들었다:
+  - ① 알림 Provider가 마운트 1회만 연결 → 로그인 화면에서 시작하면 401로 영영 죽고, 같은 탭 계정 전환 시 **앞 사람 알림이 남음**(B27의 존재 이유를 깨는 누수) · 만료 토큰 401로 스트림 CLOSED 뒤 복구 없음 → `useAuth()` 사용자에 연결 수명을 묶고 CLOSED면 갱신 후 재연결
+  - ② 그 재연결이 **5xx에도 갱신을 불러 `_tryRefresh`가 토큰을 지움 → 장애·배포 중 조용한 로그아웃** · 새 `EventSource`는 `Last-Event-ID`를 안 보내 끊긴 동안 알림 유실 → 토큰은 401·403에만 지움(apiFetch 경로도 같이 나음) · 재연결 뒤 `since`로 복구
+  - ③ 그 복구가 본 알림이 없으면 `since` 없이 나가 **30일치가 스낵바로 쏟아짐**(계약 #27 모양) → 연결 시작 시각을 `since`로
+- **함정**: `EventSource`는 HTTP 오류(401·5xx)면 CONNECTING이 아니라 **CLOSED로 끝나고 다시 안 붙는다** — 브라우저 자동 재연결은 네트워크 끊김에만. 그리고 수동으로 새로 열면 `Last-Event-ID`가 없다
+- 스낵바는 기준선을 한 번만 잡았다 → Provider가 ready를 내리면(로그아웃·전환) 다시 잡는다. 테스트가 안 덮는다
+- 테스트 무대: Provider가 `AuthProvider` 밖이면 로그인으로 취급(기존 알림 테스트 6파일 무수정)
+- 범위 밖: 프론트 전체 실행에서 간헐 "Unhandled Errors" — 테스트 종료 뒤 `@iconify/react` 타이머가 상태를 바꿈(`queued`·`statusRefresh`·`QuestionAnalysisPanel.sourceText` 등). 결과는 전부 통과
+- 리뷰: B27 @ cbaa557 — (b) 2 · (c) 0 · nit 8
+  - (b): [frontend/src/contexts/NotificationContext.jsx:130] 마운트 1회 연결 — 로그인 전 시작 시 영영 죽음 · 계정 전환 시 앞 사람 알림 잔존
+  - (b): [frontend/src/contexts/NotificationContext.jsx:92] 만료 토큰 401 CLOSED 뒤 복구 없음
+- 리뷰: B27 @ 147abde — (b) 2 · (c) 0 · nit 7
+  - (b): [frontend/src/contexts/NotificationContext.jsx:135] 5xx CLOSED에도 갱신 → 토큰 삭제(조용한 로그아웃)
+  - (b): [frontend/src/contexts/NotificationContext.jsx:155] 수동 재연결이 끊긴 동안 알림을 못 되찾음
+- 리뷰: B27 @ febcdfa — (b) 1 · (c) 0 · nit 2 · 이연 1
+  - (b): [frontend/src/contexts/NotificationContext.jsx:148] 본 알림 없을 때 since 없는 복구 → 30일치 유입
+  - 이연: [frontend/src/contexts/NotificationContext.jsx:144] 스트림 5xx로 닫히고 갱신도 5xx면 재연결을 포기 — 백오프 재시도 후속
+- 리뷰: B27 @ 206af9b — (b) 0 · (c) 0 · nit 1 · 이연 0
+- 남은 nit(이연 아님, 기록만): `_for`가 async 생성기 안에서 R2 동기 읽기 · 읽음 요청 본문 무타입(`{"ids":[[...]]}` 500) · `mark_read` 동시 쓰기 유실 · 옛 커서 코드 잔존 · 복구 since 클라 시계 의존
 
 ### REQ-P06 — Phase 7 최종 측정: 목표 달성 → P06 완료
 
