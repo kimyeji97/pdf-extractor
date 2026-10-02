@@ -32,6 +32,8 @@ class _FakePaginator:
         self._fake = fake
 
     def paginate(self, Bucket, Prefix):
+        if self._fake.gate is not None:   # P06-19: R2가 멈춘 상황 — gate가 열릴 때까지 대기
+            self._fake.gate.wait(5)
         self._fake.lists += 1
         keys = sorted(k for k in self._fake.objects if k.startswith(Prefix))
         yield {"Contents": [{"Key": k} for k in keys]}
@@ -44,6 +46,7 @@ class FakeR2:
         self.objects: dict[str, bytes] = {}
         self.gets = 0
         self.lists = 0
+        self.gate = None
 
     def reset_counts(self):
         self.gets = 0
@@ -155,8 +158,12 @@ def test_P06_07_delete_job이_list_jobs에서_바로_빠진다(s3):
     assert [j.job_id for j in mod.list_jobs()] == ["job-b"]
 
 
-def test_P06_08_외부에서_추가한_job은_60초_뒤_보인다(s3, monkeypatch):
-    """근거: PLAN § 결정 — "60초마다 R2 전체 재적재" """
+def test_P06_08_외부에서_추가한_job은_60초_뒤_재적재가_끝나면_보인다(s3, monkeypatch):
+    """근거: PLAN § 결정 — "60초마다 R2 전체 재적재"
+
+    재적재는 기존 목록을 주면서 뒤에서 돈다(P06-19) — 그래서 60초 뒤 첫 호출이 아니라
+    재적재가 끝난 뒤의 호출에서 보이는지 본다(최대 2초).
+    """
     mod, fake = s3
     now = [1000.0]
     monkeypatch.setattr(time, "monotonic", lambda: now[0])
@@ -165,9 +172,41 @@ def test_P06_08_외부에서_추가한_job은_60초_뒤_보인다(s3, monkeypatc
     _seed_status(mod, fake, "job-external")
 
     now[0] += 61
+    deadline = time.perf_counter() + 2
     ids = {j.job_id for j in mod.list_jobs()}
+    while ids != {"job-a", "job-external"} and time.perf_counter() < deadline:
+        time.sleep(0.02)
+        ids = {j.job_id for j in mod.list_jobs()}
 
     assert ids == {"job-a", "job-external"}
+
+
+def test_P06_19_재적재_중에도_기존_목록을_1초_안에_준다(s3, monkeypatch):
+    """근거: PLAN § 제약 — "재적재 중에는 기존 목록을 그대로 준다" """
+    import threading
+
+    mod, fake = s3
+    now = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    _seed_status(mod, fake, "job-a")
+    mod.list_jobs()
+    now[0] += 61
+    fake.gate = threading.Event()          # 재적재가 R2에서 멈춘다
+
+    results = []
+    threads = [
+        threading.Thread(target=lambda: results.append([j.job_id for j in mod.list_jobs()]), daemon=True)
+        for _ in range(2)
+    ]
+    try:
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(1)
+    finally:
+        fake.gate.set()
+
+    assert results == [["job-a"], ["job-a"]]
 
 
 # ── workbooks · covers · templates ────────────────────────

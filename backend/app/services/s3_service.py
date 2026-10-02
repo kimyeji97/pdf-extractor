@@ -170,13 +170,18 @@ def _get_json_many(keys: List[str]) -> List[Optional[dict]]:
 #
 # R2를 DB로 쓰므로 목록 1회 = LIST + 파일 수만큼 GET 이었다(현황판 6.4s). 접두사별로 key→JSON 을
 # 메모리에 두고, 이 모듈의 저장·삭제가 함께 갱신(write-through)하며, _RELOAD_SEC 마다 R2 전체를
-# 다시 읽어 외부 변경(같은 dev R2 에 붙은 로컬 uvicorn 등)을 맞춘다.
+# 다시 읽어 외부 변경(같은 dev R2 에 붙은 로컬 uvicorn 등)을 맞춘다. 재적재는 뒤에서 돌고 그동안
+# 조회는 기존 목록을 받는다 — 조회가 재적재를 기다리면 60초마다 요청 하나가 ~1s 를 문다(2026-10-02 실측).
+# 재적재 도중의 저장·삭제는 _pending 에 적어 두었다가 새 목록에 다시 얹는다(안 그러면 방금 쓴 것이 사라진다).
 # ponytail: 프로세스 1개(uvicorn 워커 1 · ECS 태스크 1) 전제 — 늘리면 다른 프로세스 쓰기가 최대
 # _RELOAD_SEC 늦게 보인다. 그때는 R2 인덱스 파일(PLAN-P06 기각안)을 다시 볼 것.
 
 _RELOAD_SEC = 60
-_cache_lock = threading.Lock()   # 재적재 중에는 쓰기도 기다린다 — 재적재가 방금 쓴 것을 덮지 않게
+_cache_lock = threading.Lock()
 _dir_cache: dict = {}            # prefix → (loaded_at, {key: data})
+_reloading: set = set()          # 지금 R2 에서 다시 읽고 있는 prefix
+_pending: dict = {}              # prefix → {key: data | _DELETED} — 재적재 도중의 쓰기
+_DELETED = object()
 _notif_bodies: dict = {}         # 알림 본문은 한 번 쓰면 안 바뀐다 → 상대 키별로 계속 둔다
 
 
@@ -191,35 +196,72 @@ def _list_keys(prefix: str, suffix: str = ".json") -> List[str]:
 
 
 def _cached_dir(prefix: str, read_bodies: bool = True) -> dict:
-    """prefix 아래 JSON 의 {key: data}. 반환값은 캐시 그 자체라 호출부는 읽기만 한다."""
-    with _cache_lock:
-        entry = _dir_cache.get(prefix)
-        if entry is None or time.monotonic() - entry[0] >= _RELOAD_SEC:
-            keys = _list_keys(prefix)
-            datas = _get_json_many(keys) if read_bodies else [None] * len(keys)
-            items = {k: d for k, d in zip(keys, datas) if d is not None or not read_bodies}
-            entry = (time.monotonic(), items)
-            _dir_cache[prefix] = entry
-        return entry[1]
+    """prefix 아래 JSON 의 {key: data}. 반환값은 캐시 그 자체라 호출부는 읽기만 한다.
 
-
-def _cache_put(prefix: str, key: str, data) -> None:
-    with _cache_lock:
-        entry = _dir_cache.get(prefix)
-        if entry is not None:   # 아직 안 읽은 접두사는 첫 목록 조회가 R2 에서 읽는다
-            entry[1][key] = data
-
-
-def _cache_drop(prefix: str, key: str) -> None:
+    처음 한 번만 R2 를 기다린다. 그 뒤로는 _RELOAD_SEC 가 지나도 기존 목록을 바로 주고 재적재는 뒤에서 돈다.
+    """
     with _cache_lock:
         entry = _dir_cache.get(prefix)
         if entry is not None:
-            entry[1].pop(key, None)
+            if time.monotonic() - entry[0] >= _RELOAD_SEC and prefix not in _reloading:
+                _reloading.add(prefix)
+                threading.Thread(target=_reload_quietly, args=(prefix, read_bodies), daemon=True).start()
+            return entry[1]
+        _reloading.add(prefix)
+    return _reload(prefix, read_bodies)
+
+
+def _reload(prefix: str, read_bodies: bool) -> dict:
+    try:
+        keys = _list_keys(prefix)
+        datas = _get_json_many(keys) if read_bodies else [None] * len(keys)
+        items = {k: d for k, d in zip(keys, datas) if d is not None or not read_bodies}
+    except Exception:
+        with _cache_lock:
+            _reloading.discard(prefix)
+            _pending.pop(prefix, None)
+        raise
+    with _cache_lock:
+        for key, data in _pending.pop(prefix, {}).items():
+            if data is _DELETED:
+                items.pop(key, None)
+            else:
+                items[key] = data
+        _dir_cache[prefix] = (time.monotonic(), items)
+        _reloading.discard(prefix)
+    return items
+
+
+def _reload_quietly(prefix: str, read_bodies: bool) -> None:
+    try:
+        _reload(prefix, read_bodies)
+    except Exception:  # noqa: BLE001 — 실패하면 기존 목록이 남고 다음 조회가 다시 시도한다
+        logger.exception("[R2] 목록 재적재 실패 | prefix=%s", prefix)
+
+
+def _cache_write(prefix: str, key: str, data) -> None:
+    with _cache_lock:
+        entry = _dir_cache.get(prefix)
+        if entry is not None:   # 아직 안 읽은 접두사는 첫 목록 조회가 R2 에서 읽는다
+            if data is _DELETED:
+                entry[1].pop(key, None)
+            else:
+                entry[1][key] = data
+        if prefix in _reloading:
+            _pending.setdefault(prefix, {})[key] = data
+
+
+def _cache_put(prefix: str, key: str, data) -> None:
+    _cache_write(prefix, key, data)
+
+
+def _cache_drop(prefix: str, key: str) -> None:
+    _cache_write(prefix, key, _DELETED)
 
 
 def _dir_values(prefix: str, sort_key: str) -> list:
     """캐시된 dict 들의 복사본을 sort_key 내림차순으로 — 호출부가 고쳐도 캐시는 안 바뀐다."""
-    items = [dict(d) for d in _cached_dir(prefix).values()]
+    items = [dict(d) for d in list(_cached_dir(prefix).values())]
     items.sort(key=lambda d: d.get(sort_key, ""), reverse=True)
     return items
 
@@ -603,11 +645,12 @@ def read_notification(relpath: str) -> Optional[dict]:
 def delete_notification_month(month: str) -> None:
     month_prefix = _key(NOTIFICATIONS_PREFIX, month) + "/"
     _delete_prefix(month_prefix)
+    notif_prefix = _key(NOTIFICATIONS_PREFIX) + "/"
     with _cache_lock:
-        entry = _dir_cache.get(_key(NOTIFICATIONS_PREFIX) + "/")
-        if entry is not None:
-            for k in [k for k in entry[1] if k.startswith(month_prefix)]:
-                del entry[1][k]
+        entry = _dir_cache.get(notif_prefix)
+        stale = [k for k in entry[1] if k.startswith(month_prefix)] if entry is not None else []
+    for k in stale:
+        _cache_drop(notif_prefix, k)
     for rel in [r for r in _notif_bodies if r.startswith(month + "/")]:
         _notif_bodies.pop(rel, None)
 

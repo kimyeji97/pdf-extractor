@@ -9,7 +9,12 @@
 `total_pages`는 이 함수가 다루지 않는다 — 감지 완료 시 1회만 정해지고 문항 편집으로
 바뀌지 않으므로(PDF 페이지 수 자체) 각 호출부가 감지 완료 지점에서 직접 설정한다.
 """
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+PAGE_LIST_KEYS = ("false_positive_pages", "manual_pages", "undetected_pages")
 
 
 def compute_question_stats(
@@ -49,3 +54,34 @@ def compute_question_stats(
         "manual_pages": sorted({m.get("page_num") for m in manual_list}),
         "undetected_pages": undetected_pages,
     }
+
+
+def backfill_page_lists() -> int:
+    """
+    쪽 목록이 없는 옛 SOURCE 상태 파일에 쪽 목록 3종을 채운다 (REQ-P06 — 서버 시작 시 1회).
+
+    이미 있는 job은 건너뛴다(재실행 안전). 계산은 `/api/stats/detail`의 옛 경로와 같은 원천
+    (경계·수동 파일)이다. 쓰기 직전에 최신 상태를 다시 읽어 **쪽 목록만** 얹는다 — 목록을 읽은 뒤
+    감지·편집이 쓴 값을 덮지 않으려고. 채운 job 수를 반환한다.
+    """
+    from app.models.schemas import JobType
+    from app.services import storage
+
+    filled = 0
+    for snapshot in storage.list_jobs():
+        if snapshot.job_type != JobType.SOURCE or snapshot.false_positive_pages is not None:
+            continue
+        stats = compute_question_stats(
+            storage.get_boundaries_cache(snapshot.job_id) or [],
+            storage.get_manual_questions(snapshot.job_id),
+            snapshot.total_pages,
+        )
+        latest = storage.get_status(snapshot.job_id)
+        if latest is None or latest.false_positive_pages is not None:
+            continue
+        for key in PAGE_LIST_KEYS:
+            setattr(latest, key, stats[key])
+        storage.put_status(latest)
+        filled += 1
+    logger.info("[stats] 쪽 목록 채우기 완료 | filled=%d", filled)
+    return filled

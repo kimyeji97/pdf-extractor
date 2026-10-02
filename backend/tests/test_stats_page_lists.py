@@ -108,3 +108,97 @@ def test_P06_04_수동_문항_추가가_상태_파일_manual_pages를_갱신(aut
 
     assert res.status_code == 201
     assert storage.get_status("job-p06-04").manual_pages == [0, 2]
+
+
+# ── 옛 상태 파일 채우기 (서버 시작 시 1회) ────────────────
+#
+# 대상: `question_stats_service.backfill_page_lists()` — 목록은 `storage.list_jobs()`로 얻고,
+# 서버 시작(lifespan)이 이 함수를 **모듈 속성으로** 부른다(P06-18이 바꿔 끼운다).
+
+def _old_job(make_job, job_id, total_pages):
+    """쪽 목록이 없는 옛 상태 파일."""
+    from app.services import storage
+
+    job = make_job(job_id)
+    job.total_pages = total_pages
+    job.false_positive_count = 1
+    job.manual_count = 1
+    storage.put_status(job)
+    return job
+
+
+def test_P06_15_시작_채우기가_옛_job에_쪽_목록_3종을_채운다(make_job):
+    """근거: PLAN § 결정 — "쪽 목록이 없는 SOURCE job만 경계·수동 파일을 읽어 쪽 목록을 저장" """
+    from app.services import question_stats_service, storage
+
+    _old_job(make_job, "job-p06-15", total_pages=4)
+    storage.save_boundaries_cache("job-p06-15", [
+        _boundary(0, 1), _boundary(1, 2, is_false_positive=True),
+    ])
+    storage.save_manual_questions("job-p06-15", [_manual(2, "m1")])
+
+    question_stats_service.backfill_page_lists()
+
+    job = storage.get_status("job-p06-15")
+    assert (job.false_positive_pages, job.manual_pages, job.undetected_pages) == ([1], [2], [3])
+
+
+def test_P06_16_이미_쪽_목록이_있는_job은_건너뛴다(make_job):
+    """근거: PLAN § 결정 — "이미 있는 job은 건너뛴다(재실행 안전)" """
+    from app.services import question_stats_service, storage
+
+    job = _old_job(make_job, "job-p06-16", total_pages=4)
+    job.false_positive_pages, job.manual_pages, job.undetected_pages = [9], [8], [7]
+    storage.put_status(job)
+    storage.save_boundaries_cache("job-p06-16", [_boundary(1, 2, is_false_positive=True)])
+
+    question_stats_service.backfill_page_lists()
+
+    job = storage.get_status("job-p06-16")
+    assert (job.false_positive_pages, job.manual_pages, job.undetected_pages) == ([9], [8], [7])
+
+
+def test_P06_17_채우는_사이_바뀐_상태를_덮지_않는다(make_job, monkeypatch):
+    """근거: PLAN § 제약 — "쓰기 직전에 최신 상태를 다시 읽어 쪽 목록만 얹는다" """
+    from app.services import question_stats_service, storage
+
+    stale = _old_job(make_job, "job-p06-17", total_pages=2).model_copy()
+    stale.filename = "stale.pdf"
+    latest = storage.get_status("job-p06-17")
+    latest.filename = "latest.pdf"          # 목록을 읽은 뒤 감지·편집이 바꾼 값
+    storage.put_status(latest)
+    monkeypatch.setattr(storage, "list_jobs", lambda: [stale])
+
+    question_stats_service.backfill_page_lists()
+
+    job = storage.get_status("job-p06-17")
+    assert (job.filename, job.undetected_pages) == ("latest.pdf", [0, 1])
+
+
+def test_P06_18_서버_시작이_채우기를_부르되_기동을_막지_않는다(monkeypatch):
+    """근거: PLAN § 제약 — "기동을 막지 않게" """
+    import threading
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.services import question_stats_service
+
+    called, release = threading.Event(), threading.Event()
+
+    def _slow_backfill():
+        called.set()
+        release.wait(5)
+
+    monkeypatch.setattr(question_stats_service, "backfill_page_lists", _slow_backfill)
+
+    started = time.monotonic()
+    try:
+        with TestClient(app):
+            entered = time.monotonic() - started
+            was_called = called.wait(2)
+    finally:
+        release.set()
+
+    assert (was_called, entered < 1) == (True, True)
