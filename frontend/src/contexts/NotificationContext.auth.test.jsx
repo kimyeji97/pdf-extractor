@@ -1,7 +1,7 @@
 /**
  * REQ-B27 Phase 2 재작업 — 알림 연결 수명을 로그인 상태에 묶는다
  *
- * 검증 계약: docs/plans/PLAN-B27-notification-per-user.md `## 검증 계약` (B27-26~29·31·34)
+ * 검증 계약: docs/plans/PLAN-B27-notification-per-user.md `## 검증 계약` (B27-26~29·31·34·35)
  *
  * `/review B27`(2026-10-02) (b) 2건: Provider 가 마운트 1회만 연결해 ① 로그인 화면에서 시작하면 알림이 죽고
  * ② 같은 탭의 계정 전환에서 앞 사용자의 알림이 남았다 · 토큰 만료로 스트림이 401 CLOSED 되면 다시 열지 않았다.
@@ -206,5 +206,26 @@ describe('NotificationContext — 로그인 상태와 연결 수명 (B27)', () =
       since: client.listNotifications.mock.calls.at(-1)?.[0]?.since,
       jobs: screen.getByTestId('jobs').textContent,
     }).toEqual({ since: '2026-10-02T01:00:00+00:00', jobs: 'job-missed,job-old' });
+  });
+
+  it('[B27-35] 기준선 GET 실패 뒤 수동 재연결해도 연결 전부터 있던 알림을 넣지 않는다', async () => {
+    loggedInAs('a@a.com');
+    // 서버처럼 응답한다 — since 가 없으면 최근 30일치 전부, 있으면 그 이후분만
+    const old = [notif('job-old', '2020-01-01T00:00:00+00:00')];
+    client.listNotifications
+      .mockRejectedValueOnce(new Error('503'))
+      .mockImplementation((opts) =>
+        Promise.resolve({
+          notifications: old.filter((n) => !opts?.since || n.created_at > opts.since),
+          unread_count: 0,
+        }),
+      );
+    renderApp();
+    await flush();
+
+    await act(async () => { instances[0].fail(); });
+    await flush();
+
+    expect(screen.getByTestId('jobs').textContent).toBe('');
   });
 });
