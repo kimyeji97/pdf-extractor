@@ -103,6 +103,15 @@ async function _tryRefresh(refreshToken) {
 }
 
 /**
+ * access 토큰 갱신 1회 (REQ-B27). 응답이 access 쿠키도 다시 심으므로 쿠키 인증 SSE 재연결 전에 부른다.
+ * refresh 토큰이 없거나 실패하면 false.
+ */
+export async function refreshAccessToken() {
+  const refreshToken = _getRefreshToken();
+  return refreshToken ? _tryRefresh(refreshToken) : false;
+}
+
+/**
  * `Authorization` 헤더를 붙이고, 401을 받으면 refresh를 1회 시도해 원 요청을 재시도한다
  * (REQ-27 Phase 4). refresh 자체가 401이면 더 재시도하지 않고 토큰을 지운다 —
  * 무한 루프 방지(계획서 § 제약·함정).
@@ -339,7 +348,12 @@ export async function listNotifications(opts = {}) {
 
   const suffix = qs.toString() ? `?${qs}` : "";
   // 사용자별 알림이라 인증이 필요하다(REQ-B27) — raw fetch 라 헤더를 직접 붙인다(계약 #26·#31)
-  const res = await fetch(`${BASE_URL}/notifications${suffix}`, { headers: _authHeaders() });
+  const url = `${BASE_URL}/notifications${suffix}`;
+  let res = await fetch(url, { headers: _authHeaders() });
+  // 만료 토큰이면 갱신 1회 후 재요청 — apiFetch 와 같은 규칙이지만 딤은 켜지 않는다(REQ-B27)
+  if (res.status === 401 && (await refreshAccessToken())) {
+    res = await fetch(url, { headers: _authHeaders() });
+  }
   if (!res.ok) throw new Error("알림 조회 실패");
   return res.json(); // { notifications: [...], unread_count }
 }

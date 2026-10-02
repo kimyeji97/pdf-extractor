@@ -28,6 +28,8 @@ export default function NotificationSnackbar() {
 
   // 기준선은 **기준선 GET 이 돌아온 뒤의** 렌더 중에 잡는다 (계약 #27 · REQ-B11).
   // 첫 렌더는 목록이 아직 비어 있어, 거기서 잡으면 GET 도착분 전부가 신규로 보인다.
+  // 로그아웃·계정 전환이면 Provider 가 ready 를 내린다 — 기준선을 다시 잡아야 새 사용자의 30일치가 토스트로 쏟아지지 않는다(REQ-B27)
+  if (!ready) seenRef.current = null;
   if (seenRef.current === null && ready) {
     seenRef.current = new Set(notifications.map(keyOf));
   }
