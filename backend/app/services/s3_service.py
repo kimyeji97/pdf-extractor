@@ -259,6 +259,21 @@ def _cache_drop(prefix: str, key: str) -> None:
     _cache_write(prefix, key, _DELETED)
 
 
+def _cached_meta(prefix_name: str, item_id: str) -> Optional[dict]:
+    """단건 메타 — 목록 캐시가 올라와 있고 거기 있으면 캐시에서, 아니면 R2 에서 (REQ-P06).
+
+    캐시에 없다고 None 을 주지 않는다 — 다른 프로세스가 방금 만든 것일 수 있다(재적재 전).
+    """
+    prefix = _key(prefix_name) + "/"
+    key = _key(prefix_name, f"{item_id}.json")
+    with _cache_lock:
+        entry = _dir_cache.get(prefix)
+        data = entry[1].get(key) if entry is not None else None
+    if data is not None:
+        return dict(data)
+    return _get_json_or_none(key)
+
+
 def _dir_values(prefix: str, sort_key: str) -> list:
     """캐시된 dict 들의 복사본을 sort_key 내림차순으로 — 호출부가 고쳐도 캐시는 안 바뀐다."""
     items = [dict(d) for d in list(_cached_dir(prefix).values())]
@@ -487,7 +502,7 @@ def list_covers() -> list:
 
 
 def get_cover_meta(cover_id: str) -> Optional[dict]:
-    return _get_json_or_none(_key(COVERS_PREFIX, f"{cover_id}.json"))
+    return _cached_meta(COVERS_PREFIX, cover_id)
 
 
 def save_cover(cover_id: str, meta: dict, image_bytes: bytes, ext: str = "jpg") -> None:
@@ -521,57 +536,33 @@ def delete_cover(cover_id: str) -> None:
 # ── 각주 (footnotes, REQ-29) — 표지와 같은 모양이되 이미지 대신 텍스트를 저장 ──
 
 def list_footnotes() -> list:
-    prefix = _key(FOOTNOTES_PREFIX) + "/"
-    paginator = r2.get_paginator("list_objects_v2")
-    keys = []
-    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            if obj["Key"].endswith(".json"):
-                keys.append(obj["Key"])
-    footnotes = []
-    for k in keys:
-        try:
-            footnotes.append(_get_json(k))
-        except Exception:
-            continue
-    footnotes.sort(key=lambda f: f.get("created_at", ""), reverse=True)
-    return footnotes
+    return _dir_values(_key(FOOTNOTES_PREFIX) + "/", "created_at")   # 메모리 캐시 (REQ-P06)
 
 
 def get_footnote_meta(footnote_id: str) -> Optional[dict]:
-    return _get_json_or_none(_key(FOOTNOTES_PREFIX, f"{footnote_id}.json"))
+    return _cached_meta(FOOTNOTES_PREFIX, footnote_id)
 
 
 def save_footnote(footnote_id: str, meta: dict) -> None:
-    _put_json(_key(FOOTNOTES_PREFIX, f"{footnote_id}.json"), meta)
+    key = _key(FOOTNOTES_PREFIX, f"{footnote_id}.json")
+    _put_json(key, meta)
+    _cache_put(_key(FOOTNOTES_PREFIX) + "/", key, json.loads(json.dumps(meta, default=str)))
 
 
 def delete_footnote(footnote_id: str) -> None:
-    _delete(_key(FOOTNOTES_PREFIX, f"{footnote_id}.json"))
+    key = _key(FOOTNOTES_PREFIX, f"{footnote_id}.json")
+    _delete(key)
+    _cache_drop(_key(FOOTNOTES_PREFIX) + "/", key)
 
 
 # ── 워터마크 (watermarks, REQ-29) — 표지와 동일한 이미지 업로드 방식 ──────
 
 def list_watermarks() -> list:
-    prefix = _key(WATERMARKS_PREFIX) + "/"
-    paginator = r2.get_paginator("list_objects_v2")
-    keys = []
-    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            if obj["Key"].endswith(".json"):
-                keys.append(obj["Key"])
-    watermarks = []
-    for k in keys:
-        try:
-            watermarks.append(_get_json(k))
-        except Exception:
-            continue
-    watermarks.sort(key=lambda w: w.get("created_at", ""), reverse=True)
-    return watermarks
+    return _dir_values(_key(WATERMARKS_PREFIX) + "/", "created_at")   # 메모리 캐시 (REQ-P06)
 
 
 def get_watermark_meta(watermark_id: str) -> Optional[dict]:
-    return _get_json_or_none(_key(WATERMARKS_PREFIX, f"{watermark_id}.json"))
+    return _cached_meta(WATERMARKS_PREFIX, watermark_id)
 
 
 def save_watermark(watermark_id: str, meta: dict, image_bytes: bytes, ext: str = "jpg") -> None:
@@ -583,7 +574,9 @@ def save_watermark(watermark_id: str, meta: dict, image_bytes: bytes, ext: str =
         ContentType=ct,
         CacheControl=_CC_IMMUTABLE,
     )
-    _put_json(_key(WATERMARKS_PREFIX, f"{watermark_id}.json"), meta)
+    key = _key(WATERMARKS_PREFIX, f"{watermark_id}.json")
+    _put_json(key, meta)
+    _cache_put(_key(WATERMARKS_PREFIX) + "/", key, json.loads(json.dumps(meta, default=str)))
 
 
 def get_watermark_image(watermark_id: str) -> Optional[tuple]:
@@ -597,6 +590,7 @@ def get_watermark_image(watermark_id: str) -> Optional[tuple]:
 def delete_watermark(watermark_id: str) -> None:
     for ext in ["jpg", "jpeg", "png", "json"]:
         _delete(_key(WATERMARKS_PREFIX, f"{watermark_id}.{ext}"))
+    _cache_drop(_key(WATERMARKS_PREFIX) + "/", _key(WATERMARKS_PREFIX, f"{watermark_id}.json"))
 
 
 # ── job / 문제집 삭제 ─────────────────────────────────────

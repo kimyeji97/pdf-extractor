@@ -283,3 +283,53 @@ def test_P06_13_같은_알림_두번째_읽기는_R2_GET_0회(s3):
     second = mod.read_notification(rel)
 
     assert (second, fake.gets) == (first, 0)
+
+
+# ── 각주 · 워터마크 · 단건 메타 (템플릿 응답의 `_resolve_slots`가 읽는 것) ─────
+
+def test_P06_20_각주_저장_삭제가_목록에_바로_반영(s3):
+    """근거: PLAN § 결정 — "`templates`·`footnotes`·`watermarks` 목록" """
+    mod, fake = s3
+    _seed_json(fake, mod._key(mod.FOOTNOTES_PREFIX, "fn-old.json"),
+               {"footnote_id": "fn-old", "created_at": "2026-10-01T00:00:00+00:00"})
+    mod.list_footnotes()
+    mod.save_footnote("fn-new", {"footnote_id": "fn-new", "created_at": "2026-10-02T00:00:00+00:00"})
+    mod.delete_footnote("fn-old")
+    fake.reset_counts()
+
+    ids = [f["footnote_id"] for f in mod.list_footnotes()]
+
+    assert (ids, fake.gets, fake.lists) == (["fn-new"], 0, 0)
+
+
+def test_P06_21_워터마크_저장_삭제가_목록에_바로_반영(s3):
+    """근거: PLAN § 결정 — "`templates`·`footnotes`·`watermarks` 목록" """
+    mod, fake = s3
+    _seed_json(fake, mod._key(mod.WATERMARKS_PREFIX, "wm-old.json"),
+               {"watermark_id": "wm-old", "created_at": "2026-10-01T00:00:00+00:00"})
+    mod.list_watermarks()
+    mod.save_watermark("wm-new", {"watermark_id": "wm-new", "created_at": "2026-10-02T00:00:00+00:00"}, b"img")
+    mod.delete_watermark("wm-old")
+    fake.reset_counts()
+
+    ids = [w["watermark_id"] for w in mod.list_watermarks()]
+
+    assert (ids, fake.gets, fake.lists) == (["wm-new"], 0, 0)
+
+
+@pytest.mark.parametrize("prefix_attr,list_fn,get_fn,id_key", [
+    ("COVERS_PREFIX", "list_covers", "get_cover_meta", "cover_id"),
+    ("FOOTNOTES_PREFIX", "list_footnotes", "get_footnote_meta", "footnote_id"),
+    ("WATERMARKS_PREFIX", "list_watermarks", "get_watermark_meta", "watermark_id"),
+])
+def test_P06_22_목록_캐시_뒤_단건_메타_조회는_R2_GET_0회(s3, prefix_attr, list_fn, get_fn, id_key):
+    """근거: PLAN § 결정 — "메타 단건 조회도 캐시에서 답한다" """
+    mod, fake = s3
+    meta = {id_key: "x1", "name": "메타", "created_at": "2026-10-02T00:00:00+00:00"}
+    _seed_json(fake, mod._key(getattr(mod, prefix_attr), "x1.json"), meta)
+    getattr(mod, list_fn)()
+    fake.reset_counts()
+
+    got = getattr(mod, get_fn)("x1")
+
+    assert (got, fake.gets) == (meta, 0)
