@@ -253,28 +253,28 @@ def test_B17_14_시작_시_전환한_job마다_실패_알림_1건(isolated_stora
 
 # ── B17-15~17 : 통계 ─────────────────────────────────────────
 
-def test_B17_15_stats_queued_count는_QUEUED_job_수(client, isolated_storage):
+def test_B17_15_stats_queued_count는_QUEUED_job_수(authed_client, isolated_storage):
     """근거: PLAN § 작업 단계 — "`/api/stats`가 `QUEUED` 개수를" """
     _write_status(isolated_storage, "b17-15-q1", "QUEUED")
     _write_status(isolated_storage, "b17-15-q2", "QUEUED")
     _write_status(isolated_storage, "b17-15-p", "PROCESSING")
 
-    assert client.get("/api/stats").json().get("queued_count") == 2
+    assert authed_client.get("/api/stats").json().get("queued_count") == 2
 
 
-def test_B17_16_stats_processing_count는_QUEUED를_세지_않는다(client, isolated_storage):
+def test_B17_16_stats_processing_count는_QUEUED를_세지_않는다(authed_client, isolated_storage):
     """근거: PLAN § 결정 — "기존 \"분석중 파일수\"는 `PROCESSING`만 그대로" """
     _write_status(isolated_storage, "b17-16-q", "QUEUED")
     _write_status(isolated_storage, "b17-16-p", "PROCESSING")
 
-    assert client.get("/api/stats").json()["processing_count"] == 1
+    assert authed_client.get("/api/stats").json()["processing_count"] == 1
 
 
-def test_B17_17_stats_detail_queued_count는_QUEUED_job_목록만(client, isolated_storage):
+def test_B17_17_stats_detail_queued_count는_QUEUED_job_목록만(authed_client, isolated_storage):
     """근거: PLAN § 작업 단계 — "`/api/stats/detail`이 그 파일 목록을 준다" """
     _write_status(isolated_storage, "b17-17-q", "QUEUED")
     _write_status(isolated_storage, "b17-17-p", "PROCESSING")
 
-    res = client.get("/api/stats/detail", params={"field": "queued_count"})
+    res = authed_client.get("/api/stats/detail", params={"field": "queued_count"})
 
     assert [item["job_id"] for item in res.json().get("items", [])] == ["b17-17-q"]
