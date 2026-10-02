@@ -33,13 +33,19 @@ def compute_question_stats(
 
     if page_count is None:
         undetected_page_count = None
+        undetected_pages = None
     else:
         pages_with_content = {b.get("page_index") for b in boundaries}
         pages_with_content |= {m.get("page_num") for m in manual_list}
         undetected_page_count = max(page_count - len(pages_with_content), 0)
+        undetected_pages = [p for p in range(page_count) if p not in pages_with_content]
 
     return {
         "false_positive_count": false_positive_count,
         "manual_count": manual_count,
         "undetected_page_count": undetected_page_count,
+        # 쪽 목록(REQ-P06) — `/api/stats/detail`이 이걸 그대로 쓴다
+        "false_positive_pages": sorted({b.get("page_index") for b in boundaries if b.get("is_false_positive")}),
+        "manual_pages": sorted({m.get("page_num") for m in manual_list}),
+        "undetected_pages": undetected_pages,
     }

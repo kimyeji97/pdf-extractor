@@ -89,6 +89,10 @@ class JobStatusFile(BaseModel):
     false_positive_count: Optional[int] = None
     manual_count: Optional[int] = None
     undetected_page_count: Optional[int] = None
+    # 위 셋의 쪽 목록(REQ-P06) — `/api/stats/detail`이 경계·수동 파일을 읽지 않게. None이면 옛 상태 파일(파일을 읽어 계산)
+    false_positive_pages: Optional[list[int]] = None
+    manual_pages: Optional[list[int]] = None
+    undetected_pages: Optional[list[int]] = None
     # ── 소유권 (REQ-27 Phase 2) ─────────────────────────
     owner_id: Optional[str] = None
 
