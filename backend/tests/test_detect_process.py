@@ -21,15 +21,16 @@ import fitz
 from app.models.schemas import BoundariesStatus
 
 
-def _submitted(pool):
-    """풀에 넘어간 (함수, 인자) — 인자는 PDF 경로 하나여야 한다."""
-    return [(fn, len(args), isinstance(args[0], str) and args[0].endswith(".pdf")) for fn, args in pool.calls]
+def _first_submitted(pool):
+    """풀에 **첫 번째로** 넘어간 (함수, 인자 수, PDF 경로인가) — 두 번째(프리워밍)는 P06-30·31이 본다."""
+    fn, args = pool.calls[0]
+    return (fn, len(args), isinstance(args[0], str) and args[0].endswith(".pdf"))
 
 
-def test_P06_23_업로드_감지는_풀에_감지_함수와_PDF_경로만_넘기고_부모가_결과를_쓴다(
+def test_P06_23_업로드_감지는_풀에_먼저_감지_함수와_PDF_경로를_넘기고_부모가_결과를_쓴다(
     make_job, stub_detection, fake_pdf, inline_detect_pool
 ):
-    """근거: PLAN § 제약 — "자식은 `pdf_path → 경계 목록` 계산만 하고 결과를 부모에 돌려준다" """
+    """근거: PLAN § 제약 — "자식은 감지 계산(`pdf_path → 경계 목록`)과 썸네일 렌더링·저장만 하고, 경계 목록은 부모에 돌려준다" """
     from app.routers import upload as upload_router
     from app.services import storage
 
@@ -40,13 +41,13 @@ def test_P06_23_업로드_감지는_풀에_감지_함수와_PDF_경로만_넘기
 
     job = storage.get_status("job-p06-23")
     assert (
-        _submitted(inline_detect_pool),
+        _first_submitted(inline_detect_pool),
         job.boundaries_status,
         len(storage.get_boundaries_cache("job-p06-23")),
-    ) == ([(upload_router.detect_question_boundaries, 1, True)], BoundariesStatus.DONE, 3)
+    ) == ((upload_router.detect_question_boundaries, 1, True), BoundariesStatus.DONE, 3)
 
 
-def test_P06_24_재감지도_풀에_감지_함수와_PDF_경로만_넘기고_부모가_결과를_쓴다(
+def test_P06_24_재감지도_풀에_먼저_감지_함수와_PDF_경로를_넘기고_부모가_결과를_쓴다(
     make_job, stub_detection, fake_pdf, inline_detect_pool
 ):
     """근거: PLAN § 결정 — "업로드·재감지 두 경로 모두" """
@@ -60,10 +61,10 @@ def test_P06_24_재감지도_풀에_감지_함수와_PDF_경로만_넘기고_부
 
     job = storage.get_status("job-p06-24")
     assert (
-        _submitted(inline_detect_pool),
+        _first_submitted(inline_detect_pool),
         job.boundaries_status,
         len(storage.get_boundaries_cache("job-p06-24")),
-    ) == ([(browse_router.detect_question_boundaries, 1, True)], BoundariesStatus.DONE, 2)
+    ) == ((browse_router.detect_question_boundaries, 1, True), BoundariesStatus.DONE, 2)
 
 
 def test_P06_25_감지_풀은_프로세스_풀이고_크기는_분석_동시_한도(inline_detect_pool):
