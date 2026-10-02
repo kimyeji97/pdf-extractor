@@ -88,7 +88,8 @@ export function NotificationProvider({ children }) {
 
     if (typeof EventSource === 'undefined') return undefined; // SSR·구형 환경 — 기준선만 산다
 
-    const es = new EventSource(STREAM_URL);
+    // API 가 다른 오리진이라 쿠키를 실으려면 withCredentials 가 필요하다 — 스트림은 쿠키 인증(REQ-B27, 계약 #31)
+    const es = new EventSource(STREAM_URL, { withCredentials: true });
 
     const onNotification = (ev) => {
       let payload;

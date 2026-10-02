@@ -338,7 +338,8 @@ export async function listNotifications(opts = {}) {
   if (limit) qs.set("limit", String(limit));
 
   const suffix = qs.toString() ? `?${qs}` : "";
-  const res = await fetch(`${BASE_URL}/notifications${suffix}`);
+  // 사용자별 알림이라 인증이 필요하다(REQ-B27) — raw fetch 라 헤더를 직접 붙인다(계약 #26·#31)
+  const res = await fetch(`${BASE_URL}/notifications${suffix}`, { headers: _authHeaders() });
   if (!res.ok) throw new Error("알림 조회 실패");
   return res.json(); // { notifications: [...], unread_count }
 }
@@ -351,10 +352,16 @@ export async function listNotifications(opts = {}) {
  * 커서가 서버에 있으므로 **다른 창의 뱃지도 함께 사라진다** — "모두의 알림"의 귀결이고
  * 의도된 동작이다.
  */
-export async function markNotificationsRead() {
-  const res = await fetch(`${BASE_URL}/notifications/read`, { method: "POST" });
+export async function markNotificationsRead(ids) {
+  // ids(알림 created_at)를 주면 그 알림만, 없으면 내 알림 전부 — 사용자별(REQ-B27)
+  const opts = { method: "POST", headers: _authHeaders() };
+  if (ids) {
+    opts.headers = { ...opts.headers, "Content-Type": "application/json" };
+    opts.body = JSON.stringify({ ids });
+  }
+  const res = await fetch(`${BASE_URL}/notifications/read`, opts);
   if (!res.ok) throw new Error("읽음 처리 실패");
-  return res.json(); // { cursor, unread_count }
+  return res.json(); // { unread_count }
 }
 
 /**

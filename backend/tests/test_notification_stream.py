@@ -152,7 +152,7 @@ def test_P04_04_stream_응답은_text_event_stream(authed_client, monkeypatch):
     """
     from app.routers import notification as router_mod
 
-    async def _finite(last_event_id, heartbeat_s=router_mod.HEARTBEAT_S):
+    async def _finite(*args, **kwargs):   # REQ-B27: 라우트가 user= 도 넘긴다 — 대역은 인자를 가리지 않는다
         yield ": keepalive\n\n"
 
     monkeypatch.setattr(router_mod, "event_stream", _finite)
