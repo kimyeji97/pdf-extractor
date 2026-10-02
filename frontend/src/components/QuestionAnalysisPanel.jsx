@@ -213,6 +213,9 @@ export default function QuestionAnalysisPanel({
   // ── 삭제 Undo 토스트 ────────────────────────────────────
   const [undoToast, setUndoToast]   = useState(null);
   const undoTimerRef                = useRef(null);
+  // 서버에 아직 안 보낸 삭제 (REQ-B26) — 토스트가 닫히거나·다시 삭제하거나·쪽을 옮기거나·화면을 떠날 때 보낸다
+  const pendingDeleteRef            = useRef(null);
+  const fetchQuestionsRef           = useRef(null);
 
   // ── 문항 목록 로드 ─────────────────────────────────────
   const fetchQuestions = useCallback(async () => {
@@ -230,12 +233,27 @@ export default function QuestionAnalysisPanel({
     }
   }, [jobId, pageNum]);
 
+  fetchQuestionsRef.current = fetchQuestions;
+
+  /** 대기 중 삭제를 서버에 보낸다. 쪽·job 은 삭제한 시점 값이다(쪽을 옮긴 뒤에도 원래 쪽을 지운다) */
+  const commitPendingDelete = useCallback(() => {
+    const p = pendingDeleteRef.current;
+    if (!p) return;
+    pendingDeleteRef.current = null;
+    // 자동/수동을 분리해 벌크 삭제 1회 호출 (단건 동시 호출의 경쟁 상태 회피 — REQ-B06)
+    bulkDeleteQuestions(p.jobId, p.pageNum, p.autoRefs, p.manualIds)
+      // 실패 시 서버 상태로 목록 복원 (종전 동작 유지)
+      .catch(() => fetchQuestionsRef.current?.());
+  }, []);
+
   useEffect(() => {
     fetchQuestions();
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoToast(null);
+      commitPendingDelete(); // 쪽 이동·화면 이탈에도 대기 중 삭제가 사라지지 않게
     };
-  }, [fetchQuestions, refreshTrigger]);
+  }, [fetchQuestions, refreshTrigger, commitPendingDelete]);
 
   // ── 체크박스 토글 ──────────────────────────────────────
   const toggleCheck = (id) => {
@@ -294,36 +312,43 @@ export default function QuestionAnalysisPanel({
   const showUndoToast = (message, onUndo) => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoToast({ message, onUndo });
-    undoTimerRef.current = setTimeout(() => setUndoToast(null), 4000);
+    undoTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+      commitPendingDelete();
+    }, 4000);
   };
 
-  const handleDeleteSelected = async () => {
-    const toDelete = questions.filter((q) => checkedIds.has(q.question_id));
-    if (toDelete.length === 0) return;
+  // 삭제는 화면에서 먼저 숨기고 토스트가 닫힐 때 서버에 보낸다 — [되돌리기]가 삭제 전 상태(오탐 표시 포함)를
+  // 그대로 되살리려면 서버에서 지우지 않아야 한다 (REQ-B26, 백엔드 복원 API 없음)
+  const handleDeleteSelected = () => {
+    const snapshot = questions;
+    const deletedItems = snapshot.filter((q) => checkedIds.has(q.question_id));
+    if (deletedItems.length === 0) return;
 
-    const deletedItems = [...toDelete];
-    setQuestions((prev) => prev.filter((q) => !checkedIds.has(q.question_id)));
+    commitPendingDelete(); // 토스트 중 또 삭제 — 앞 삭제는 바로 확정
+    const deletedIds = new Set(deletedItems.map((q) => q.question_id));
+    setQuestions((prev) => prev.filter((q) => !deletedIds.has(q.question_id)));
     setCheckedIds(new Set());
 
-    // 자동/수동을 분리해 벌크 삭제 1회 호출 (단건 동시 호출의 경쟁 상태 회피)
     // 같은 쪽에 같은 번호가 공존할 수 있어 (번호, k) 로 지목한다 (ADR-0006)
-    const autoRefs = deletedItems
-      .filter((q) => !q.is_manual)
-      .map((q) => ({ num: q.question_num, k: q.k ?? 0 }));
-    const manualIds = deletedItems
-      .filter((q) => q.is_manual)
-      .map((q) => q.manual_id);
+    const pending = {
+      jobId,
+      pageNum,
+      autoRefs: deletedItems.filter((q) => !q.is_manual).map((q) => ({ num: q.question_num, k: q.k ?? 0 })),
+      manualIds: deletedItems.filter((q) => q.is_manual).map((q) => q.manual_id),
+    };
+    pendingDeleteRef.current = pending;
 
-    try {
-      await bulkDeleteQuestions(jobId, pageNum, autoRefs, manualIds);
-    } catch {
-      // 실패 시 서버 상태로 목록 복원
-      await fetchQuestions();
-      return;
-    }
-
-    showUndoToast(`${deletedItems.length}개 문항이 삭제되었습니다.`, async () => {
-      await fetchQuestions();
+    showUndoToast(`${deletedItems.length}개 문항이 삭제되었습니다.`, () => {
+      if (pendingDeleteRef.current !== pending) return;
+      pendingDeleteRef.current = null;
+      // 원래 순서대로 되살린다 — 그 사이 바뀐 다른 문항(제목 등)은 현재 값을 쓴다
+      setQuestions((prev) => {
+        const current = new Map(prev.map((q) => [q.question_id, q]));
+        return snapshot
+          .filter((q) => current.has(q.question_id) || deletedIds.has(q.question_id))
+          .map((q) => current.get(q.question_id) ?? q);
+      });
     });
   };
 
