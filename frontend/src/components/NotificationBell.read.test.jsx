@@ -74,10 +74,12 @@ describe('NotificationBell — 알림별 읽음 (B27)', () => {
   it('[B27-22] 뱃지는 미확인 개수 그대로이고 팝오버를 열어도 그대로다', () => {
     feedIs([A, B], 3);
     renderBell();
+    // 팝오버(모달)가 열리면 나머지 화면이 aria-hidden 이 돼 role 로 다시 못 찾는다 — 열기 전에 잡아 둔다
+    const bell = screen.getByRole('button', { name: /^알림$/ });
 
-    openPopover();
+    fireEvent.click(bell);
 
-    expect(within(screen.getByRole('button', { name: /^알림$/ })).getByText('3')).toBeInTheDocument();
+    expect(within(bell).getByText('3')).toBeInTheDocument();
   });
 
   it('[B27-23] 읽은 항목과 안 읽은 항목의 왼쪽 아이콘 칸이 확인/미확인으로 구분된다', () => {
