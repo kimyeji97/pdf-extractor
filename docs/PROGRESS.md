@@ -107,7 +107,7 @@
 | REQ-B11 | 알림 기준선이 피드 도착 전에 잡힘 — 새로고침마다 직전 알림 토스트 | [plan](plans/PLAN-B11-notification-baseline-before-feed.md) | 2026-08-28 | ✅ **Phase 1~2 완료**(`useNotificationsReady` + 세 소비처 게이트, 10/10 · dev Worker 배포 후 새로고침 5회 토스트 0건 · 계약 #27 정정) — PR #3 **main 머지 완료(2026-08-28, `3d35d65`)**. 미결 1건(ready 동승 알림)은 후속 |
 | REQ-C09 | 알림 경로 후속 묶음 (실패 문구 서버 `message` 단일 출처 · `useNotificationRefresh` `kind` 필터 · 계약 #26 딤 회귀 케이스 · SSE `: connected` 선발송) | [plan](plans/PLAN-C09-notification-followups.md) | 2026-08-28 | ✅ Phase 1·2 완료 (10/10 · 백엔드 34/34 · 프론트 61/61 · dev 실측 warm `onopen` 0.2~0.8s) — PR #4 **main 머지 완료(2026-08-28, `91a911a`)**. Phase 1 육안 1건(실패 배너 문구) 미확인 |
 | REQ-P05 | 알림 전달 지연 (감지 완료 알림을 프리워밍 앞으로 · 피드 GET 병렬화) | [plan](plans/PLAN-P05-notification-latency.md) | 2026-08-28 | ✅ Phase 1~3 완료 (10/10 · 백엔드 44/44 · 프론트 61/61) — 발행 전 대기 **8.1s 단축**, 피드 GET 3.79s → 1.43s. PR #5 **main 머지(2026-08-28, `6fba551`)** |
-| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API p90 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | — | 🟡 **Phase 1~6 완료** — Phase 5 현황판 API 캐시(PR #29) · **Phase 6 감지·썸네일 렌더링을 nice 19 자식 프로세스로**(분석 중 `questions_all` p90 1.41 → 0.70s, PR #30 main 머지 `3c06185`·dev 배포). 남은 것: Phase 7 최종 측정 |
+| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API p90 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | 2026-10-02 | ✅ **Phase 1~7 완료** — 현황판 API 캐시(PR #29) · 감지·썸네일 렌더링 nice 19 자식(PR #30) · 최종 측정 터널 경유 모든 API p90 < 1s(피크 ② 포함). 터널 튐 대응은 오픈 후로 이연 |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | 2026-08-27 | ✅ **Phase 0~3 완료** — SSE, 폴링 0건, dev 실측 전송 0.3~1.3s·숨김 탭 즉시 · PR #2 main 머지(`d176596`) · 후속: 콜드 스타트 기준, `: connected` 선발송, 발행 전 서버 작업 ~6s |
@@ -247,6 +247,12 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-02
+
+### REQ-P06 — Phase 7 최종 측정: 목표 달성 → P06 완료
+
+- 터널 경유 GET 23종 × 평시·피크 ①·피크 ② × 2회 — 일반 API 1s 초과 **0건**, 가장 느린 p90 `questions_all` 0.70s, 이미지 내려받기 최대 2.07s(3s 기준 안), 피크 ② 메모리 54%
+- **시간대 분산은 생략**(사용자 결정 — 지금은 사용자 1명이라 무관). 10/1 오후 터널 튐은 재현 안 됨 → 미결로 남겨 오픈 후 본다
+- 상세: [perf-infra-capacity.md](infra/perf-infra-capacity.md) §8
 
 ### REQ-P06 — Phase 6: 분석 중 API 느림의 진짜 원인은 API 프로세스 안의 썸네일 렌더링
 
