@@ -167,48 +167,77 @@ def _purge_expired_months(keys: list[str], cutoff: datetime) -> list[str]:
     return [k for k in keys if k.split("/", 1)[0] not in expired]
 
 
-def _unread_count() -> int:
-    """읽음 커서 이후 개수 — 키 이름만으로 센다(파일 읽기 0회)."""
-    cutoff = _cutoff()
-    cursor_ts = _parse_iso(storage.get_read_cursor())
-    return sum(
-        1
-        for ts in (nkey.parse_stamp(k) for k in storage.list_notification_keys())
-        if ts is not None and ts >= cutoff and (cursor_ts is None or ts > cursor_ts)
-    )
-
-
-def list_feed(since: Optional[str] = None, limit: int = DEFAULT_LIMIT) -> dict:
+def can_see(user: Optional[dict], job_id: Optional[str], owners: Optional[dict] = None) -> bool:
     """
-    알림 피드. 반환은 `{"notifications": [...], "unread_count": N}`.
+    이 사용자가 이 job 의 알림을 볼 수 있나 (REQ-B27). `user` 가 None 이면 내부 호출 — 거르지 않는다.
 
-    필터 순서가 곧 비용이다 — 키 이름으로 다 거른 **뒤에** 남은 것만 읽는다.
+    소유자는 알림 본문이 아니라 **job 상태의 owner_id** 로 판정한다 — 본문에 두면 거를 때 파일을 다 열어야 해
+    "평상시 GET 0회"(F09-09)가 깨진다. 상태 목록은 메모리 캐시(P06)라 싸다. 소유자 없는 job·지워진 job 은 admin 만.
     """
+    if user is None or user.get("role") == "admin":
+        return True
+    if owners is None:
+        owners = _owners()
+    return job_id is not None and owners.get(job_id) == user.get("user_id")
+
+
+def _owners() -> dict:
+    return {j.job_id: j.owner_id for j in storage.list_jobs() if j.owner_id}
+
+
+def _visible_dated(user: Optional[dict]) -> list:
+    """보관 기간 안 · 이 사용자가 볼 수 있는 (시각, 키) — 최신순. 키 이름만 본다(파일 읽기 0회)."""
     cutoff = _cutoff()
     keys = _purge_expired_months(storage.list_notification_keys(), cutoff)
-
-    # 키 이름만으로 (시각, 키) 쌍을 만든다. 여기까지 파일 읽기 0회.
+    owners = _owners() if user is not None and user.get("role") != "admin" else None
     dated = []
     for key in keys:
         ts = nkey.parse_stamp(key)
         if ts is None or ts < cutoff:
             continue
+        if not can_see(user, nkey.parse_job_id(key), owners):
+            continue
         dated.append((ts, key))
     dated.sort(key=lambda p: p[0], reverse=True)
+    return dated
 
-    cursor = storage.get_read_cursor()
-    cursor_ts = _parse_iso(cursor)
-    unread_count = sum(1 for ts, _ in dated if cursor_ts is None or ts > cursor_ts)
+
+def _read_ids(user: Optional[dict]) -> set:
+    """user None(내부 호출)은 공용 기록 `_all` — `mark_read(None)` 이 쓰는 곳과 같다."""
+    return set(storage.get_read_ids(user["user_id"] if user else "_all"))
+
+
+def unread_count(user: Optional[dict]) -> int:
+    """이 사용자의 미확인 개수 — 읽은 id 집합에 없는 것(id = 알림 created_at)."""
+    read = _read_ids(user)
+    return sum(1 for ts, _ in _visible_dated(user) if ts.isoformat() not in read)
+
+
+def _unread_count() -> int:
+    """발행 시점 이벤트에 싣는 값(내부). 스트림이 받는 사람 기준으로 다시 센다(REQ-B27)."""
+    return unread_count(None)
+
+
+def list_feed(since: Optional[str] = None, limit: int = DEFAULT_LIMIT, user: Optional[dict] = None) -> dict:
+    """
+    알림 피드. 반환은 `{"notifications": [... + "read"], "unread_count": N}` — 이 사용자 기준.
+
+    필터 순서가 곧 비용이다 — 키 이름으로 다 거른 **뒤에** 남은 것만 읽는다.
+    """
+    dated = _visible_dated(user)
+    read = _read_ids(user)
+    unread = sum(1 for ts, _ in dated if ts.isoformat() not in read)
 
     since_ts = _parse_iso(since)
     if since_ts is not None:
         dated = [(ts, k) for ts, k in dated if ts > since_ts]
 
     selected = dated[: max(limit, 0)]
-
     notifications = _read_many([key for _, key in selected])
+    for item in notifications:
+        item["read"] = item.get("created_at") in read
 
-    return {"notifications": notifications, "unread_count": unread_count}
+    return {"notifications": notifications, "unread_count": unread}
 
 
 def _read_many(keys: list[str]) -> list[dict]:
@@ -236,27 +265,31 @@ def _read_many(keys: list[str]) -> list[dict]:
     return [item for item in items if item is not None]
 
 
-def mark_all_read() -> Optional[str]:
+def mark_read(user: Optional[dict], ids: Optional[list] = None) -> int:
     """
-    전체 읽음 — 커서 **파일 1개**만 쓴다.
+    읽음 처리 (REQ-B27) — `ids`(알림 created_at)만, 없으면 이 사용자가 볼 수 있는 알림 전부. 남은 미확인 개수를 돌려준다.
 
-    항목별 읽음이었다면 읽을 때마다 N개 파일을 다시 써야 했다. 뱃지의 목적은
-    "새 게 있나"지 개별 추적이 아니라는 결정이 서버 저장의 비용을 크게 깎았다.
+    읽음은 **사용자별**이다 — 예전 전역 커서는 한 사람이 벨을 열면 모두의 뱃지가 0이 됐다.
+    읽은 id 는 보관 기간 안의 것만 남긴다(30일 정리와 함께 비워진다). `read` 이벤트는 이 사용자 스트림에만 간다.
+    `user` 가 None 이면 내부 호출(테스트) — 공용 기록 `_all` 에 쓰고 전원에게 알린다.
     """
-    cutoff = _cutoff()
-    stamps = [
-        ts
-        for ts in (nkey.parse_stamp(k) for k in storage.list_notification_keys())
-        if ts is not None and ts >= cutoff
-    ]
-    # 커서는 "지금"이 아니라 **가장 최근 알림의 시각**이다. now() 로 잡으면 이 호출
-    # 직후 미세하게 늦게 기록된 알림이 읽음 처리되어 조용히 사라진다.
-    cursor_dt = max(stamps) if stamps else datetime.now(timezone.utc)
-    cursor = cursor_dt.isoformat()
-    storage.save_read_cursor(cursor)
-    # 다른 탭의 뱃지도 지워져야 한다("모두의 알림" — 커서가 공유된다). 프론트가 세지 않는다(계약 #27).
-    broker.publish({"event": "read", "data": {"unread_count": 0}})
-    return cursor
+    owner_key = user["user_id"] if user else "_all"
+    visible = {ts.isoformat() for ts, _ in _visible_dated(user)}
+    read = set(storage.get_read_ids(owner_key))
+    read |= visible if ids is None else (set(ids) & visible)
+    storage.save_read_ids(owner_key, sorted(read & visible))
+    remaining = len(visible - read)
+    event = {"event": "read", "data": {"unread_count": remaining}}
+    if user:
+        event["user_id"] = user["user_id"]
+    broker.publish(event)
+    return remaining
+
+
+def mark_all_read() -> Optional[str]:
+    """내부 호출용 전체 읽음(사용자 없음) — 반환은 옛 커서 자리의 None 호환."""
+    mark_read(None)
+    return None
 
 
 def _parse_iso(value: Optional[str]) -> Optional[datetime]:

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { listNotifications } from 'api/client';
+import { listNotifications, refreshAccessToken } from 'api/client';
+import { useAuth } from 'contexts/AuthContext';
 
 /**
  * 전역 완료 알림 상태 (REQ-F09 Phase 2 → REQ-P04 Phase 2에서 전달 경로를 SSE로 교체)
@@ -57,8 +58,25 @@ export function NotificationProvider({ children }) {
   // 기준선과 겹쳐 와도 한 번만 누적된다.
   const seenRef = useRef(new Set());
 
+  // 연결 수명은 **로그인한 사람**에 묶인다(REQ-B27) — 서버는 연결 시점의 사용자로 거르므로, 로그아웃·계정 전환에
+  // 다시 붙지 않으면 앞 사람의 알림이 남고 로그인 화면에서 시작하면 401 로 영영 죽는다.
+  // null = 로그아웃(연결 안 함). AuthProvider 밖(단독 테스트 무대)은 로그인으로 취급한다.
+  const auth = useAuth();
+  const identity = !auth ? 'standalone' : auth.isAuthenticated ? `user:${auth.userEmail ?? ''}` : null;
+
   useEffect(() => {
     let cancelled = false;
+    // 수동 재연결 복구의 since — 본 알림 중 가장 최근 created_at. 본 게 없으면 **연결 시작 시각**이다:
+    // since 없이 읽으면 최근 30일치가 와서 기준선 실패 뒤 전부 신규로 쏟아진다(계약 #27, REQ-B27).
+    // 서버 created_at 과 같은 '+00:00' 표기로 맞춘다(서버 fromisoformat)
+    const startedAt = new Date().toISOString().replace('Z', '+00:00');
+    let lastSeen = null;
+    // 이전 사용자 상태를 비운다
+    seenRef.current = new Set();
+    setNotifications([]);
+    setUnreadCount(0);
+    setReady(false);
+    if (identity === null) return undefined;
 
     /** 피드 GET·스트림 이벤트 공통 병합 — 데이터 처리는 F09 그대로고 도착 경로만 다르다. */
     const merge = (incoming, unread) => {
@@ -69,7 +87,10 @@ export function NotificationProvider({ children }) {
         setUnreadCount(unread);
       }
       const fresh = incoming.filter((n) => !seenRef.current.has(keyOf(n)));
-      fresh.forEach((n) => seenRef.current.add(keyOf(n)));
+      fresh.forEach((n) => {
+        seenRef.current.add(keyOf(n));
+        if (!lastSeen || n.created_at > lastSeen) lastSeen = n.created_at;
+      });
       // **누적**한다. 교체하면 팝오버 이력이 사라진다.
       if (fresh.length > 0) setNotifications((prev) => [...fresh, ...prev]);
     };
@@ -88,7 +109,7 @@ export function NotificationProvider({ children }) {
 
     if (typeof EventSource === 'undefined') return undefined; // SSR·구형 환경 — 기준선만 산다
 
-    const es = new EventSource(STREAM_URL);
+    let es = null;
 
     const onNotification = (ev) => {
       let payload;
@@ -110,23 +131,57 @@ export function NotificationProvider({ children }) {
       }
     };
 
-    // 재연결(`onerror` 후 브라우저 자동 재시도)에는 손대지 않는다 — 끊긴 동안의 알림은
-    // 브라우저가 붙이는 `Last-Event-ID` 로 서버가 복구한다(백엔드 Phase 1).
+    // 일시 끊김 재연결은 브라우저에 맡긴다 — 끊긴 동안의 알림은 브라우저가 붙이는 `Last-Event-ID` 로
+    // 서버가 복구한다(백엔드 Phase 1). CLOSED(HTTP 오류)만 아래 onError 가 다시 연다.
     // 본문은 읽지 않는다 — 소비처는 "바뀌었다"만 알면 되고 현재 상태는 다시 읽어서 얻는다
     const onStatus = () => setStatusEvents((n) => n + 1);
 
-    es.addEventListener('notification', onNotification);
-    es.addEventListener('read', onRead);
-    es.addEventListener('status', onStatus);
+    // 일시 끊김은 브라우저가 CONNECTING 으로 재시도한다. HTTP 오류(만료 토큰 401)는 CLOSED 로 끝나고 다시 안 붙으므로
+    // 토큰을 갱신해 새로 연다(REQ-B27). 열리기 전 연속 재시도는 1회 — 갱신은 되는데 스트림만 계속 거부되면 루프가 된다.
+    let retried = false;
+    const onOpen = () => { retried = false; };
+    const onError = () => {
+      if (es.readyState !== EventSource.CLOSED || retried) return;
+      retried = true;
+      refreshAccessToken()
+        .then((ok) => {
+          if (!ok || cancelled) return;
+          connect();
+          // 새 EventSource 는 Last-Event-ID 를 안 보낸다 — 끊긴 동안의 알림은 since 로 직접 되찾는다(REQ-B27).
+          // 연결 뒤에 읽으므로 사이에 온 것은 스트림·GET 양쪽에 올 수 있고, seenRef 가 한 번만 넣는다
+          listNotifications({ since: lastSeen ?? startedAt })
+            .then((data) => merge(data?.notifications ?? [], data?.unread_count))
+            .catch(() => {});
+        })
+        .catch(() => {});
+    };
 
-    return () => {
-      cancelled = true;
+    const detach = () => {
+      es.removeEventListener('open', onOpen);
+      es.removeEventListener('error', onError);
       es.removeEventListener('notification', onNotification);
       es.removeEventListener('read', onRead);
       es.removeEventListener('status', onStatus);
       es.close();
     };
-  }, []);
+
+    function connect() {
+      if (es) detach();
+      // API 가 다른 오리진이라 쿠키를 실으려면 withCredentials 가 필요하다 — 스트림은 쿠키 인증(REQ-B27, 계약 #31)
+      es = new EventSource(STREAM_URL, { withCredentials: true });
+      es.addEventListener('open', onOpen);
+      es.addEventListener('error', onError);
+      es.addEventListener('notification', onNotification);
+      es.addEventListener('read', onRead);
+      es.addEventListener('status', onStatus);
+    }
+    connect();
+
+    return () => {
+      cancelled = true;
+      detach();
+    };
+  }, [identity]);
 
   const value = useMemo(
     () => ({ notifications, unreadCount }),

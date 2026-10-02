@@ -19,7 +19,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getStatus, setLoadingCallback } from 'api/client';
 
-const UNAUTHENTICATED_RAW_FETCH = new Set(['listNotifications', 'markNotificationsRead', 'logout']);
+// REQ-B27: 알림 API 도 인증이 필요해져 예외에서 뺐다 — 남은 건 무인증 엔드포인트뿐
+const UNAUTHENTICATED_RAW_FETCH = new Set(['logout']);
 
 const jsonResponse = (body, { status = 200 } = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

@@ -305,14 +305,14 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 `REQ-{prefix}{seq}`의 prefix는 작업 성격을 나타낸다:
 
-| Prefix | 의미 | 점유 범위 (2026-09-30) |
+| Prefix | 의미 | 점유 범위 (2026-10-02) |
 |--------|------|-----------|
 | (숫자) | 핵심·v2·v3 기능 (기획 단위) | REQ-01~30 |
-| `B` | 버그 수정 (Bug) | REQ-B01~B24 |
+| `B` | 버그 수정 (Bug) | REQ-B01~B27 |
 | `C` | 보완 기능 (Complement) | REQ-C01~C11 |
 | `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D11 |
 | `E` | 실험·인프라성 기능 (Enhancement) | REQ-E01 |
-| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F15 |
+| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F17 |
 | `P` | 성능 (Performance) | REQ-P01~P06 |
 
 기능 대분류 참고: REQ-01~09(핵심), REQ-10~15(v2), REQ-16~26(v3), REQ-27~28(계정·공유), REQ-29~30(템플릿).
@@ -335,7 +335,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-10-02 기준 각 prefix 다음 번호: `B25`(B24는 2026-10-02 착수 — 통계 API 인증 누락), `C12`, `D12`, `F16`, `P07`, 숫자 `31`.
+2026-10-02 기준 각 prefix 다음 번호: `B28`(B25·B26·F16·F17은 2026-10-02 계획서만, B27 진행 중), `C12`, `D12`, `F18`, `P07`, 숫자 `31`.
 (2026-09-30에 착수 대기 13건을 **B21·B22·F14·F15·C10·C11·P06**으로 예약했다 — 전부 미착수이고 REQ-28은 ⏸.
 예약분은 PROGRESS "미착수 — 번호만 부여된 것" 표가 단일 출처다. 번호는 완료돼도 재사용하지 않는다)
 
@@ -641,7 +641,7 @@ deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS
     — 상태를 바꾸는 엔드포인트에 쓰면 CSRF 표면이 생긴다. 테스트는 헤더 없이 쿠키만 가진 `https`
     클라이언트로 쓴다(`Secure` 쿠키는 http 요청에 안 실린다). (REQ-B15)
     ⚠️ **이 규칙은 테스트가 강제한다** — `frontend/src/api/client.statusAuth.test.js`(B23-03)가 `client.js`를 스캔해 raw fetch
-    export 함수는 `_authHeaders()`를 부르거나 **무인증 예외 목록**(`listNotifications`·`markNotificationsRead`·`logout`)에 있어야
+    export 함수는 `_authHeaders()`를 부르거나 **무인증 예외 목록**(`logout`뿐 — 알림 두 함수는 REQ-B27로 인증이 붙어 빠졌다)에 있어야
     통과시킨다. 새 raw fetch를 만들면 헤더를 붙이거나, 백엔드가 정말 무인증일 때만 예외 목록에 **이유와 함께** 올린다.
     문서만으로는 `getStatus`를 놓쳐 PDF 생성 폴링이 401이 됐다(REQ-B23).
 

@@ -18,6 +18,7 @@ import { Icon } from "@iconify/react";
 
 import Box from "@mui/material/Box";
 import Badge from "@mui/material/Badge";
+import Button from "@mui/material/Button";
 import Popover from "@mui/material/Popover";
 import Tooltip from "@mui/material/Tooltip";
 import Divider from "@mui/material/Divider";
@@ -49,36 +50,31 @@ export default function NotificationBell() {
 
   const [anchorEl, setAnchorEl] = useState(null);
 
-  // 읽음 처리는 서버 커서라 다음 폴링(최대 5초)까지 unreadCount가 그대로다.
-  // 그 사이 뱃지가 남아 있으면 "눌렀는데 안 읽혔다"로 보이므로 로컬에서 즉시 가린다.
-  //
-  // ⚠️ **개수가 아니라 "무엇까지 읽었는지"로 가린다.** 서버의 unread_count는 읽음 커서
-  //    **이후** 개수라 mark_all_read 뒤 0으로 리셋되고 새 알림마다 1부터 다시 센다
-  //    (`notification_service.list_feed`). 개수 비교(`unread > readUpTo`)로 가리면
-  //    **미읽음 3건일 때 읽은 뒤 도착한 새 알림이 1이라 영영 안 보인다** — 2026-08-10
-  //    육안 검증에서 실제로 이렇게 죽어 있었다(F09-47).
-  const [readAtKey, setReadAtKey] = useState(null);
+  // 읽음은 **클릭한 알림만**(REQ-B27) — 벨을 열어도 읽음 처리하지 않는다. 뱃지는 서버 미확인 수 그대로.
+  // 클릭한 알림은 서버 응답·피드 재조회 전에도 "확인"으로 보이도록 여기서 기억한다
+  // (서버 `read` 이벤트는 개수만 싣고 어느 알림인지는 싣지 않는다).
+  const [readKeys, setReadKeys] = useState(() => new Set());
+  const isRead = (n) => n.read || readKeys.has(keyOf(n));
 
-  const newestKey = notifications.length ? keyOf(notifications[0]) : null;
-  const badgeCount = unreadCount > 0 && newestKey !== readAtKey ? unreadCount : 0;
-
-  const handleOpen = (e) => {
-    setAnchorEl(e.currentTarget);
-    setReadAtKey(newestKey);
-    // 실패해도 팝오버는 열린다 — 읽음 커서는 다음 열기에서 다시 시도된다.
-    markNotificationsRead().catch(() => {});
-  };
+  const handleOpen = (e) => setAnchorEl(e.currentTarget);
 
   const handleItemClick = (n) => {
+    setReadKeys((prev) => new Set(prev).add(keyOf(n)));
+    markNotificationsRead([n.created_at]).catch(() => {});
     setAnchorEl(null);
     navigate(destinationOf(n));
+  };
+
+  const handleReadAll = () => {
+    setReadKeys(new Set(notifications.map(keyOf)));
+    markNotificationsRead().catch(() => {});
   };
 
   return (
     <>
       <Tooltip title="알림">
         <IconButton aria-label="알림" onClick={handleOpen} sx={{ color: "text.secondary" }}>
-          <Badge badgeContent={badgeCount} color="error">
+          <Badge badgeContent={unreadCount} color="error">
             <Icon icon="solar:bell-bing-bold-duotone" width={22} />
           </Badge>
         </IconButton>
@@ -92,9 +88,16 @@ export default function NotificationBell() {
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         slotProps={{ paper: { sx: { width: 340, maxHeight: 420 } } }}
       >
-        <Typography variant="subtitle2" sx={{ px: 2, py: 1.5 }}>
-          알림
-        </Typography>
+        <Box sx={{ px: 2, py: 1, display: "flex", alignItems: "center" }}>
+          <Typography variant="subtitle2" sx={{ flex: 1 }}>
+            알림
+          </Typography>
+          {notifications.length > 0 && (
+            <Button size="small" onClick={handleReadAll}>
+              모두 읽음
+            </Button>
+          )}
+        </Box>
         <Divider />
 
         {notifications.length === 0 ? (
@@ -102,13 +105,18 @@ export default function NotificationBell() {
             아직 알림이 없습니다
           </Typography>
         ) : (
-          notifications.map((n) => (
+          notifications.map((n) => {
+            const read = isRead(n);
+            const tone = n.severity === "error" ? "error" : "success";
+            return (
             <ListItemButton
-              key={`${n.job_id}:${n.created_at}`}
+              key={keyOf(n)}
               onClick={() => handleItemClick(n)}
               sx={{ alignItems: "flex-start", gap: 1.5, py: 1.25 }}
             >
+              {/* 확인/미확인은 왼쪽 아이콘으로 구분한다(2026-10-02 결정): 미확인 = 색 채운 아이콘, 확인 = 회색 테두리형 */}
               <Box
+                aria-label={read ? "확인" : "미확인"}
                 sx={(theme) => ({
                   mt: 0.25,
                   width: 32,
@@ -118,12 +126,16 @@ export default function NotificationBell() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  bgcolor: tintBg(n.severity === "error" ? "error" : "success")(theme),
-                  color: n.severity === "error" ? "error.main" : "success.main",
+                  bgcolor: read ? "transparent" : tintBg(tone)(theme),
+                  color: read ? "text.disabled" : `${tone}.main`,
                 })}
               >
                 <Icon
-                  icon={n.severity === "error" ? "solar:danger-triangle-bold" : "solar:check-circle-bold"}
+                  icon={
+                    n.severity === "error"
+                      ? read ? "solar:danger-triangle-linear" : "solar:danger-triangle-bold"
+                      : read ? "solar:check-read-linear" : "solar:check-circle-bold"
+                  }
                   width={18}
                 />
               </Box>
@@ -137,7 +149,8 @@ export default function NotificationBell() {
                 </Typography>
               </Box>
             </ListItemButton>
-          ))
+            );
+          })
         )}
       </Popover>
     </>

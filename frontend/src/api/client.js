@@ -91,15 +91,24 @@ async function _tryRefresh(refreshToken) {
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
     if (!res.ok) {
-      _clearTokens();
+      // 서버가 refresh 토큰을 **거부**했을 때만 지운다 — 5xx·네트워크(배포·장애)에 지우면 조용히 로그아웃된다(REQ-B27)
+      if (res.status === 401 || res.status === 403) _clearTokens();
       return false;
     }
     _setTokens(await res.json());
     return true;
   } catch {
-    _clearTokens();
     return false;
   }
+}
+
+/**
+ * access 토큰 갱신 1회 (REQ-B27). 응답이 access 쿠키도 다시 심으므로 쿠키 인증 SSE 재연결 전에 부른다.
+ * refresh 토큰이 없거나 실패하면 false.
+ */
+export async function refreshAccessToken() {
+  const refreshToken = _getRefreshToken();
+  return refreshToken ? _tryRefresh(refreshToken) : false;
 }
 
 /**
@@ -338,7 +347,13 @@ export async function listNotifications(opts = {}) {
   if (limit) qs.set("limit", String(limit));
 
   const suffix = qs.toString() ? `?${qs}` : "";
-  const res = await fetch(`${BASE_URL}/notifications${suffix}`);
+  // 사용자별 알림이라 인증이 필요하다(REQ-B27) — raw fetch 라 헤더를 직접 붙인다(계약 #26·#31)
+  const url = `${BASE_URL}/notifications${suffix}`;
+  let res = await fetch(url, { headers: _authHeaders() });
+  // 만료 토큰이면 갱신 1회 후 재요청 — apiFetch 와 같은 규칙이지만 딤은 켜지 않는다(REQ-B27)
+  if (res.status === 401 && (await refreshAccessToken())) {
+    res = await fetch(url, { headers: _authHeaders() });
+  }
   if (!res.ok) throw new Error("알림 조회 실패");
   return res.json(); // { notifications: [...], unread_count }
 }
@@ -351,10 +366,16 @@ export async function listNotifications(opts = {}) {
  * 커서가 서버에 있으므로 **다른 창의 뱃지도 함께 사라진다** — "모두의 알림"의 귀결이고
  * 의도된 동작이다.
  */
-export async function markNotificationsRead() {
-  const res = await fetch(`${BASE_URL}/notifications/read`, { method: "POST" });
+export async function markNotificationsRead(ids) {
+  // ids(알림 created_at)를 주면 그 알림만, 없으면 내 알림 전부 — 사용자별(REQ-B27)
+  const opts = { method: "POST", headers: _authHeaders() };
+  if (ids) {
+    opts.headers = { ...opts.headers, "Content-Type": "application/json" };
+    opts.body = JSON.stringify({ ids });
+  }
+  const res = await fetch(`${BASE_URL}/notifications/read`, opts);
   if (!res.ok) throw new Error("읽음 처리 실패");
-  return res.json(); // { cursor, unread_count }
+  return res.json(); // { unread_count }
 }
 
 /**

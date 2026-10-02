@@ -1,7 +1,8 @@
 /**
  * REQ-F09 Phase 5 — 헤더 벨 + 미읽음 뱃지 + 알림 이력 팝오버
  *
- * 검증 계약: docs/plans/PLAN-F09-completion-notification.md `## 검증 계약` (F09-40~43)
+ * 검증 계약: docs/plans/PLAN-F09-completion-notification.md `## 검증 계약` (F09-40·43·46)
+ * F09-41·42·47(벨 열기 = 전체 읽음)은 2026-10-02 REQ-B27 로 폐기 — `NotificationBell.read.test.jsx` 가 대체
  *
  * ⚠️ **라이트/다크 양쪽 확인은 이 파일이 못 한다** — 계약 #20 이 겨냥하는 실패는
  *    "정상 토큰(`primary.lighter`)을 썼는데 다크에서만 깨지는 것"이라 렌더 단언으로는
@@ -76,53 +77,6 @@ describe('NotificationBell', () => {
     renderBell();
 
     expect(screen.getByText('3')).toBeInTheDocument();
-  });
-
-  it('[F09-41] 팝오버를 열면 읽음 커서 갱신 API가 불린다', () => {
-    feedIs([notif('job-a', '2026-08-07T10:00:00+00:00')], 1);
-    renderBell();
-
-    openPopover();
-
-    // 항목별이 아니라 전체 읽음이다 — 커서 하나로 충분하다는 결정(2026-08-03).
-    expect(markNotificationsRead).toHaveBeenCalledTimes(1);
-  });
-
-  it('[F09-42] 읽음 처리 후 뱃지가 사라진다', async () => {
-    feedIs([notif('job-a', '2026-08-07T10:00:00+00:00')], 1);
-    const { rerender } = renderBell();
-
-    openPopover();
-    feedIs([notif('job-a', '2026-08-07T10:00:00+00:00')], 0); // 서버가 0을 돌려준 뒤
-    rerender(
-      <ThemeProvider>
-        <NotificationBell />
-      </ThemeProvider>,
-    );
-
-    expect(screen.queryByText('1')).not.toBeInTheDocument();
-  });
-
-  it('[F09-47] 읽음 처리 후 새 알림이 오면 뱃지가 다시 나타난다', () => {
-    // 서버의 unread_count 는 **읽음 커서 이후 개수**라 mark_all_read 뒤 0으로 리셋되고
-    // 새 알림마다 1부터 다시 센다(`notification_service.list_feed`). 즉 이 값은
-    // 단조 증가하지 않는다 — 그렇게 가정하면 읽은 뒤의 알림이 영영 안 보인다.
-    feedIs([notif('job-a', '2026-08-07T10:00:00+00:00')], 1);
-    const { rerender } = renderBell();
-
-    openPopover(); // 읽음 처리 (커서가 지금으로 이동)
-
-    feedIs(
-      [notif('job-b', '2026-08-07T10:05:00+00:00'), notif('job-a', '2026-08-07T10:00:00+00:00')],
-      1, // 커서 이후 1건 — 값은 읽기 전과 같지만 **다른 알림**이다
-    );
-    rerender(
-      <ThemeProvider>
-        <NotificationBell />
-      </ThemeProvider>,
-    );
-
-    expect(screen.getByText('1')).toBeInTheDocument();
   });
 
   it('[F09-43] 팝오버 항목을 클릭하면 화면 이동이 일어난다', () => {

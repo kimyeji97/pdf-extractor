@@ -663,6 +663,16 @@ def save_read_cursor(cursor: str) -> None:
     _put_json(_key(NOTIFICATIONS_PREFIX, nkey.READ_CURSOR_NAME), {"cursor": cursor})
 
 
+# 알림 읽음 기록 — 사용자별 읽은 알림 id 목록 (REQ-B27). notifications/ 밖(그 아래 .json 은 알림 키로 세어진다)
+def get_read_ids(user_id: str) -> list:
+    data = _get_json_or_none(_key("notification_reads", f"{user_id}.json"))
+    return data.get("ids", []) if data else []
+
+
+def save_read_ids(user_id: str, ids: list) -> None:
+    _put_json(_key("notification_reads", f"{user_id}.json"), {"ids": ids})
+
+
 def delete_job(job_id: str) -> None:
     """
     job과 연관된 오브젝트를 전부 삭제한다 (원본·결과·상태·경계·썸네일·수동문항·페이지캐시).

@@ -272,6 +272,7 @@ class NotificationItem(BaseModel):
     kind: Optional[NotificationKind] = None
     title: Optional[str] = None
     message: Optional[str] = None
+    read: bool = False   # 이 사용자가 클릭해 읽었나 (REQ-B27)
 
 
 class NotificationListResponse(BaseModel):

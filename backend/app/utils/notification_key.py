@@ -63,6 +63,12 @@ def parse_stamp(relpath: str):
         return None
 
 
+def parse_job_id(relpath: str):
+    """상대 경로에서 job_id 를 뽑는다(파일을 열지 않는다 — 소유자 필터, REQ-B27). 형식에 안 맞으면 None."""
+    m = _FILENAME_RE.match(relpath.rsplit("/", 1)[-1])
+    return m.group("job_id") if m else None
+
+
 def month_is_expired(month: str, cutoff: datetime) -> bool:
     """
     월 프리픽스 전체가 보관 기간을 벗어났는가.
