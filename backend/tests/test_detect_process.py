@@ -105,3 +105,16 @@ def test_P06_26_진짜_자식_프로세스_감지_결과가_직접_호출과_같
     in_child = inline_detect_pool.original.submit(detect_question_boundaries, pdf_path).result(timeout=120)
 
     assert in_child == direct
+
+
+def test_P06_29_감지_자식_프로세스는_nice_19로_돈다(inline_detect_pool):
+    """근거: PLAN § 결정 — "자식 프로세스를 `os.nice(19)`로 띄운다"
+
+    분리 후 감지 5건이 vCPU 2개를 다 써(CPU 57% → 99%) 분석 중 API가 오히려 느려졌다 —
+    CPU가 바쁠 때 API가 먼저 받도록 감지 프로세스 우선순위를 가장 낮춘다.
+    """
+    import os
+
+    nice = inline_detect_pool.original.submit(os.getpriority, os.PRIO_PROCESS, 0).result(timeout=60)
+
+    assert nice == 19

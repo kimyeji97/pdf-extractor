@@ -9,6 +9,7 @@ OOM 으로 죽었다(2026-09-28 dev). 초과분은 `QUEUED` 로 두고 슬롯이
    다른 태스크가 돌리던 정상 작업까지 FAILED 로 찍는다(PLAN-B17 § 운영 환경 참고).
 """
 import logging
+import os
 import threading
 from concurrent.futures import ProcessPoolExecutor
 
@@ -25,7 +26,13 @@ slots = threading.BoundedSemaphore(MAX_CONCURRENT)
 # 느려졌다(피크 ① questions_all p90 1.41s, /health 0.09 → 0.33s). 크기 = 슬롯 수라 슬롯을 잡은 작업은 바로 돈다.
 # ⚠️ 자식은 `pdf_path → 경계 목록` 만 계산한다. 상태·캐시·알림 쓰기는 부모에서 — s3_service 메모리 캐시는
 #    같은 프로세스의 저장만 안다. 테스트는 conftest 의 `inline_detect_pool` 이 인라인으로 바꾼다.
-detect_pool = ProcessPoolExecutor(max_workers=MAX_CONCURRENT)
+# 우선순위는 가장 낮게 — 프로세스로 나누자 감지 5건이 vCPU 2개를 다 써(CPU 57% → 99%) API 가 CPU 를 다퉜다.
+# CPU 가 바쁠 때 API 가 먼저 받고, 감지는 남는 CPU 를 쓴다.
+def _lower_priority() -> None:
+    os.nice(19)
+
+
+detect_pool = ProcessPoolExecutor(max_workers=MAX_CONCURRENT, initializer=_lower_priority)
 
 _INTERRUPTED_MESSAGE = "서버가 재시작되어 분석이 중단되었습니다. 재감지해 주세요."
 
