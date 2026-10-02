@@ -363,7 +363,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ### 배포 상태 (세션마다 필요한 사실)
 
-⚠️ **dev 백엔드는 2026-10-02 브랜치 `perf/P06-list-cache` `32d4353`(이미지 태그 `p06-32d4353`, **머지 전**)로 마지막 배포됐다 — `:latest`도 이 이미지다. 현재 `desired 0`.** 머지 후 main으로 다시 빌드할 것(B24 main `64b8a18`은 2026-10-02 배포·확인)
+⚠️ **dev 백엔드는 2026-10-02 브랜치 `perf/P06-detect-process` `0cbe2d9`(이미지 `p06-0cbe2d9`, **머지 전**)로 마지막 배포됐다 — `:latest`도 이 이미지다. 현재 `desired 0`.** 머지 후 main으로 다시 빌드할 것(P06 Phase 5 main `ba591c7`은 2026-10-02 배포·확인)
 (**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시

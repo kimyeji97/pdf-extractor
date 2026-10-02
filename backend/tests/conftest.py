@@ -183,6 +183,37 @@ def fake_pdf(monkeypatch):
     return b"%PDF-1.4 fake"
 
 
+class _InlineDetectPool:
+    """감지 풀 대역 — 같은 프로세스에서 바로 실행하고 넘겨받은 (fn, args)를 기록한다."""
+
+    def __init__(self, original):
+        self.original = original   # 진짜 풀 (P06-25·26). 구현 전에는 None
+        self.calls: list = []
+
+    def submit(self, fn, *args, **kwargs):
+        self.calls.append((fn, args))
+        fut: Future = Future()
+        try:
+            fut.set_result(fn(*args, **kwargs))
+        except Exception as exc:  # noqa: BLE001
+            fut.set_exception(exc)
+        return fut
+
+
+@pytest.fixture(autouse=True)
+def inline_detect_pool(monkeypatch):
+    """
+    REQ-P06 Phase 6 — 감지가 `analysis_slots.detect_pool`(ProcessPoolExecutor)에서 돈다.
+    다른 프로세스에는 monkeypatch 가 안 건너가 `stub_detection` 등 감지 대역이 무시되므로
+    **모든 테스트**에서 인라인으로 바꾼다. 진짜 풀은 `.original` 로 꺼낸다.
+    """
+    from app.services import analysis_slots
+
+    pool = _InlineDetectPool(getattr(analysis_slots, "detect_pool", None))
+    monkeypatch.setattr(analysis_slots, "detect_pool", pool, raising=False)
+    return pool
+
+
 @pytest.fixture
 def stub_detection(monkeypatch):
     """
