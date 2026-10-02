@@ -517,6 +517,23 @@ def save_read_cursor(cursor: str) -> None:
     path.write_text(json.dumps({"cursor": cursor}), encoding="utf-8")
 
 
+# 알림 읽음 기록 — 사용자별 읽은 알림 id(created_at) 목록 (REQ-B27).
+# notifications/ 밖에 둔다 — 그 아래 .json 은 알림 키로 세어진다.
+def get_read_ids(user_id: str) -> list:
+    path = _BASE / "notification_reads" / f"{user_id}.json"
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("ids", [])
+    except Exception:
+        return []
+
+
+def save_read_ids(user_id: str, ids: list) -> None:
+    path = _ensure(_BASE / "notification_reads" / f"{user_id}.json")
+    path.write_text(json.dumps({"ids": ids}), encoding="utf-8")
+
+
 def cover_image_key(cover_id: str, ext: str = "jpg") -> str:
     return f"covers/{cover_id}.{ext}"
 

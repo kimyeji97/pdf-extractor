@@ -1,7 +1,9 @@
 """
 GET  /api/notifications          - 알림 피드 (첫 진입 기준선 · REQ-F09)
 GET  /api/notifications/stream   - SSE 스트림 (상시 전달 경로 · REQ-P04)
-POST /api/notifications/read     - 읽음 커서 갱신 (전체 읽음)
+POST /api/notifications/read     - 읽음 ({"ids": [...]} 그 알림만, 본문 없으면 전체 — 사용자별, REQ-B27)
+
+세 엔드포인트 모두 로그인 필요 · user 는 본인 job 의 알림만, admin 은 전체(REQ-B27).
 
 프론트는 완료를 판정하지 않는다 — 서버가 완료 시점에 쓴 알림을 읽기만 한다(계약 #22).
 P04 로 폴링이 사라졌지만 피드 GET 은 남는다: 첫 진입의 30일 기준선(계약 #27)이 그것이다.
@@ -11,12 +13,12 @@ import json
 import logging
 from typing import AsyncIterator, Optional
 
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Body, Depends, Header, Query
 from starlette.responses import StreamingResponse
 
 from app.models.schemas import NotificationListResponse, NotificationReadResponse
 from app.services import notification_broker as broker
-from app.services import notification_service
+from app.services import auth_service, notification_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -29,8 +31,9 @@ def list_notifications(
         description="ISO 8601 시각. 이후 알림만 반환한다. 미지정 시 최근 30일 전체(최신 50건).",
     ),
     limit: int = Query(default=notification_service.DEFAULT_LIMIT, ge=1, le=200),
+    current_user: dict = Depends(auth_service.get_current_user),
 ):
-    return notification_service.list_feed(since=since, limit=limit)
+    return notification_service.list_feed(since=since, limit=limit, user=current_user)
 
 
 # Cloudflare edge 는 오리진이 125초 동안 한 바이트도 안 보내면 스트림을 끊는다
@@ -47,8 +50,22 @@ def _format(event: dict) -> str:
     return "\n".join(lines) + "\n\n"
 
 
+def _for(user: Optional[dict], event: dict) -> Optional[dict]:
+    """이 사용자 스트림에 흘릴 모양으로 — 남의 job 이벤트·남의 읽음은 None(REQ-B27). user None 이면 그대로."""
+    if user is None:
+        return event
+    if event.get("event") == "read":
+        return event if event.get("user_id") in (None, user.get("user_id")) else None
+    data = event.get("data") or {}
+    if not notification_service.can_see(user, data.get("job_id")):
+        return None
+    if event.get("event") == "notification":   # 미확인 수는 받는 사람 기준
+        return {**event, "data": {**data, "unread_count": notification_service.unread_count(user)}}
+    return event
+
+
 async def event_stream(
-    last_event_id: Optional[str], heartbeat_s: float = HEARTBEAT_S
+    last_event_id: Optional[str], heartbeat_s: float = HEARTBEAT_S, user: Optional[dict] = None
 ) -> AsyncIterator[str]:
     """
     SSE 청크 생성기.
@@ -66,7 +83,7 @@ async def event_stream(
     async with broker.subscribe() as queue:
         yield ": connected\n\n"
         if last_event_id:
-            feed = notification_service.list_feed(since=last_event_id)
+            feed = notification_service.list_feed(since=last_event_id, user=user)
             for item in reversed(feed["notifications"]):
                 yield _format(
                     {
@@ -81,22 +98,30 @@ async def event_stream(
             except asyncio.TimeoutError:
                 yield ": keepalive\n\n"
                 continue
-            yield _format(event)
+            event = _for(user, event)
+            if event is not None:
+                yield _format(event)
 
 
 @router.get("/notifications/stream")
 async def stream_notifications(
     last_event_id: Optional[str] = Header(default=None, alias="Last-Event-ID"),
+    # EventSource 는 헤더를 못 붙인다 — 쿠키도 받는다(계약 #31, GET 조회라 CSRF 표면 없음)
+    current_user: dict = Depends(auth_service.get_current_user_allow_cookie),
 ):
     return StreamingResponse(
-        event_stream(last_event_id),
+        event_stream(last_event_id, user=current_user),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
 @router.post("/notifications/read", response_model=NotificationReadResponse)
-def mark_notifications_read():
-    """팝오버를 열면 호출된다 — 개별 항목이 아니라 전체를 읽음 처리한다."""
-    cursor = notification_service.mark_all_read()
-    return NotificationReadResponse(cursor=cursor, unread_count=0)
+def mark_notifications_read(
+    body: Optional[dict] = Body(default=None),
+    current_user: dict = Depends(auth_service.get_current_user),
+):
+    """알림을 클릭하면 그 알림만(`{"ids": [created_at]}`), '모두 읽음'이면 본문 없이 — 이 사용자만 (REQ-B27)."""
+    ids = (body or {}).get("ids")
+    remaining = notification_service.mark_read(current_user, ids)
+    return NotificationReadResponse(unread_count=remaining)
