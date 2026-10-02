@@ -137,6 +137,7 @@
 | REQ-F15 | 문제집 이름·파일명 표시 — 감지 알림 제목 문제집 이름 우선 · 목록 카드·작업 화면 헤더에 파일명 병기 | [plan](plans/PLAN-F15-workbook-name-and-filename.md) | 2026-09-30 | ✅ **완료**(F15-01~11 · PR #26 `f18c495` · dev 확인) |
 | REQ-C10 | 감지 문항 이름을 원문으로 표시("문항 유형 01" — 고정 접두어 "문항" + 사용자 이름 \|\| 원문 \|\| 번호) | [plan](plans/PLAN-C10-question-source-title.md) | 2026-10-01 | ✅ **Phase 1~3 완료**(백엔드 감지 원문 `source_text` + 조회 API · 프론트 `utils/questionName` 단일 표시 이름·입력란 고정 접두어, 케이스 30/30 · 백엔드 317 · 프론트 273 · 기출 4종·테스트02 경계 불변 실측). PR #27 main 머지 `b6edc0f`, dev 배포 `c10-b6edc0f` 후 사용자 육안 확인. 원문은 재감지한 파일부터 |
 | REQ-B27 | 알림 사용자별 분리 + 알림별 읽음 — 알림 API 3종 무인증·전 사용자 알림 노출, 전역 읽음 커서 | [plan](plans/PLAN-B27-notification-per-user.md) | 2026-10-02 | ✅ **Phase 1·2 완료**(케이스 35/35 · 백엔드 374/374·프론트 290/290 · 리뷰 3회 후 `206af9b` (b)·(c) 0). PR #31 main 머지 `95b707c`, dev 백엔드·프론트 동반 배포 후 계정 둘로 확인(API 18항목 · 화면 계정 전환) |
+| REQ-B26 | 문항 삭제 [되돌리기]가 복원하지 않음 → 삭제를 토스트 동안 미루고 되돌리면 그대로 | [plan](plans/PLAN-B26-delete-undo-restore.md) | 2026-10-02 | ✅ **Phase 1 완료**(케이스 22/22 · 프론트 312/312 · 리뷰 3회 후 `4c50d43` (b)·(c) 0). 프론트 전용 — PR·dev 배포 전 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -214,7 +215,6 @@
 | REQ-28 | 공유 기능 (분석 파일·생성 문제집을 계정에 공유) | [TODO](TODO.md) | 대 — REQ-27 선행 | ⏸ 보류 |
 | REQ-C11 | "유제"(보이는 번호 없는 하위 문항) 감지 — HWP 출력 기본문제 PDF | [TODO §8](TODO.md) · B20에서 분리 | — | ❌ **기각(2026-10-01)** — 2026-10-06 오픈 후 실사용 케이스를 보고 넣을지 다시 정한다. 그때 새 번호로(번호 재사용 안 함) |
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 | [plan](plans/PLAN-B25-stats-page-jump.md) · 2026-10-02 dev 확인 | — | 📝 계획서만 |
-| REQ-B26 | 문항 삭제 [되돌리기]가 복원하지 않음 | [plan](plans/PLAN-B26-delete-undo-restore.md) · 2026-10-02 dev 확인 | — | 📝 계획서만 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) · 2026-10-02 dev 확인 | — | 📝 계획서만 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." | [plan](plans/PLAN-F17-source-label-format.md) · 2026-10-02 dev 확인 | — | 📝 계획서만 |
 
@@ -252,6 +252,30 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-02
+
+### REQ-B26 — 삭제 [되돌리기] 복원: 삭제 지연으로 (리뷰 세 바퀴)
+
+- 원인: 삭제는 즉시 서버 반영, [되돌리기]는 서버 목록을 다시 읽기만 했다 — 복원된 게 없었다. 결정: **삭제 지연**(화면에서 숨기고 4초 토스트가 닫힐 때 서버 삭제), 백엔드 무변경
+- 구현 전 확인: 첫 테스트 9건 중 6건이 옛 구현에서도 통과 — 대역 서버가 삭제를 반영하지 않아 "다시 읽기"로도 문항이 돌아왔다. `/testrun`이 무대를 서버처럼(삭제 반영) 바꾸고 옛 컴포넌트로 돌려 B26-03·04가 실패하는 것을 확인. 기존 B20-27은 "클릭 즉시 호출"을 단언해 (a)로 언마운트 확정 후 단언(단언 불변)
+- `/review` 세 바퀴:
+  - ① (b) 같은 쪽 다시 읽기가 삭제 POST를 앞질러 지운 문항이 되살아남 · 4초 안 탭 닫기면 삭제 유실 · 지연 삭제가 `apiFetch`라 사용자가 안 누른 순간 전역 딤(계약 #26) / (c) 토스트 중 재감지 · 실패 처리 미정 → 사용자 "추천대로": **재감지 전 확정·대기**, **실패 시 "삭제하지 못했습니다" + 그 쪽일 때만 다시 읽기, 다른 숨김 유지** · `pagehide` 전송 · `bulkDeleteQuestions` 자체를 배경 요청(헤더 직접·`keepalive`·401 갱신 1회 — 호출처가 지연 삭제뿐)
+  - ② **`work.jsx`가 쪽마다 패널 `key`를 바꿔 쪽 이동 = 언마운트·새 마운트**인데 같은 인스턴스로 가정했다(B26-17도 `rerender` 무대) → 진행 중 삭제(`inflightDeletes`)·실패 알림을 **모듈 수준**으로 · 외부 확정 시 토스트 닫기
+  - ③ 0건
+- 함정: 실패 처리의 다시 읽기가 "진행 중 삭제"를 기다리는데 그게 자기 자신이면 서로 기다려 멈춘다 — 읽기는 **요청 자체**가 끝나기만 기다린다
+- 리뷰: B26 @ 2b7b64f — (b) 3 · (c) 2 · nit 2 · 이연 0
+  - (b): [frontend/src/components/QuestionAnalysisPanel.jsx:250] refreshTrigger 정리에서 대기 삭제를 기다리지 않고 바로 다시 읽음
+  - (b): [frontend/src/components/QuestionAnalysisPanel.jsx:312] 토스트 4초 안 탭 닫기·새로고침이면 대기 삭제가 안 나감
+  - (b): [frontend/src/components/QuestionAnalysisPanel.jsx:315] 지연 삭제가 apiFetch라 전역 딤(계약 #26)
+  - (c): [frontend/src/components/QuestionAnalysisPanel.jsx:244] 토스트 중 재감지 처리 미정
+  - (c): [frontend/src/components/QuestionAnalysisPanel.jsx:246] 지연 삭제 실패 시 동작 미정
+- 리뷰: B26 @ 7fc7b54 — (b) 3 · (c) 0 · nit 1 · 이연 1
+  - (b): [frontend/src/components/QuestionAnalysisPanel.jsx:296] 쪽 이동(재마운트) 뒤 실패 무알림
+  - (b): [frontend/src/components/QuestionAnalysisPanel.jsx:227] 진행 중 삭제가 인스턴스별 — 새 패널이 이전 POST를 안 기다림
+  - (b): [frontend/src/components/QuestionAnalysisPanel.jsx:260] 외부 확정 뒤 토스트 잔존, [되돌리기]가 아무것도 안 되살림
+  - 이연: [frontend/src/pages/analysis/work.jsx:196] 재감지 진행 중에도 삭제 가능 — 옛 (번호, k)로 새 경계를 지울 수 있음
+- 리뷰: B26 @ 4c50d43 — (b) 0 · (c) 0 · nit 1 · 이연 1
+  - 이연: [frontend/src/components/QuestionAnalysisPanel.jsx:274] 작업 화면을 떠난 뒤의 지연 삭제 실패는 알릴 패널이 없음
+- nit(기록만): 쪽 목록 문항 수가 삭제 뒤 안 바뀜(예전부터) · 다른 job 패널에 맥락 없는 실패 문구 · pagehide 때 401이면 갱신 재시도가 못 끝남
 
 ### REQ-B27 — PR #31 머지, dev 배포·계정 둘 확인 → B27 완료
 
