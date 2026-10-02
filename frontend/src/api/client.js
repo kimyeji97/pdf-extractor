@@ -564,15 +564,17 @@ export async function deleteManualQuestion(jobId, pageNum, manualId) {
  * 단건 DELETE 동시 호출의 경쟁 상태를 피하기 위해 캐시별 1회 갱신으로 처리한다.
  */
 export async function bulkDeleteQuestions(jobId, pageNum, questions = [], manualIds = []) {
-  const res = await apiFetch(
-    `${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/bulk-delete`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // 자동 문항은 (번호, k) 쌍 — 옛 question_nums 는 백엔드가 k=0 으로만 읽는다 (ADR-0006)
-      body: JSON.stringify({ questions, manual_ids: manualIds }),
-    }
-  );
+  // 배경 요청이다(REQ-B26) — 유일한 호출처가 토스트 뒤·화면 정리·탭 닫기에 나가는 지연 삭제라 apiFetch 의 전역 딤을
+  // 켜면 사용자가 안 누른 순간 화면이 덮인다(계약 #26). 헤더는 직접(계약 #31), 탭을 닫아도 끝까지 가도록 keepalive.
+  const send = () => fetch(`${BASE_URL}/jobs/${jobId}/pages/${pageNum}/questions/bulk-delete`, {
+    method: "POST",
+    keepalive: true,
+    headers: { "Content-Type": "application/json", ..._authHeaders() },
+    // 자동 문항은 (번호, k) 쌍 — 옛 question_nums 는 백엔드가 k=0 으로만 읽는다 (ADR-0006)
+    body: JSON.stringify({ questions, manual_ids: manualIds }),
+  });
+  let res = await send();
+  if (res.status === 401 && (await refreshAccessToken())) res = await send();
   if (!res.ok) throw new Error("문항 삭제 실패");
   return res.json();
 }

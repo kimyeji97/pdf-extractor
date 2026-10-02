@@ -335,7 +335,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-10-02 기준 각 prefix 다음 번호: `B28`(B25·B26·F16·F17은 2026-10-02 계획서만, B27 진행 중), `C12`, `D12`, `F18`, `P07`, 숫자 `31`.
+2026-10-02 기준 각 prefix 다음 번호: `B28`(B25·B26·F16·F17은 2026-10-02 계획서만, B27 ✅), `C12`, `D12`, `F18`, `P07`, 숫자 `31`.
 (2026-09-30에 착수 대기 13건을 **B21·B22·F14·F15·C10·C11·P06**으로 예약했다 — 전부 미착수이고 REQ-28은 ⏸.
 예약분은 PROGRESS "미착수 — 번호만 부여된 것" 표가 단일 출처다. 번호는 완료돼도 재사용하지 않는다)
 
@@ -363,12 +363,12 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ### 배포 상태 (세션마다 필요한 사실)
 
-⚠️ **dev 백엔드는 2026-10-02 main `3c06185`(P06 Phase 6까지, 이미지 태그 `p06-3c06185` = `:latest`)로 배포됐다 — 현재 `desired 0`(2026-10-02 P06 측정 끝 후 내림).**
+⚠️ **dev 백엔드는 2026-10-02 main `95b707c`(B27까지, 이미지 태그 `b27-95b707c` = `:latest`)로 배포됐다 — B27 dev 확인 뒤 `desired 1`로 켜져 있다(내릴지 사용자 결정 대기).**
 (**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
-⚠️ **dev 프론트는 2026-10-01 main `b6edc0f` 빌드(C10까지)다** — 실체는 Pages가 아니라
+⚠️ **dev 프론트는 2026-10-02 main `95b707c` 빌드(B27까지)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
 "배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh`)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**

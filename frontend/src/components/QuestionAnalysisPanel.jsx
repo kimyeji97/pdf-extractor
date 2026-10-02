@@ -191,6 +191,19 @@ const QuestionCard = memo(
     prev.editingValue === next.editingValue,
 );
 
+// 화면에 떠 있는 패널들의 "대기 삭제 확정" 함수 (REQ-B26). 재감지는 부모(work.jsx)에서 시작되므로,
+// 옛 경계의 (번호, k)로 지목한 지연 삭제가 새 경계에 적용되지 않게 부모가 먼저 이걸 기다린다.
+// 쪽을 옮기면 work.jsx 가 key 를 바꿔 패널을 새로 그린다 — 보낸 삭제·실패 알림은 패널이 아니라 여기에 둔다.
+const pendingFlushers = new Set();
+const deleteFailureListeners = new Set();
+let inflightDeletes = Promise.resolve(); // 모든 패널이 보낸 삭제 — 목록 읽기·재감지가 이것을 기다린다
+
+/** 대기 중 삭제를 지금 보내고, 이미 나간 것(언마운트된 패널 것 포함)까지 끝나면 끝난다 (재감지 전에 부른다) */
+export function flushPendingDeletes() {
+  pendingFlushers.forEach((flush) => flush());
+  return inflightDeletes;
+}
+
 export default function QuestionAnalysisPanel({
   jobId,
   pageNum,
@@ -213,6 +226,11 @@ export default function QuestionAnalysisPanel({
   // ── 삭제 Undo 토스트 ────────────────────────────────────
   const [undoToast, setUndoToast]   = useState(null);
   const undoTimerRef                = useRef(null);
+  // 서버에 아직 안 보낸 삭제 (REQ-B26) — 토스트가 닫히거나·다시 삭제하거나·쪽을 옮기거나·화면을 떠날 때 보낸다
+  const pendingDeleteRef            = useRef(null);
+  const fetchQuestionsRef           = useRef(null);
+  const viewRef                     = useRef({ jobId, pageNum });
+  viewRef.current = { jobId, pageNum };
 
   // ── 문항 목록 로드 ─────────────────────────────────────
   const fetchQuestions = useCallback(async () => {
@@ -221,8 +239,12 @@ export default function QuestionAnalysisPanel({
     setError("");
     setCheckedIds(new Set());
     try {
+      // 방금 보낸 삭제보다 먼저 읽으면 지운 문항이 되살아나 보인다 (REQ-B26)
+      await inflightDeletes;
       const data = await getPageQuestions(jobId, pageNum);
-      setQuestions(data.questions || []);
+      // 아직 안 보낸 삭제로 숨긴 문항은 계속 숨긴다
+      const hidden = pendingDeleteRef.current?.ids ?? new Set();
+      setQuestions((data.questions || []).filter((q) => !hidden.has(q.question_id)));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -230,12 +252,55 @@ export default function QuestionAnalysisPanel({
     }
   }, [jobId, pageNum]);
 
+  fetchQuestionsRef.current = fetchQuestions;
+
+  /**
+   * 대기 중 삭제를 서버에 보내고 그 요청이 끝나는 Promise 를 돌려준다(없으면 진행 중인 것).
+   * 쪽·job 은 삭제한 시점 값이다(쪽을 옮긴 뒤에도 원래 쪽을 지운다).
+   */
+  const commitPendingDelete = useCallback(() => {
+    const p = pendingDeleteRef.current;
+    if (!p) return;
+    pendingDeleteRef.current = null;
+    // 이미 나간 삭제는 되돌릴 수 없다 — 바깥에서 확정(재감지 전·pagehide)돼도 [되돌리기]를 남기지 않는다
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
+    // 자동/수동을 분리해 벌크 삭제 1회 호출 (단건 동시 호출의 경쟁 상태 회피 — REQ-B06)
+    const request = bulkDeleteQuestions(p.jobId, p.pageNum, p.autoRefs, p.manualIds);
+    // 목록 읽기가 기다리는 건 요청 자체다 — 실패 처리(다시 읽기 포함)까지 기다리면 서로를 기다려 멈춘다
+    const settled = request.then(() => undefined, () => undefined);
+    inflightDeletes = Promise.all([inflightDeletes, settled]).then(() => undefined);
+    // 실패는 지금 떠 있는 패널들에 알린다 — 쪽을 옮겨 이 패널이 없어져도 새 패널이 보여 준다
+    request.catch(() => deleteFailureListeners.forEach((notify) => notify(p)));
+  }, []);
+
   useEffect(() => {
     fetchQuestions();
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoToast(null);
+      commitPendingDelete(); // 쪽 이동·다시 읽기·화면 이탈에도 대기 중 삭제가 사라지지 않게
     };
-  }, [fetchQuestions, refreshTrigger]);
+  }, [fetchQuestions, refreshTrigger, commitPendingDelete]);
+
+  // 탭 닫기·새로고침엔 React 정리가 안 돈다 — pagehide 에 보낸다(요청은 keepalive) · 재감지 전 확정 통로 등록
+  useEffect(() => {
+    const onPageHide = () => { commitPendingDelete(); };
+    // 그 쪽을 보고 있을 때만 서버 상태로 다시 읽는다 — 다른 대기 삭제의 숨김은 fetchQuestions 가 유지
+    const onFailure = async (p) => {
+      const view = viewRef.current;
+      if (view.jobId === p.jobId && view.pageNum === p.pageNum) await fetchQuestionsRef.current?.();
+      setError("삭제하지 못했습니다");
+    };
+    window.addEventListener("pagehide", onPageHide);
+    pendingFlushers.add(commitPendingDelete);
+    deleteFailureListeners.add(onFailure);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      pendingFlushers.delete(commitPendingDelete);
+      deleteFailureListeners.delete(onFailure);
+    };
+  }, [commitPendingDelete]);
 
   // ── 체크박스 토글 ──────────────────────────────────────
   const toggleCheck = (id) => {
@@ -294,36 +359,44 @@ export default function QuestionAnalysisPanel({
   const showUndoToast = (message, onUndo) => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoToast({ message, onUndo });
-    undoTimerRef.current = setTimeout(() => setUndoToast(null), 4000);
+    undoTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+      commitPendingDelete();
+    }, 4000);
   };
 
-  const handleDeleteSelected = async () => {
-    const toDelete = questions.filter((q) => checkedIds.has(q.question_id));
-    if (toDelete.length === 0) return;
+  // 삭제는 화면에서 먼저 숨기고 토스트가 닫힐 때 서버에 보낸다 — [되돌리기]가 삭제 전 상태(오탐 표시 포함)를
+  // 그대로 되살리려면 서버에서 지우지 않아야 한다 (REQ-B26, 백엔드 복원 API 없음)
+  const handleDeleteSelected = () => {
+    const snapshot = questions;
+    const deletedItems = snapshot.filter((q) => checkedIds.has(q.question_id));
+    if (deletedItems.length === 0) return;
 
-    const deletedItems = [...toDelete];
-    setQuestions((prev) => prev.filter((q) => !checkedIds.has(q.question_id)));
+    commitPendingDelete(); // 토스트 중 또 삭제 — 앞 삭제는 바로 확정
+    const deletedIds = new Set(deletedItems.map((q) => q.question_id));
+    setQuestions((prev) => prev.filter((q) => !deletedIds.has(q.question_id)));
     setCheckedIds(new Set());
 
-    // 자동/수동을 분리해 벌크 삭제 1회 호출 (단건 동시 호출의 경쟁 상태 회피)
     // 같은 쪽에 같은 번호가 공존할 수 있어 (번호, k) 로 지목한다 (ADR-0006)
-    const autoRefs = deletedItems
-      .filter((q) => !q.is_manual)
-      .map((q) => ({ num: q.question_num, k: q.k ?? 0 }));
-    const manualIds = deletedItems
-      .filter((q) => q.is_manual)
-      .map((q) => q.manual_id);
+    const pending = {
+      jobId,
+      pageNum,
+      ids: deletedIds,
+      autoRefs: deletedItems.filter((q) => !q.is_manual).map((q) => ({ num: q.question_num, k: q.k ?? 0 })),
+      manualIds: deletedItems.filter((q) => q.is_manual).map((q) => q.manual_id),
+    };
+    pendingDeleteRef.current = pending;
 
-    try {
-      await bulkDeleteQuestions(jobId, pageNum, autoRefs, manualIds);
-    } catch {
-      // 실패 시 서버 상태로 목록 복원
-      await fetchQuestions();
-      return;
-    }
-
-    showUndoToast(`${deletedItems.length}개 문항이 삭제되었습니다.`, async () => {
-      await fetchQuestions();
+    showUndoToast(`${deletedItems.length}개 문항이 삭제되었습니다.`, () => {
+      if (pendingDeleteRef.current !== pending) return;
+      pendingDeleteRef.current = null;
+      // 원래 순서대로 되살린다 — 그 사이 바뀐 다른 문항(제목 등)은 현재 값을 쓴다
+      setQuestions((prev) => {
+        const current = new Map(prev.map((q) => [q.question_id, q]));
+        return snapshot
+          .filter((q) => current.has(q.question_id) || deletedIds.has(q.question_id))
+          .map((q) => current.get(q.question_id) ?? q);
+      });
     });
   };
 
