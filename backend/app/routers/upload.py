@@ -162,7 +162,8 @@ def _detect_boundaries(job_id: str, status_file) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = str(Path(tmpdir) / "original.pdf")
             Path(pdf_path).write_bytes(pdf_bytes)
-            boundaries = detect_question_boundaries(pdf_path)
+            # 계산만 자식 프로세스에서 (REQ-P06 Phase 6) — 결과 쓰기는 아래에서 이 프로세스가 한다
+            boundaries = analysis_slots.detect_pool.submit(detect_question_boundaries, pdf_path).result()
 
         logger.info("[boundary] 감지 완료 | job_id=%s count=%d", job_id, len(boundaries))
 

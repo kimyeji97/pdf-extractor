@@ -10,6 +10,7 @@ OOM 으로 죽었다(2026-09-28 dev). 초과분은 `QUEUED` 로 두고 슬롯이
 """
 import logging
 import threading
+from concurrent.futures import ProcessPoolExecutor
 
 from app.models.schemas import BoundariesStatus
 from app.services import notification_service, storage
@@ -19,6 +20,12 @@ logger = logging.getLogger(__name__)
 # ponytail: 인프로세스 세마포어 — 태스크를 여럿 띄우면 작업별 소유 태스크·하트비트로 바꿀 것
 MAX_CONCURRENT = 5
 slots = threading.BoundedSemaphore(MAX_CONCURRENT)
+
+# 감지 계산만 별도 프로세스에서 (REQ-P06 Phase 6) — 같은 프로세스 스레드로 돌면 GIL 을 다퉈 분석 중 API 가
+# 느려졌다(피크 ① questions_all p90 1.41s, /health 0.09 → 0.33s). 크기 = 슬롯 수라 슬롯을 잡은 작업은 바로 돈다.
+# ⚠️ 자식은 `pdf_path → 경계 목록` 만 계산한다. 상태·캐시·알림 쓰기는 부모에서 — s3_service 메모리 캐시는
+#    같은 프로세스의 저장만 안다. 테스트는 conftest 의 `inline_detect_pool` 이 인라인으로 바꾼다.
+detect_pool = ProcessPoolExecutor(max_workers=MAX_CONCURRENT)
 
 _INTERRUPTED_MESSAGE = "서버가 재시작되어 분석이 중단되었습니다. 재감지해 주세요."
 
