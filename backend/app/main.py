@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import logging
+import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -9,6 +10,7 @@ from starlette.responses import JSONResponse
 from app.routers import upload, extract, browse, workbook, cover, notification, footnote, watermark, template, auth
 from app.core.config import settings
 from app.services import analysis_slots
+from app.services import question_stats_service
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,7 +39,16 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     # 죽은 태스크가 남긴 QUEUED·PROCESSING 을 FAILED + 실패 알림으로 (REQ-B17 — 태스크 1개 전제)
     analysis_slots.fail_interrupted()
+    # 옛 상태 파일에 쪽 목록 채우기 (REQ-P06) — 채우는 동안에도 상세 조회는 옛 경로로 같은 답을 내므로 기동을 막지 않는다
+    threading.Thread(target=_backfill_page_lists, daemon=True).start()
     yield
+
+
+def _backfill_page_lists() -> None:
+    try:
+        question_stats_service.backfill_page_lists()
+    except Exception:  # noqa: BLE001 — 실패해도 옛 경로가 남아 있다. 기동을 죽이지 않는다
+        logging.getLogger(__name__).exception("[stats] 쪽 목록 채우기 실패")
 
 
 app = FastAPI(

@@ -107,7 +107,7 @@
 | REQ-B11 | 알림 기준선이 피드 도착 전에 잡힘 — 새로고침마다 직전 알림 토스트 | [plan](plans/PLAN-B11-notification-baseline-before-feed.md) | 2026-08-28 | ✅ **Phase 1~2 완료**(`useNotificationsReady` + 세 소비처 게이트, 10/10 · dev Worker 배포 후 새로고침 5회 토스트 0건 · 계약 #27 정정) — PR #3 **main 머지 완료(2026-08-28, `3d35d65`)**. 미결 1건(ready 동승 알림)은 후속 |
 | REQ-C09 | 알림 경로 후속 묶음 (실패 문구 서버 `message` 단일 출처 · `useNotificationRefresh` `kind` 필터 · 계약 #26 딤 회귀 케이스 · SSE `: connected` 선발송) | [plan](plans/PLAN-C09-notification-followups.md) | 2026-08-28 | ✅ Phase 1·2 완료 (10/10 · 백엔드 34/34 · 프론트 61/61 · dev 실측 warm `onopen` 0.2~0.8s) — PR #4 **main 머지 완료(2026-08-28, `91a911a`)**. Phase 1 육안 1건(실패 배너 문구) 미확인 |
 | REQ-P05 | 알림 전달 지연 (감지 완료 알림을 프리워밍 앞으로 · 피드 GET 병렬화) | [plan](plans/PLAN-P05-notification-latency.md) | 2026-08-28 | ✅ Phase 1~3 완료 (10/10 · 백엔드 44/44 · 프론트 61/61) — 발행 전 대기 **8.1s 단축**, 피드 GET 3.79s → 1.43s. PR #5 **main 머지(2026-08-28, `6fba551`)** |
-| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API p90 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | — | 🟡 **Phase 1~4 완료**(측정 · 최소 사양 산정 · 터널 프로토콜 비교 = 차이 없음 · dev 2 vCPU/4GB rev 8 반영·피크 ② 생존). 남은 것: Phase 5 현황판 계열 API 개선(코드 — **방식 확정 2026-10-02**: 메모리 캐시 + 상태 파일 쪽 목록) · Phase 6 최종 측정 |
+| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API p90 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | — | 🟡 **Phase 1~5 완료**(측정 · 최소 사양 · 터널 비교 · dev 2 vCPU/4GB · **현황판 API 메모리 캐시 + 쪽 목록 — 대상 API p90 평시 0.12~0.21s · 피크 ① 0.19~0.89s**, 브랜치 `perf/P06-list-cache` 머지 전). 남은 것: Phase 6 최종 측정(터널 경유 전 API) |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | 2026-08-27 | ✅ **Phase 0~3 완료** — SSE, 폴링 0건, dev 실측 전송 0.3~1.3s·숨김 탭 즉시 · PR #2 main 머지(`d176596`) · 후속: 콜드 스타트 기준, `: connected` 선발송, 발행 전 서버 작업 ~6s |
@@ -130,7 +130,7 @@
 | REQ-B19 | 분석 실패 파일 상세가 30초 504 — 조회 경로가 캐시 미스 시 요청 안에서 동기 감지 (B17 Phase 4를 막음, TODO §7) | [plan](plans/PLAN-B19-lookup-path-sync-detection.md) | 2026-09-29 | ✅ **Phase 1~3 완료**(조회 3곳 캐시 미스 → 감지 없이 빈 결과·404, 상태 파일 안 씀 · 케이스 10/10 · `/testrun` 확인 · 회귀 없음 백엔드 266/266 · 전제 소멸한 F09-06·07·16 폐기 · 504 CORS 헤더는 Cloudflare 쪽에서 빠짐 — 구간 특정까지). PR #22 main 머지 `46c464e`, dev 배포 `f93e525` 확인(FAILED 상세 즉시 200·재감지 DONE·stats 9s→0.9s). `/api/jobs`·`/api/notifications` 재측정과 미결 3건은 TODO §7·§9로 이관 |
 | REQ-B20 | HWP 출력 PDF가 전부 오탐 — 보이지 않는 0.1pt 번호 글자 + 같은 쪽·같은 번호 식별자 충돌 (B18 회귀, dev `테스트02` 840경계·오탐 378) | [plan](plans/PLAN-B20-invisible-number-and-id-collision.md) | 2026-09-30 | ✅ **Phase 1~5 완료**(adaptive 1pt 이하 제외 · 정규식 전용 높이 규칙 200pt · 문항 ID 순번 k — ADR-0006 · 목록 k 필드 · 프론트 k 전달 · 케이스 27/27 · 백엔드 288/288·프론트 203/203). PR #23 `0d8c5d4`·PR #24 `ee27f2c` main 머지, dev 배포 `fe3d971` 사용자 확인 |
 | REQ-B23 | 결과 PDF 상태 조회(`GET /api/status/{job_id}`)가 401 — `getStatus` raw fetch에 인증 헤더 누락(계약 #31 누락) | [plan](plans/PLAN-B23-status-poll-401.md) | 2026-09-30 | ✅ **Phase 1·2 완료**(`getStatus`에 `_authHeaders()` · raw fetch 인증 스캔 테스트 · 케이스 3/3 · 프론트 206/206). PR #25 main 머지 `4f26daf`, dev 프론트 배포 후 사용자 확인 |
-| REQ-B24 | 현황판 통계 API(`/api/stats`·`/api/stats/detail`) 인증 누락 — 비로그인으로도 전 사용자 합산·남의 job_id·파일명 노출 | [plan](plans/PLAN-B24-stats-auth-missing.md) | 2026-10-02 | 🟡 **Phase 1 완료**(인증 + user 본인·admin 전체 · 케이스 9/9 · 백엔드 326/326). 브랜치 `fix/B24-stats-auth` `60d43f0` 푸시 — PR·머지·dev 배포 남음 |
+| REQ-B24 | 현황판 통계 API(`/api/stats`·`/api/stats/detail`) 인증 누락 — 비로그인으로도 전 사용자 합산·남의 job_id·파일명 노출 | [plan](plans/PLAN-B24-stats-auth-missing.md) | 2026-10-02 | ✅ **Phase 1 완료**(인증 + user 본인·admin 전체 · 케이스 9/9 · 백엔드 326/326). PR #28 main 머지 `64b8a18`, dev 배포 후 비로그인 401·user 남의 job 0건 확인(admin 화면은 테스트로만) |
 | REQ-B21 | 크롭 하단 여백이 문항마다 다름 — 하단 조임이 다음 문항 번호를 제 것으로 잡았다 | [plan](plans/PLAN-B21-crop-bottom-next-number.md) | 2026-09-30 | ✅ **완료**(B21-01~04 · PR #26 `f18c495` · dev 확인) |
 | REQ-B22 | 경계 캐시가 없는 job 처리 — FAILED·DONE 0문항 화면 안 안내 · extract-v2 캐시 미스 감지 제거 | [plan](plans/PLAN-B22-missing-boundaries-cache.md) | 2026-09-30 | ✅ **완료**(B22-01~10 · PR #26 `f18c495` · dev 확인) |
 | REQ-F14 | 현황판 개선 + 시스템 전체 뱃지 색 — 감지 상태 SSE `status` 이벤트 · 목록·현황판 함께 배경 재조회 · `utils/badges` 단일 정의 · 상세 영역 닫기·목록 우측 | [plan](plans/PLAN-F14-stats-board-and-badges.md) | 2026-09-30 | ✅ **완료**(F14-01~26 · PR #26 `f18c495` · dev 확인) |
@@ -247,6 +247,21 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-02
+
+### REQ-P06 — Phase 5: 현황판 계열 API 12.3s → 0.2s (메모리 캐시 + 쪽 목록, 실측 세 번 만에 통과)
+
+- **실측이 두 번 계획을 고쳤다** — 코드 케이스가 전부 녹색인 뒤에도 dev 실측(P06-14)이 두 번 미충족이었다. 단위 테스트만으로는 둘 다 못 봤다:
+  1. **옛 상태 파일**: dev job이 전부 Phase 5 이전 것이라 "쪽 목록 없으면 파일을 읽어 계산" 경로를 타 미탐지 12.3s·오탐 4~6s 그대로였다(계획서는 대체 경로만 정하고 채우기를 안 정했다)
+     → **서버 시작 시 1회 채우기**(사용자 결정 — 일회성 스크립트·조회 때 저장(계약 #34 위반) 기각). 백그라운드 스레드, 최신 상태를 다시 읽어 쪽 목록만 얹는다. dev 첫 기동에서 76건 채움
+  2. **admin `templates`**: 목록은 캐시였지만 응답이 템플릿마다 표지·각주·워터마크 메타를 R2에서 순차로 읽어(`_resolve_slots`) 피크 ① p90 1.06s → 각주·워터마크 목록도 캐시하고 단건 메타도 캐시에서(사용자 결정 — 병렬화만 기각)
+- **재적재가 조회를 막으면 p90이 깨진다** — 첫 구현은 60초 재적재 동안 목록 조회를 잠가 60초마다 요청 하나가 R2 전체 읽기(~1s)를 기다렸다. 재적재는 뒤에서, 그동안 기존 목록을 준다.
+  **재적재 도중 쓰기는 따로 적어 새 목록에 다시 얹는다** — 안 하면 방금 저장한 job이 최대 60초 목록에서 사라진다(계획서에 없던 것, 구현 중 발견)
+- 메모리 캐시가 성립하는 전제는 프로세스 1개(uvicorn 워커 1 · 태스크 1) — 늘리면 다른 프로세스 쓰기가 60초 늦게 보인다. **R2에 직접 쓰는 새 경로는 캐시가 모른다** — `s3_service`의 save/delete 함수를 거칠 것
+- **테스트 함정**: 테스트 env는 R2 계정 ID를 빈 값으로 덮어 `s3_service`를 임포트하면 `boto3.client`가 `Invalid endpoint`로 죽는다(지금까지 아무 테스트도 s3_service를 임포트하지 않아 몰랐다) → 픽스처가 `boto3.client`를 가짜로 바꾼 뒤 로드
+- **그대로 둔 것**(사용자 결정): 재시작 직후 표지·각주·워터마크 목록을 아무도 안 연 상태의 `templates` — 1회차 1.08s · 이후 0.7s, 목록 화면이 한 번 열리면 0.12s. Phase 6에서 다시 본다
+- 실측(앱 직접, 2 vCPU/4GB, 측정 데이터 포함): `stats_detail` 미탐지 12.3s → 0.16s · 오탐 6.2s → 0.14s · `stats` 1.45s → 0.20s · `jobs` 0.9s → 0.14~0.20s · admin `templates` 0.93s → 0.21s(평시 p90). 피크 ① 최대 0.89s(알림)
+- **범위 밖으로 남은 1s 초과**(Phase 6 몫): 피크 ①의 `page_questions` 1.77s · `questions_all` 1.52s(user), 앞 측정의 `cover_image` 2.75s(admin)
+- dev는 측정 동안 P06 브랜치 이미지로 떴다 — **ECR `:latest`가 머지 전 브랜치 이미지 `p06-32d4353`** 이다. 머지 후 main으로 다시 빌드할 것. B24도 같은 날 PR #28로 머지·dev 배포(비로그인 401·user 남의 job 0건 확인)
 
 ### REQ-B24 — 현황판 통계 API 인증 누락 (P06 Phase 5 원인 확인 중 발견, 계획서 + Phase 1)
 

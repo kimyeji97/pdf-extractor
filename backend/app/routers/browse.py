@@ -169,6 +169,19 @@ class StatsDetailResponse(BaseModel):
     items: List[StatsDetailJob]
 
 
+def _pages_from_files(j, field: StatsDetailField) -> List[int]:
+    """쪽 목록이 없는 옛 상태 파일용 — 경계·수동 파일을 읽어 계산한다(REQ-P06 이전 방식)."""
+    if field == StatsDetailField.FALSE_POSITIVE_COUNT:
+        cached = storage.get_boundaries_cache(j.job_id) or []
+        return sorted({b.get("page_index") for b in cached if b.get("is_false_positive")})
+    manual_list = storage.get_manual_questions(j.job_id)
+    if field == StatsDetailField.MANUAL_COUNT:
+        return sorted({m.get("page_num") for m in manual_list})
+    cached = storage.get_boundaries_cache(j.job_id) or []
+    covered = {b.get("page_index") for b in cached} | {m.get("page_num") for m in manual_list}
+    return [p for p in range(j.total_pages or 0) if p not in covered]
+
+
 @router.get("/stats/detail", response_model=StatsDetailResponse)
 def get_stats_detail(
     field: StatsDetailField = Query(...),
@@ -178,9 +191,9 @@ def get_stats_detail(
     통계 타일 클릭 시 아코디언에 채울 상세 목록 (REQ-F12 Phase 2).
 
     `/api/stats`는 집계 숫자만 준다 — "어느 파일·어느 페이지인지"는 여기서 온다.
-    job 캐시 필드(0보다 큰 것)로 먼저 대상 job을 추리고, **그 job들만** boundaries·수동
-    문항을 읽어 `pages`를 계산한다 — 매 요청 전체 job의 원본을 읽지 않는다는 점에서
-    `/api/stats`와 같은 원칙이다.
+    job 캐시 필드(0보다 큰 것)로 대상 job을 추리고, `pages`는 상태 파일에 캐시된 쪽 목록을
+    그대로 쓴다(REQ-P06 — 예전엔 job마다 boundaries·수동 파일을 순차로 읽어 6.4s가 걸렸다).
+    쪽 목록이 없는 옛 상태 파일만 파일을 읽어 계산한다.
     """
     sources = _visible_sources(current_user)
     items: List[StatsDetailJob] = []
@@ -195,32 +208,19 @@ def get_stats_detail(
                 ))
         return StatsDetailResponse(field=field, items=items)
 
+    count_attr, pages_attr = {
+        StatsDetailField.FALSE_POSITIVE_COUNT: ("false_positive_count", "false_positive_pages"),
+        StatsDetailField.MANUAL_COUNT: ("manual_count", "manual_pages"),
+        StatsDetailField.UNDETECTED_PAGE_COUNT: ("undetected_page_count", "undetected_pages"),
+    }[field]
     for j in sources:
-        if field == StatsDetailField.FALSE_POSITIVE_COUNT:
-            count = j.false_positive_count or 0
-            if count <= 0:
-                continue
-            cached = storage.get_boundaries_cache(j.job_id) or []
-            pages = sorted({
-                b.get("page_index") for b in cached if b.get("is_false_positive")
-            })
-        elif field == StatsDetailField.MANUAL_COUNT:
-            count = j.manual_count or 0
-            if count <= 0:
-                continue
-            manual_list = storage.get_manual_questions(j.job_id)
-            pages = sorted({m.get("page_num") for m in manual_list})
-        else:  # UNDETECTED_PAGE_COUNT
-            count = j.undetected_page_count or 0
-            if count <= 0:
-                continue
-            cached = storage.get_boundaries_cache(j.job_id) or []
-            manual_list = storage.get_manual_questions(j.job_id)
-            covered = (
-                {b.get("page_index") for b in cached}
-                | {m.get("page_num") for m in manual_list}
-            )
-            pages = [p for p in range(j.total_pages or 0) if p not in covered]
+        count = getattr(j, count_attr) or 0
+        if count <= 0:
+            continue
+        # 상태 파일의 쪽 목록을 그대로 쓴다(REQ-P06). 없으면 옛 상태 파일 — 파일을 읽어 계산
+        pages = getattr(j, pages_attr)
+        if pages is None:
+            pages = _pages_from_files(j, field)
 
         items.append(StatsDetailJob(
             job_id=j.job_id, filename=j.filename, workbook_name=j.workbook_name,
@@ -475,9 +475,8 @@ def _refresh_detection_body(job_id: str, job) -> None:
         job.total_question_count = len(boundaries)
         job.questions_per_page = qpp
         job.total_pages = page_count
-        job.false_positive_count = stats["false_positive_count"]
-        job.manual_count = stats["manual_count"]
-        job.undetected_page_count = stats["undetected_page_count"]
+        for key, value in stats.items():  # 개수·쪽 목록(REQ-P06) 전부
+            setattr(job, key, value)
 
         # DONE 상태를 먼저 저장해 프론트가 즉시 재감지 완료를 확인하게 한 뒤,
         # 썸네일 프리워밍(REQ-P03-01)을 이어서 실행한다 (실패해도 감지 결과엔 영향 없음)
@@ -879,9 +878,8 @@ def delete_question(
         # 문항 통계 캐시 (REQ-F12) — total_pages는 안 바뀐다. 나머지 셋만 전량 재계산.
         manual_list = storage.get_manual_questions(job_id)
         stats = question_stats_service.compute_question_stats(cached, manual_list, job.total_pages)
-        job.false_positive_count = stats["false_positive_count"]
-        job.manual_count = stats["manual_count"]
-        job.undetected_page_count = stats["undetected_page_count"]
+        for key, value in stats.items():  # 개수·쪽 목록(REQ-P06) 전부
+            setattr(job, key, value)
 
         storage.put_status(job)
 
@@ -936,9 +934,8 @@ def add_manual_question(
     # undetected_page_count만 전량 재계산.
     cached_boundaries = storage.get_boundaries_cache(job_id) or []
     stats = question_stats_service.compute_question_stats(cached_boundaries, manual_list, job.total_pages)
-    job.false_positive_count = stats["false_positive_count"]
-    job.manual_count = stats["manual_count"]
-    job.undetected_page_count = stats["undetected_page_count"]
+    for key, value in stats.items():  # 개수·쪽 목록(REQ-P06) 전부
+        setattr(job, key, value)
     storage.put_status(job)
 
     # 수동 문항 영역 썸네일 생성 및 캐시 저장
@@ -1019,9 +1016,8 @@ def delete_manual_question(
     if job:
         cached_boundaries = storage.get_boundaries_cache(job_id) or []
         stats = question_stats_service.compute_question_stats(cached_boundaries, manual_list, job.total_pages)
-        job.false_positive_count = stats["false_positive_count"]
-        job.manual_count = stats["manual_count"]
-        job.undetected_page_count = stats["undetected_page_count"]
+        for key, value in stats.items():  # 개수·쪽 목록(REQ-P06) 전부
+            setattr(job, key, value)
         storage.put_status(job)
 
     storage.delete_manual_thumbnail_cache(job_id, page_num, manual_id)
@@ -1119,9 +1115,8 @@ def bulk_delete_questions(
             stats = question_stats_service.compute_question_stats(
                 final_boundaries, final_manual, job.total_pages
             )
-            job.false_positive_count = stats["false_positive_count"]
-            job.manual_count = stats["manual_count"]
-            job.undetected_page_count = stats["undetected_page_count"]
+            for key, value in stats.items():  # 개수·쪽 목록(REQ-P06) 전부
+                setattr(job, key, value)
             storage.put_status(job)
 
     return {"deleted_auto": deleted_auto, "deleted_manual": deleted_manual}

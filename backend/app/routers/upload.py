@@ -192,9 +192,8 @@ def _detect_boundaries(job_id: str, status_file) -> None:
         status_file.total_question_count = len(boundaries)
         status_file.questions_per_page = questions_per_page
         status_file.total_pages = page_count
-        status_file.false_positive_count = stats["false_positive_count"]
-        status_file.manual_count = stats["manual_count"]
-        status_file.undetected_page_count = stats["undetected_page_count"]
+        for key, value in stats.items():  # 개수·쪽 목록(REQ-P06) 전부
+            setattr(status_file, key, value)
 
         # DONE 상태를 먼저 저장해 프론트 폴링이 즉시 결과를 확인할 수 있게 한 뒤,
         # 썸네일 프리워밍(REQ-P03-01)은 그 뒤에 이어서 실행한다 (실패해도 감지 결과엔 영향 없음)
