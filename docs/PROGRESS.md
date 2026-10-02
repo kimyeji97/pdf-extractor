@@ -107,7 +107,7 @@
 | REQ-B11 | 알림 기준선이 피드 도착 전에 잡힘 — 새로고침마다 직전 알림 토스트 | [plan](plans/PLAN-B11-notification-baseline-before-feed.md) | 2026-08-28 | ✅ **Phase 1~2 완료**(`useNotificationsReady` + 세 소비처 게이트, 10/10 · dev Worker 배포 후 새로고침 5회 토스트 0건 · 계약 #27 정정) — PR #3 **main 머지 완료(2026-08-28, `3d35d65`)**. 미결 1건(ready 동승 알림)은 후속 |
 | REQ-C09 | 알림 경로 후속 묶음 (실패 문구 서버 `message` 단일 출처 · `useNotificationRefresh` `kind` 필터 · 계약 #26 딤 회귀 케이스 · SSE `: connected` 선발송) | [plan](plans/PLAN-C09-notification-followups.md) | 2026-08-28 | ✅ Phase 1·2 완료 (10/10 · 백엔드 34/34 · 프론트 61/61 · dev 실측 warm `onopen` 0.2~0.8s) — PR #4 **main 머지 완료(2026-08-28, `91a911a`)**. Phase 1 육안 1건(실패 배너 문구) 미확인 |
 | REQ-P05 | 알림 전달 지연 (감지 완료 알림을 프리워밍 앞으로 · 피드 GET 병렬화) | [plan](plans/PLAN-P05-notification-latency.md) | 2026-08-28 | ✅ Phase 1~3 완료 (10/10 · 백엔드 44/44 · 프론트 61/61) — 발행 전 대기 **8.1s 단축**, 피드 GET 3.79s → 1.43s. PR #5 **main 머지(2026-08-28, `6fba551`)** |
-| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API p90 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | — | 🟡 **Phase 1~6 완료** — Phase 5 현황판 API 캐시(PR #29) · **Phase 6 감지·썸네일 렌더링을 nice 19 자식 프로세스로**(분석 중 `questions_all` p90 1.41 → 0.70s, 브랜치 `perf/P06-detect-process` 머지 전). 남은 것: Phase 7 최종 측정 |
+| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API p90 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | — | 🟡 **Phase 1~6 완료** — Phase 5 현황판 API 캐시(PR #29) · **Phase 6 감지·썸네일 렌더링을 nice 19 자식 프로세스로**(분석 중 `questions_all` p90 1.41 → 0.70s, PR #30 main 머지 `3c06185`·dev 배포). 남은 것: Phase 7 최종 측정 |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | 2026-08-27 | ✅ **Phase 0~3 완료** — SSE, 폴링 0건, dev 실측 전송 0.3~1.3s·숨김 탭 즉시 · PR #2 main 머지(`d176596`) · 후속: 콜드 스타트 기준, `: connected` 선발송, 발행 전 서버 작업 ~6s |
@@ -263,6 +263,7 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 - **함정**: ① 자식 프로세스엔 monkeypatch가 안 건너간다 → conftest 자동 픽스처 `inline_detect_pool` ② Linux fork로 부모 boto3 연결 풀이 복사된다 → 자식 시작 시 `s3_service._make_client()`로 재생성 ③ macOS(spawn)는 stdin 스크립트에서 자식을 못 띄운다(측정 스크립트는 파일로)
 - **계획서가 중간에 스스로 어긋났다** — 프리워밍을 옮기는 결정을 추가하면서 "프리워밍은 부모에 남긴다"는 옛 문장을 안 지워 P06-23·24가 빨개졌다. `/testrun`이 (c)로 돌려 정정
 - 측정 도구는 scratchpad 소실로 `~/.cache/pdf-extractor-p06/p06m.py`로 재작성(레포 밖, admin만, 비밀번호는 환경변수)
+- **PR #30 머지·dev 배포(main `3c06185`)** — 212쪽 업로드 1건으로 확인: 감지 49s 만에 DONE, 프리워밍(820문항) 자식에서 완료, 오류 0. 분석 중 `/health` 0.10s · `questions_all` p90 0.78s
 - `templates` 평시 0.9s대: 표지·각주·워터마크 목록을 아무도 안 연 캐시 빈 상태(같은 날 "그대로 둔다" 결정). 1s 미만이지만 여유가 적다 — Phase 7에서 본다
 
 ### REQ-P06 — Phase 5: 현황판 계열 API 12.3s → 0.2s (메모리 캐시 + 쪽 목록, 실측 세 번 만에 통과)
