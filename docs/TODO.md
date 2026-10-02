@@ -93,7 +93,7 @@
       (PLAN-B17 § 범위 — 제외 "요청 경로 안의 동기 감지"). 방향 후보: FAILED/캐시 없음이면 조회에서 감지하지 말고
       빈 결과 + 재감지 유도 · 폴백도 세마포어 안으로 · 백그라운드로 넘기기 — `/workplan`에서 결정.
       ⚠️ 504에 CORS 헤더가 없던 것은 계약 #8(미들웨어 순서)이 지켜져 있는데도 난 현상이라 **원인 미확인** — 같이 볼 것
-- [ ] **→ REQ-P06**([계획서](plans/PLAN-P06-api-latency-during-analysis.md), 2026-10-01 Phase 1·2 측정 완료 — 원인 넷: 터널·데이터 비례 API·분석 CPU·1GB OOM) · **API 전반이 느림** — 목록 화면 `/api/stats` 9.06s · `/api/jobs` 5.64s · `/api/notifications` 3.04s.
+- [x] **→ REQ-P06** ✅ 2026-10-02([계획서](plans/PLAN-P06-api-latency-during-analysis.md) — 현황판 API 캐시 · 감지·썸네일 렌더링 자식 프로세스 · 2 vCPU/4GB, 터널 경유 모든 API p90 < 1s) · **API 전반이 느림** — 목록 화면 `/api/stats` 9.06s · `/api/jobs` 5.64s · `/api/notifications` 3.04s.
       **추정(미검증)**: 위 항목의 폭주한 동기 감지가 0.5 vCPU를 점유한 시점과 겹친다(로그상 504 직후 stats 응답).
       위 항목을 고친 뒤 재측정해서 여전히 느리면 별도 원인(stats 집계·R2 왕복 등)을 조사
       → 2026-09-29 B19 배포 후 `/api/stats` 0.87~0.98s(9.06s → 약 1/10). `/api/jobs`·`/api/notifications`는 미측정(인증 필요)
