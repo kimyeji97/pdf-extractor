@@ -59,8 +59,15 @@ const pressDelete = () => act(async () => { fireEvent.click(screen.getByRole('bu
 const pressUndo = () => act(async () => { fireEvent.click(screen.getByRole('button', { name: '되돌리기' })); });
 const elapse = (ms) => act(async () => { vi.advanceTimersByTime(ms); await Promise.resolve(); });
 
+/** 서버처럼 응답한다 — 삭제 요청이 오면 그 문항을 목록에서 뺀다. 되돌리기가 "서버를 다시 읽기"면 문항이 안 돌아온다 */
 const mount = async (questions, props) => {
-  getPageQuestions.mockResolvedValue({ questions });
+  let served = [...questions];
+  getPageQuestions.mockImplementation(async () => ({ questions: served }));
+  bulkDeleteQuestions.mockImplementation(async (_job, _page, refs, ids) => {
+    served = served.filter((q) =>
+      q.is_manual ? !ids.includes(q.manual_id) : !refs.some((r) => r.num === q.question_num && r.k === (q.k ?? 0)));
+    return {};
+  });
   const view = render(ui(props));
   await flush();
   return view;

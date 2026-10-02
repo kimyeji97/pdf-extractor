@@ -65,9 +65,11 @@ describe('같은 번호 공존 문항의 k', () => {
   });
 
   it('[B20-27] 아래 문항만 체크해 삭제하면 bulkDeleteQuestions 에 [{num:1,k:1}] 을 넘긴다', async () => {
-    renderPanel();
+    const { unmount } = renderPanel();
     fireEvent.click(within(rowOf(await screen.findByText('문항 아래제목'))).getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /삭제/ }));
+    // REQ-B26: 삭제는 토스트가 닫힐 때(또는 화면을 떠날 때) 보낸다 — 화면을 떠나 확정시킨다
+    unmount();
     expect(bulkDeleteQuestions).toHaveBeenCalledWith('job-a', 0, [{ num: 1, k: 1 }], []);
   });
 });
