@@ -10,6 +10,7 @@ OOM 으로 죽었다(2026-09-28 dev). 초과분은 `QUEUED` 로 두고 슬롯이
 """
 import logging
 import os
+import sys
 import threading
 from concurrent.futures import ProcessPoolExecutor
 
@@ -28,11 +29,15 @@ slots = threading.BoundedSemaphore(MAX_CONCURRENT)
 #    같은 프로세스의 저장만 안다. 테스트는 conftest 의 `inline_detect_pool` 이 인라인으로 바꾼다.
 # 우선순위는 가장 낮게 — 프로세스로 나누자 감지 5건이 vCPU 2개를 다 써(CPU 57% → 99%) API 가 CPU 를 다퉜다.
 # CPU 가 바쁠 때 API 가 먼저 받고, 감지는 남는 CPU 를 쓴다.
-def _lower_priority() -> None:
+# 썸네일 프리워밍(PyMuPDF 렌더링 + 썸네일 R2 저장)도 이 풀에서 돈다 — 부모에 두면 API 와 GIL 을 다툰다.
+def _init_worker() -> None:
     os.nice(19)
+    s3 = sys.modules.get("app.services.s3_service")
+    if s3 is not None:   # fork 로 복사된 부모의 boto3 연결 풀을 나눠 쓰지 않는다
+        s3.r2 = s3._make_client()
 
 
-detect_pool = ProcessPoolExecutor(max_workers=MAX_CONCURRENT, initializer=_lower_priority)
+detect_pool = ProcessPoolExecutor(max_workers=MAX_CONCURRENT, initializer=_init_worker)
 
 _INTERRUPTED_MESSAGE = "서버가 재시작되어 분석이 중단되었습니다. 재감지해 주세요."
 

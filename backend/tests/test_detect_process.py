@@ -118,3 +118,69 @@ def test_P06_29_감지_자식_프로세스는_nice_19로_돈다(inline_detect_po
     nice = inline_detect_pool.original.submit(os.getpriority, os.PRIO_PROCESS, 0).result(timeout=60)
 
     assert nice == 19
+
+
+# ── 썸네일 프리워밍도 감지 풀로 (nice 19 뒤에도 /health p90 0.44s — 부모의 렌더링 12스레드) ──
+
+def _fns(pool):
+    return [fn for fn, _ in pool.calls]
+
+
+def test_P06_30_업로드_감지는_프리워밍도_감지_풀로_넘긴다(
+    make_job, stub_detection, fake_pdf, inline_detect_pool
+):
+    """근거: PLAN § 결정 — "`prewarm_all_thumbnails` 호출도 감지 풀(nice 19 자식)에서" """
+    from app.routers import upload as upload_router
+
+    make_job("job-p06-30")
+    stub_detection(count=2)
+
+    upload_router._trigger_boundary_detection("job-p06-30")
+
+    assert _fns(inline_detect_pool) == [
+        upload_router.detect_question_boundaries,
+        upload_router.prewarm_service.prewarm_all_thumbnails,
+    ]
+
+
+def test_P06_31_재감지도_프리워밍을_감지_풀로_넘긴다(
+    make_job, stub_detection, fake_pdf, inline_detect_pool
+):
+    """근거: PLAN § 결정 — "`prewarm_all_thumbnails` 호출도 감지 풀(nice 19 자식)에서" """
+    from app.routers import browse as browse_router
+
+    make_job("job-p06-31")
+    stub_detection(count=2)
+
+    browse_router._run_refresh_detection("job-p06-31")
+
+    assert _fns(inline_detect_pool) == [
+        browse_router.detect_question_boundaries,
+        browse_router.prewarm_service.prewarm_all_thumbnails,
+    ]
+
+
+def test_P06_32_자식_초기화가_R2_클라이언트를_새로_만든다(inline_detect_pool, monkeypatch):
+    """근거: PLAN § 제약 — "자식 시작 시 클라이언트를 새로 만든다"
+
+    Linux 는 fork 라 부모의 boto3 클라이언트(연결 풀)가 자식에 복사된다. 초기화 함수를 이 프로세스에서
+    직접 부르되 `os.nice` 는 막는다(테스트 프로세스 우선순위는 되돌릴 수 없다). boto3 는 가짜 —
+    conftest 가 R2 계정을 빈 값으로 덮어 진짜 클라이언트는 `Invalid endpoint` 로 죽는다.
+    """
+    import importlib
+    import os
+    import sys
+
+    import boto3
+
+    monkeypatch.setattr(os, "nice", lambda n: 0)
+    monkeypatch.setattr(boto3, "client", lambda *a, **kw: object())
+    if "app.services.s3_service" in sys.modules:
+        s3 = importlib.reload(sys.modules["app.services.s3_service"])
+    else:
+        s3 = importlib.import_module("app.services.s3_service")
+    before = s3.r2
+
+    inline_detect_pool.original._initializer()
+
+    assert s3.r2 is not before

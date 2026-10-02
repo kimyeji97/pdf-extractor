@@ -208,7 +208,9 @@ def _detect_boundaries(job_id: str, status_file) -> None:
 
         try:
             page_count = len(page_infos) if page_infos is not None else len(thumbnail_service.get_page_info(pdf_bytes))
-            prewarm_service.prewarm_all_thumbnails(job_id, pdf_bytes, boundaries, page_count)
+            analysis_slots.detect_pool.submit(  # 렌더링도 자식 프로세스에서 (REQ-P06 Phase 6)
+                prewarm_service.prewarm_all_thumbnails, job_id, pdf_bytes, boundaries, page_count
+            ).result()
         except Exception as e:
             logger.warning("[boundary] 썸네일 프리워밍 실패(무시) | job_id=%s error=%s", job_id, e)
 

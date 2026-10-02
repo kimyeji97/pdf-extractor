@@ -35,14 +35,19 @@ logger = logging.getLogger(__name__)
 
 _endpoint = f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
-r2 = boto3.client(
-    "s3",
-    endpoint_url=_endpoint,
-    aws_access_key_id=settings.R2_ACCESS_KEY_ID,
-    aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
-    region_name="auto",
-    config=Config(signature_version="s3v4", max_pool_connections=50),
-)
+def _make_client():
+    """R2 클라이언트. 감지 풀 자식은 시작 시 이걸로 새로 만든다 — fork 로 복사된 부모의 연결 풀을 나눠 쓰지 않게 (REQ-P06)."""
+    return boto3.client(
+        "s3",
+        endpoint_url=_endpoint,
+        aws_access_key_id=settings.R2_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
+        region_name="auto",
+        config=Config(signature_version="s3v4", max_pool_connections=50),
+    )
+
+
+r2 = _make_client()
 
 BUCKET = settings.R2_BUCKET_NAME
 _ROOT = settings.R2_ROOT_PREFIX.strip("/")
