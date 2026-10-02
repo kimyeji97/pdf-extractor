@@ -1,14 +1,14 @@
 /**
  * REQ-B27 Phase 2 — 알림 API raw fetch 인증 · 단건 읽음 본문
  *
- * 검증 계약: docs/plans/PLAN-B27-notification-per-user.md `## 검증 계약` (B27-16·17·30)
+ * 검증 계약: docs/plans/PLAN-B27-notification-per-user.md `## 검증 계약` (B27-16·17·30·32·33)
  *
  * 알림 GET·읽음은 계약 #26 의 raw fetch 다(전역 딤 없음). 백엔드가 인증을 요구하게 됐으므로(B27 Phase 1)
  * `_authHeaders()` 를 직접 붙여야 한다(계약 #31). `client.uploadAuth.test.js` 처럼 `global.fetch` 를 모킹해 본다.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { listNotifications, markNotificationsRead, setLoadingCallback } from 'api/client';
+import { listNotifications, markNotificationsRead, refreshAccessToken, setLoadingCallback } from 'api/client';
 
 const ok = (body) => new Response(JSON.stringify(body), { status: 200 });
 
@@ -61,5 +61,25 @@ describe('알림 API 인증 (B27)', () => {
 
     expect({ unread: data.unread_count, dimmed: loading.mock.calls.some(([v]) => v === true) })
       .toEqual({ unread: 3, dimmed: false });
+  });
+
+  it('[B27-32] 갱신 응답이 5xx면 false 를 돌려주고 저장된 토큰을 지우지 않는다', async () => {
+    localStorage.setItem('refresh_token', 'ref123');
+    fetch.mockImplementation(() => Promise.resolve(new Response('', { status: 503 })));
+
+    const ok = await refreshAccessToken();
+
+    expect({ ok, access: localStorage.getItem('access_token'), refresh: localStorage.getItem('refresh_token') })
+      .toEqual({ ok: false, access: 'tok123', refresh: 'ref123' });
+  });
+
+  it('[B27-33] 갱신이 네트워크 에러면 false 를 돌려주고 저장된 토큰을 지우지 않는다', async () => {
+    localStorage.setItem('refresh_token', 'ref123');
+    fetch.mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')));
+
+    const ok = await refreshAccessToken();
+
+    expect({ ok, access: localStorage.getItem('access_token'), refresh: localStorage.getItem('refresh_token') })
+      .toEqual({ ok: false, access: 'tok123', refresh: 'ref123' });
   });
 });

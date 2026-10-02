@@ -66,6 +66,7 @@ export function NotificationProvider({ children }) {
 
   useEffect(() => {
     let cancelled = false;
+    let lastSeen = null; // 본 알림 중 가장 최근 created_at — 수동 재연결 복구의 since
     // 이전 사용자 상태를 비운다
     seenRef.current = new Set();
     setNotifications([]);
@@ -82,7 +83,10 @@ export function NotificationProvider({ children }) {
         setUnreadCount(unread);
       }
       const fresh = incoming.filter((n) => !seenRef.current.has(keyOf(n)));
-      fresh.forEach((n) => seenRef.current.add(keyOf(n)));
+      fresh.forEach((n) => {
+        seenRef.current.add(keyOf(n));
+        if (!lastSeen || n.created_at > lastSeen) lastSeen = n.created_at;
+      });
       // **누적**한다. 교체하면 팝오버 이력이 사라진다.
       if (fresh.length > 0) setNotifications((prev) => [...fresh, ...prev]);
     };
@@ -136,7 +140,15 @@ export function NotificationProvider({ children }) {
       if (es.readyState !== EventSource.CLOSED || retried) return;
       retried = true;
       refreshAccessToken()
-        .then((ok) => { if (ok && !cancelled) connect(); })
+        .then((ok) => {
+          if (!ok || cancelled) return;
+          connect();
+          // 새 EventSource 는 Last-Event-ID 를 안 보낸다 — 끊긴 동안의 알림은 since 로 직접 되찾는다(REQ-B27).
+          // 연결 뒤에 읽으므로 사이에 온 것은 스트림·GET 양쪽에 올 수 있고, seenRef 가 한 번만 넣는다
+          listNotifications(lastSeen ? { since: lastSeen } : {})
+            .then((data) => merge(data?.notifications ?? [], data?.unread_count))
+            .catch(() => {});
+        })
         .catch(() => {});
     };
 

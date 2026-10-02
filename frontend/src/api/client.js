@@ -91,13 +91,13 @@ async function _tryRefresh(refreshToken) {
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
     if (!res.ok) {
-      _clearTokens();
+      // 서버가 refresh 토큰을 **거부**했을 때만 지운다 — 5xx·네트워크(배포·장애)에 지우면 조용히 로그아웃된다(REQ-B27)
+      if (res.status === 401 || res.status === 403) _clearTokens();
       return false;
     }
     _setTokens(await res.json());
     return true;
   } catch {
-    _clearTokens();
     return false;
   }
 }
