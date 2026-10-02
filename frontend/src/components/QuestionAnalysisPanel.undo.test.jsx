@@ -1,7 +1,7 @@
 /**
  * REQ-B26 Phase 1 — 문항 삭제 지연 + [되돌리기] 복원
  *
- * 검증 계약: docs/plans/PLAN-B26-delete-undo-restore.md `## 검증 계약` (B26-01~11 · 13 · 15~18)
+ * 검증 계약: docs/plans/PLAN-B26-delete-undo-restore.md `## 검증 계약` (B26-01~11 · 13 · 15~22)
  *
  * 삭제는 화면에서 먼저 숨기고 4초 토스트가 닫힐 때 서버에 보낸다. 되돌리면 숨긴 것만 되살린다(서버 요청 없음).
  * 무대는 `QuestionAnalysisPanel.test.jsx` 와 같다(`ThemeProvider` 아래 렌더, 계약 #25).
@@ -285,5 +285,85 @@ describe('삭제 지연 재작업 — /review (b)·(c) (B26)', () => {
     await flush();
 
     expect(screen.queryAllByText(/자동2/).length).toBe(0);
+  });
+
+});
+
+/** 앱과 같은 무대 — work.jsx 는 쪽마다 key 를 바꿔 패널을 새로 그린다(쪽 이동 = 언마운트·새 마운트) */
+const keyed = (page) => (
+  <ThemeProvider>
+    <QuestionAnalysisPanel key={`job-a-${page}`} jobId="job-a" pageNum={page} pageInfo={{}} />
+  </ThemeProvider>
+);
+
+describe('쪽 이동 = 패널 재마운트 — /review 회차 1 (B26)', () => {
+  it('[B26-19] 쪽 이동 뒤 지연 삭제가 실패하면 새로 그려진 패널에 "삭제하지 못했습니다"', async () => {
+    getPageQuestions.mockResolvedValue({ questions: [auto(1)] });
+    const { rerender } = render(keyed(1));
+    await flush();
+    bulkDeleteQuestions.mockRejectedValueOnce(new Error('500'));
+
+    checkItem(0);
+    await pressDelete();
+    await act(async () => { rerender(keyed(2)); });
+    await flush();
+    await flush();
+
+    expect(screen.getByText(/삭제하지 못했습니다/)).toBeInTheDocument();
+  });
+
+  it('[B26-20] 쪽 이동 뒤 바로 돌아오면 이전 패널의 삭제가 끝난 뒤에 읽어 지운 문항이 안 보인다', async () => {
+    let served = [auto(1), auto(2)];
+    getPageQuestions.mockImplementation(async () => ({ questions: served }));
+    let release;
+    bulkDeleteQuestions.mockImplementationOnce((_j, _p, refs) => new Promise((resolve) => {
+      release = () => {
+        served = served.filter((q) => !refs.some((r) => r.num === q.question_num));
+        resolve({});
+      };
+    }));
+    const { rerender } = render(keyed(1));
+    await flush();
+
+    checkItem(0);
+    await pressDelete();
+    await act(async () => { rerender(keyed(2)); });
+    await act(async () => { rerender(keyed(1)); });
+    await flush();
+    await act(async () => { release(); });
+    await flush();
+    await flush();
+
+    expect(screen.queryAllByText(/자동1/).length).toBe(0);
+  });
+
+  it('[B26-21] flushPendingDeletes 는 언마운트된 패널이 보낸 진행 중 삭제도 끝날 때까지 기다린다', async () => {
+    getPageQuestions.mockResolvedValue({ questions: [auto(1)] });
+    let release;
+    bulkDeleteQuestions.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve({}); }));
+    const { rerender } = render(keyed(1));
+    await flush();
+
+    checkItem(0);
+    await pressDelete();
+    await act(async () => { rerender(keyed(2)); }); // 옛 패널 정리에서 삭제가 나가 진행 중
+    let done = false;
+    let flushing;
+    await act(async () => { flushing = Promise.resolve(panelModule.flushPendingDeletes?.()).then(() => { done = true; }); });
+    const doneBefore = done;
+    await act(async () => { release(); await flushing; });
+
+    expect({ doneBefore, doneAfter: done }).toEqual({ doneBefore: false, doneAfter: true });
+  });
+
+  it('[B26-22] 외부 확정(flushPendingDeletes) 뒤에는 [되돌리기] 토스트가 사라진다', async () => {
+    await mount([auto(1)]);
+
+    checkItem(0);
+    await pressDelete();
+    await act(async () => { await panelModule.flushPendingDeletes?.(); });
+    await flush();
+
+    expect(screen.queryByRole('button', { name: '되돌리기' })).toBeNull();
   });
 });

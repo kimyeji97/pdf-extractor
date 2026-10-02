@@ -193,11 +193,15 @@ const QuestionCard = memo(
 
 // 화면에 떠 있는 패널들의 "대기 삭제 확정" 함수 (REQ-B26). 재감지는 부모(work.jsx)에서 시작되므로,
 // 옛 경계의 (번호, k)로 지목한 지연 삭제가 새 경계에 적용되지 않게 부모가 먼저 이걸 기다린다.
+// 쪽을 옮기면 work.jsx 가 key 를 바꿔 패널을 새로 그린다 — 보낸 삭제·실패 알림은 패널이 아니라 여기에 둔다.
 const pendingFlushers = new Set();
+const deleteFailureListeners = new Set();
+let inflightDeletes = Promise.resolve(); // 모든 패널이 보낸 삭제 — 목록 읽기·재감지가 이것을 기다린다
 
-/** 대기 중 삭제를 지금 보내고, 진행 중인 것까지 끝나면 끝난다 (재감지 전에 부른다) */
+/** 대기 중 삭제를 지금 보내고, 이미 나간 것(언마운트된 패널 것 포함)까지 끝나면 끝난다 (재감지 전에 부른다) */
 export function flushPendingDeletes() {
-  return Promise.all([...pendingFlushers].map((flush) => flush())).then(() => undefined);
+  pendingFlushers.forEach((flush) => flush());
+  return inflightDeletes;
 }
 
 export default function QuestionAnalysisPanel({
@@ -224,10 +228,9 @@ export default function QuestionAnalysisPanel({
   const undoTimerRef                = useRef(null);
   // 서버에 아직 안 보낸 삭제 (REQ-B26) — 토스트가 닫히거나·다시 삭제하거나·쪽을 옮기거나·화면을 떠날 때 보낸다
   const pendingDeleteRef            = useRef(null);
-  const inflightDeleteRef           = useRef(Promise.resolve()); // 보낸 삭제가 끝날 때까지 — 목록 읽기는 그 뒤에
   const fetchQuestionsRef           = useRef(null);
-  const viewRef                     = useRef({ jobId, pageNum, mounted: true });
-  viewRef.current = { ...viewRef.current, jobId, pageNum };
+  const viewRef                     = useRef({ jobId, pageNum });
+  viewRef.current = { jobId, pageNum };
 
   // ── 문항 목록 로드 ─────────────────────────────────────
   const fetchQuestions = useCallback(async () => {
@@ -237,7 +240,7 @@ export default function QuestionAnalysisPanel({
     setCheckedIds(new Set());
     try {
       // 방금 보낸 삭제보다 먼저 읽으면 지운 문항이 되살아나 보인다 (REQ-B26)
-      await inflightDeleteRef.current;
+      await inflightDeletes;
       const data = await getPageQuestions(jobId, pageNum);
       // 아직 안 보낸 삭제로 숨긴 문항은 계속 숨긴다
       const hidden = pendingDeleteRef.current?.ids ?? new Set();
@@ -257,22 +260,18 @@ export default function QuestionAnalysisPanel({
    */
   const commitPendingDelete = useCallback(() => {
     const p = pendingDeleteRef.current;
-    if (!p) return inflightDeleteRef.current;
+    if (!p) return;
     pendingDeleteRef.current = null;
+    // 이미 나간 삭제는 되돌릴 수 없다 — 바깥에서 확정(재감지 전·pagehide)돼도 [되돌리기]를 남기지 않는다
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
     // 자동/수동을 분리해 벌크 삭제 1회 호출 (단건 동시 호출의 경쟁 상태 회피 — REQ-B06)
     const request = bulkDeleteQuestions(p.jobId, p.pageNum, p.autoRefs, p.manualIds);
-    // 목록 읽기가 기다리는 건 요청 자체다 — 실패 처리(아래, 다시 읽기 포함)까지 기다리면 서로를 기다려 멈춘다
-    inflightDeleteRef.current = request.then(() => undefined, () => undefined);
-    return request.then(
-      () => undefined,
-      async () => {
-        const view = viewRef.current;
-        if (!view.mounted) return;
-        // 그 쪽을 보고 있을 때만 서버 상태로 다시 읽는다 — 다른 대기 삭제의 숨김은 fetchQuestions 가 유지
-        if (view.jobId === p.jobId && view.pageNum === p.pageNum) await fetchQuestionsRef.current?.();
-        setError("삭제하지 못했습니다");
-      },
-    );
+    // 목록 읽기가 기다리는 건 요청 자체다 — 실패 처리(다시 읽기 포함)까지 기다리면 서로를 기다려 멈춘다
+    const settled = request.then(() => undefined, () => undefined);
+    inflightDeletes = Promise.all([inflightDeletes, settled]).then(() => undefined);
+    // 실패는 지금 떠 있는 패널들에 알린다 — 쪽을 옮겨 이 패널이 없어져도 새 패널이 보여 준다
+    request.catch(() => deleteFailureListeners.forEach((notify) => notify(p)));
   }, []);
 
   useEffect(() => {
@@ -286,14 +285,20 @@ export default function QuestionAnalysisPanel({
 
   // 탭 닫기·새로고침엔 React 정리가 안 돈다 — pagehide 에 보낸다(요청은 keepalive) · 재감지 전 확정 통로 등록
   useEffect(() => {
-    viewRef.current.mounted = true;
     const onPageHide = () => { commitPendingDelete(); };
+    // 그 쪽을 보고 있을 때만 서버 상태로 다시 읽는다 — 다른 대기 삭제의 숨김은 fetchQuestions 가 유지
+    const onFailure = async (p) => {
+      const view = viewRef.current;
+      if (view.jobId === p.jobId && view.pageNum === p.pageNum) await fetchQuestionsRef.current?.();
+      setError("삭제하지 못했습니다");
+    };
     window.addEventListener("pagehide", onPageHide);
     pendingFlushers.add(commitPendingDelete);
+    deleteFailureListeners.add(onFailure);
     return () => {
-      viewRef.current.mounted = false;
       window.removeEventListener("pagehide", onPageHide);
       pendingFlushers.delete(commitPendingDelete);
+      deleteFailureListeners.delete(onFailure);
     };
   }, [commitPendingDelete]);
 
