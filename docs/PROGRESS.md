@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-01
+> 최종 갱신: 2026-10-02
 
 ## 요구사항 인덱스
 
@@ -107,7 +107,7 @@
 | REQ-B11 | 알림 기준선이 피드 도착 전에 잡힘 — 새로고침마다 직전 알림 토스트 | [plan](plans/PLAN-B11-notification-baseline-before-feed.md) | 2026-08-28 | ✅ **Phase 1~2 완료**(`useNotificationsReady` + 세 소비처 게이트, 10/10 · dev Worker 배포 후 새로고침 5회 토스트 0건 · 계약 #27 정정) — PR #3 **main 머지 완료(2026-08-28, `3d35d65`)**. 미결 1건(ready 동승 알림)은 후속 |
 | REQ-C09 | 알림 경로 후속 묶음 (실패 문구 서버 `message` 단일 출처 · `useNotificationRefresh` `kind` 필터 · 계약 #26 딤 회귀 케이스 · SSE `: connected` 선발송) | [plan](plans/PLAN-C09-notification-followups.md) | 2026-08-28 | ✅ Phase 1·2 완료 (10/10 · 백엔드 34/34 · 프론트 61/61 · dev 실측 warm `onopen` 0.2~0.8s) — PR #4 **main 머지 완료(2026-08-28, `91a911a`)**. Phase 1 육안 1건(실패 배너 문구) 미확인 |
 | REQ-P05 | 알림 전달 지연 (감지 완료 알림을 프리워밍 앞으로 · 피드 GET 병렬화) | [plan](plans/PLAN-P05-notification-latency.md) | 2026-08-28 | ✅ Phase 1~3 완료 (10/10 · 백엔드 44/44 · 프론트 61/61) — 발행 전 대기 **8.1s 단축**, 피드 GET 3.79s → 1.43s. PR #5 **main 머지(2026-08-28, `6fba551`)** |
-| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API p90 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | — | 🟡 **Phase 1~4 완료**(측정 · 최소 사양 산정 · 터널 프로토콜 비교 = 차이 없음 · dev 2 vCPU/4GB rev 8 반영·피크 ② 생존). 남은 것: Phase 5 현황판 계열 API 개선(코드, 방식 미결) · Phase 6 최종 측정 |
+| REQ-P06 | API 응답 속도 — 목표 "분석 중 여부 상관없이 모든 API p90 1s 미만"(파일 업로드·SSE 제외, 내려받기 3s 허용) + 운영 사양 | [plan](plans/PLAN-P06-api-latency-during-analysis.md) | — | 🟡 **Phase 1~4 완료**(측정 · 최소 사양 산정 · 터널 프로토콜 비교 = 차이 없음 · dev 2 vCPU/4GB rev 8 반영·피크 ② 생존). 남은 것: Phase 5 현황판 계열 API 개선(코드 — **방식 확정 2026-10-02**: 메모리 캐시 + 상태 파일 쪽 목록) · Phase 6 최종 측정 |
 | REQ-F09 | 문항 분석·문제집 생성 완료 알림 | [plan](plans/PLAN-F09-completion-notification.md) | 2026-08-10 | ✅ v1(Phase 1~5) — 케이스 47/47 + 육안 확인 · dev 배포 완료(백엔드 08-18 · 프론트 08-21) · Phase 6 이연 |
 | REQ-F11 | 재감지 중 상세 진입 차단 | [plan](plans/PLAN-F11-analysis-detail-entry-guard.md) | 2026-08-10 | ✅ 케이스 10/10 + 육안 확인 · 프론트 dev 배포 2026-08-21 |
 | REQ-P04 | 상시 폴링 → 서버 푸시 전환 | [plan](plans/PLAN-P04-websocket-push.md) | 2026-08-27 | ✅ **Phase 0~3 완료** — SSE, 폴링 0건, dev 실측 전송 0.3~1.3s·숨김 탭 즉시 · PR #2 main 머지(`d176596`) · 후속: 콜드 스타트 기준, `: connected` 선발송, 발행 전 서버 작업 ~6s |
@@ -130,6 +130,7 @@
 | REQ-B19 | 분석 실패 파일 상세가 30초 504 — 조회 경로가 캐시 미스 시 요청 안에서 동기 감지 (B17 Phase 4를 막음, TODO §7) | [plan](plans/PLAN-B19-lookup-path-sync-detection.md) | 2026-09-29 | ✅ **Phase 1~3 완료**(조회 3곳 캐시 미스 → 감지 없이 빈 결과·404, 상태 파일 안 씀 · 케이스 10/10 · `/testrun` 확인 · 회귀 없음 백엔드 266/266 · 전제 소멸한 F09-06·07·16 폐기 · 504 CORS 헤더는 Cloudflare 쪽에서 빠짐 — 구간 특정까지). PR #22 main 머지 `46c464e`, dev 배포 `f93e525` 확인(FAILED 상세 즉시 200·재감지 DONE·stats 9s→0.9s). `/api/jobs`·`/api/notifications` 재측정과 미결 3건은 TODO §7·§9로 이관 |
 | REQ-B20 | HWP 출력 PDF가 전부 오탐 — 보이지 않는 0.1pt 번호 글자 + 같은 쪽·같은 번호 식별자 충돌 (B18 회귀, dev `테스트02` 840경계·오탐 378) | [plan](plans/PLAN-B20-invisible-number-and-id-collision.md) | 2026-09-30 | ✅ **Phase 1~5 완료**(adaptive 1pt 이하 제외 · 정규식 전용 높이 규칙 200pt · 문항 ID 순번 k — ADR-0006 · 목록 k 필드 · 프론트 k 전달 · 케이스 27/27 · 백엔드 288/288·프론트 203/203). PR #23 `0d8c5d4`·PR #24 `ee27f2c` main 머지, dev 배포 `fe3d971` 사용자 확인 |
 | REQ-B23 | 결과 PDF 상태 조회(`GET /api/status/{job_id}`)가 401 — `getStatus` raw fetch에 인증 헤더 누락(계약 #31 누락) | [plan](plans/PLAN-B23-status-poll-401.md) | 2026-09-30 | ✅ **Phase 1·2 완료**(`getStatus`에 `_authHeaders()` · raw fetch 인증 스캔 테스트 · 케이스 3/3 · 프론트 206/206). PR #25 main 머지 `4f26daf`, dev 프론트 배포 후 사용자 확인 |
+| REQ-B24 | 현황판 통계 API(`/api/stats`·`/api/stats/detail`) 인증 누락 — 비로그인으로도 전 사용자 합산·남의 job_id·파일명 노출 | [plan](plans/PLAN-B24-stats-auth-missing.md) | 2026-10-02 | 🟡 **Phase 1 완료**(인증 + user 본인·admin 전체 · 케이스 9/9 · 백엔드 326/326). 브랜치 `fix/B24-stats-auth` `60d43f0` 푸시 — PR·머지·dev 배포 남음 |
 | REQ-B21 | 크롭 하단 여백이 문항마다 다름 — 하단 조임이 다음 문항 번호를 제 것으로 잡았다 | [plan](plans/PLAN-B21-crop-bottom-next-number.md) | 2026-09-30 | ✅ **완료**(B21-01~04 · PR #26 `f18c495` · dev 확인) |
 | REQ-B22 | 경계 캐시가 없는 job 처리 — FAILED·DONE 0문항 화면 안 안내 · extract-v2 캐시 미스 감지 제거 | [plan](plans/PLAN-B22-missing-boundaries-cache.md) | 2026-09-30 | ✅ **완료**(B22-01~10 · PR #26 `f18c495` · dev 확인) |
 | REQ-F14 | 현황판 개선 + 시스템 전체 뱃지 색 — 감지 상태 SSE `status` 이벤트 · 목록·현황판 함께 배경 재조회 · `utils/badges` 단일 정의 · 상세 영역 닫기·목록 우측 | [plan](plans/PLAN-F14-stats-board-and-badges.md) | 2026-09-30 | ✅ **완료**(F14-01~26 · PR #26 `f18c495` · dev 확인) |
@@ -244,6 +245,28 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-10-02
+
+### REQ-B24 — 현황판 통계 API 인증 누락 (P06 Phase 5 원인 확인 중 발견, 계획서 + Phase 1)
+
+- **발견 경위**: P06 Phase 5의 현황판 API 코드를 읽다가 `get_stats`·`get_stats_detail`에 `current_user`가 없는 것을 봤다. 라우터·앱 수준 인증도 없다.
+  비로그인으로도 200, 응답은 전 사용자 SOURCE 합산, 상세는 **남의 `job_id`·`filename`·`workbook_name`**까지 준다.
+  P06 Phase 1 측정의 "job 0건 계정도 같은 값"(데이터 비례 API 원인 추정 근거)이 사실 이 증상이었다 — 그 추정 "전체를 훑고 소유자로 거르는 구조"는 틀렸다(거르지 않았다)
+- **P06과 분리**(사용자 결정): 같은 함수를 고치지만 P06 Phase 5의 완료 기준 "응답 내용은 바뀌지 않는다"를 지키기 위해. 오픈(10/6) 전 처리
+- 규칙은 `list_jobs`와 같다 — user 본인 소유만, admin 전체, `owner_id` 없는 옛 job·문제집은 admin만(`workbook_count`도 문제집 `owner_id`로 거름 — 사용자 승인)
+- **함정(계약 #30 재현)**: 기존 F12-18~24·B17-15~17이 무인증 `client`로 통계를 불러 401로 깨진다 → `authed_client`(admin)로 옮김(단언 불변).
+  옮기지 않으면 F12-24("잘못된 field는 4xx")는 **401로도 통과**해 아무것도 검증하지 않게 된다 — 인증 추가 후 "그대로 녹색"인 4xx 단언은 의심할 것
+- REQ-27 Phase 2가 엔티티 API에 인증을 걸 때 통계 두 엔드포인트가 범위에서 빠진 것으로 보인다(추정). 알림 피드(`/api/notifications`)의 사용자 구분은 이번에 확인 안 함 — 계획서 제외로 남김
+
+### REQ-P06 — Phase 5 방식 확정: 원인은 "목록마다 파일 전부 GET"
+
+- 원인(코드 확인): R2를 DB로 쓰므로 목록 1회 = LIST + 파일 수만큼 GET. `jobs`·`stats`는 status 전부(12 병렬), `stats`는 문제집 목록까지 한 번 더.
+  `stats_detail` 미탐지·오탐·수동은 대상 job마다 경계·수동 파일을 **순차** GET(6.4s의 주범). `covers`·`templates`는 기존 병렬 헬퍼 `_get_json_many`도 안 쓰고 순차
+- **결정**(사용자): 프로세스 메모리 캐시(write-through + 60초 R2 재적재) + 상태 파일에 쪽 목록 저장. 기각: R2 인덱스 파일(동시 쓰기 잠금 필요, 코드 최다) · 병렬화만(`jobs`·`stats` 0.9s 그대로, 데이터 늘면 초과)
+- 메모리 캐시가 성립하는 근거: 상태 쓰기는 전부 메인 프로세스(생성 `ProcessPoolExecutor` 자식은 PDF만 만들고 `put_status`는 부모가 함), uvicorn 워커 1 · ECS 태스크 1.
+  태스크·워커를 늘리면 다른 프로세스 쓰기가 60초 늦게 보인다 — 그때 R2 인덱스안을 다시 볼 것(계획서 제약)
+- 순서: B24 먼저(보안·소규모), P06 Phase 5는 그 뒤
 
 ## 2026-10-01
 

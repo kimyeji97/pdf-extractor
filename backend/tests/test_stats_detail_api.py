@@ -48,7 +48,7 @@ def _items_by_id(res):
 
 # ── processing_count ──────────────────────────────────────
 
-def test_F12_18_processing_count는_PROCESSING_job만_count_pages는_null(client, make_job):
+def test_F12_18_processing_count는_PROCESSING_job만_count_pages는_null(authed_client, make_job):
     """근거: PLAN § 결정 — "`processing_count`는 `count`·`pages` 둘 다 `null`(페이지 개념이 없음)" """
     from app.services import storage
 
@@ -60,7 +60,7 @@ def test_F12_18_processing_count는_PROCESSING_job만_count_pages는_null(client
     j2.boundaries_status = BoundariesStatus.DONE
     storage.put_status(j2)
 
-    res = client.get("/api/stats/detail", params={"field": "processing_count"})
+    res = authed_client.get("/api/stats/detail", params={"field": "processing_count"})
     items = _items_by_id(res)
 
     assert set(items.keys()) == {"job-processing"}
@@ -70,7 +70,7 @@ def test_F12_18_processing_count는_PROCESSING_job만_count_pages는_null(client
 
 # ── false_positive_count ─────────────────────────────────
 
-def test_F12_19_false_positive_count는_오탐_페이지_번호_목록을_준다(client, make_job):
+def test_F12_19_false_positive_count는_오탐_페이지_번호_목록을_준다(authed_client, make_job):
     """근거: PLAN § 결정 — "`false_positive_count`·`manual_count`·`undetected_page_count`일 때만 채우고(해당 지표가 걸린 페이지 번호 목록)" """
     from app.services import storage
 
@@ -83,7 +83,7 @@ def test_F12_19_false_positive_count는_오탐_페이지_번호_목록을_준다
         _boundary(2, 1, is_false_positive=True),
     ])
 
-    res = client.get("/api/stats/detail", params={"field": "false_positive_count"})
+    res = authed_client.get("/api/stats/detail", params={"field": "false_positive_count"})
     items = _items_by_id(res)
 
     assert items["job-fp"]["count"] == 2
@@ -92,7 +92,7 @@ def test_F12_19_false_positive_count는_오탐_페이지_번호_목록을_준다
 
 # ── manual_count ──────────────────────────────────────────
 
-def test_F12_20_manual_count는_수동문항_페이지_번호_목록을_준다(client, make_job):
+def test_F12_20_manual_count는_수동문항_페이지_번호_목록을_준다(authed_client, make_job):
     """근거: PLAN § 결정 — "`false_positive_count`·`manual_count`·`undetected_page_count`일 때만 채우고(해당 지표가 걸린 페이지 번호 목록)" """
     from app.services import storage
 
@@ -104,7 +104,7 @@ def test_F12_20_manual_count는_수동문항_페이지_번호_목록을_준다(c
         _manual(3, "m2"),
     ])
 
-    res = client.get("/api/stats/detail", params={"field": "manual_count"})
+    res = authed_client.get("/api/stats/detail", params={"field": "manual_count"})
     items = _items_by_id(res)
 
     assert items["job-manual"]["count"] == 2
@@ -113,7 +113,7 @@ def test_F12_20_manual_count는_수동문항_페이지_번호_목록을_준다(c
 
 # ── undetected_page_count ─────────────────────────────────
 
-def test_F12_21_undetected_page_count는_실제_미탐지_페이지_번호를_준다(client, make_job):
+def test_F12_21_undetected_page_count는_실제_미탐지_페이지_번호를_준다(authed_client, make_job):
     """근거: PLAN § 결정 — "`false_positive_count`·`manual_count`·`undetected_page_count`일 때만 채우고(해당 지표가 걸린 페이지 번호 목록)" """
     from app.services import storage
 
@@ -124,7 +124,7 @@ def test_F12_21_undetected_page_count는_실제_미탐지_페이지_번호를_�
     storage.save_boundaries_cache("job-undetected", [_boundary(0, 1)])
     # 페이지 1·2는 자동·수동 어느 쪽도 없어 미탐지
 
-    res = client.get("/api/stats/detail", params={"field": "undetected_page_count"})
+    res = authed_client.get("/api/stats/detail", params={"field": "undetected_page_count"})
     items = _items_by_id(res)
 
     assert sorted(items["job-undetected"]["pages"]) == [1, 2]
@@ -133,7 +133,7 @@ def test_F12_21_undetected_page_count는_실제_미탐지_페이지_번호를_�
 
 # ── 0-값 제외 ──────────────────────────────────────────────
 
-def test_F12_22_해당_field가_0인_job은_목록에서_빠진다(client, make_job):
+def test_F12_22_해당_field가_0인_job은_목록에서_빠진다(authed_client, make_job):
     """근거: PLAN § 결정 — "그 field 값이 0보다 큰 job만 포함" """
     from app.services import storage
 
@@ -141,14 +141,14 @@ def test_F12_22_해당_field가_0인_job은_목록에서_빠진다(client, make_
     job.false_positive_count = 0
     storage.put_status(job)
 
-    res = client.get("/api/stats/detail", params={"field": "false_positive_count"})
+    res = authed_client.get("/api/stats/detail", params={"field": "false_positive_count"})
 
     assert "job-zero" not in _items_by_id(res)
 
 
 # ── EXPORT 제외 ────────────────────────────────────────────
 
-def test_F12_23_EXPORT_job은_제외된다(client, make_job):
+def test_F12_23_EXPORT_job은_제외된다(authed_client, make_job):
     """근거: PLAN § 결정 — "`SOURCE` job만" """
     from app.services import storage
 
@@ -157,17 +157,17 @@ def test_F12_23_EXPORT_job은_제외된다(client, make_job):
     storage.put_status(job)
     storage.save_boundaries_cache("job-export", [_boundary(0, 1, is_false_positive=True)])
 
-    res = client.get("/api/stats/detail", params={"field": "false_positive_count"})
+    res = authed_client.get("/api/stats/detail", params={"field": "false_positive_count"})
 
     assert "job-export" not in _items_by_id(res)
 
 
 # ── 잘못된 field ───────────────────────────────────────────
 
-def test_F12_24_잘못되거나_없는_field는_4xx(client):
+def test_F12_24_잘못되거나_없는_field는_4xx(authed_client):
     """근거: PLAN § 결정 — "`field=<processing_count\\|undetected_page_count\\|false_positive_count\\|manual_count>`" """
-    invalid = client.get("/api/stats/detail", params={"field": "workbook_count"})
-    missing = client.get("/api/stats/detail")
+    invalid = authed_client.get("/api/stats/detail", params={"field": "workbook_count"})
+    missing = authed_client.get("/api/stats/detail")
 
     assert 400 <= invalid.status_code < 500
     assert 400 <= missing.status_code < 500

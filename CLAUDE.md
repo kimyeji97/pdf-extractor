@@ -308,7 +308,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 | Prefix | 의미 | 점유 범위 (2026-09-30) |
 |--------|------|-----------|
 | (숫자) | 핵심·v2·v3 기능 (기획 단위) | REQ-01~30 |
-| `B` | 버그 수정 (Bug) | REQ-B01~B23 |
+| `B` | 버그 수정 (Bug) | REQ-B01~B24 |
 | `C` | 보완 기능 (Complement) | REQ-C01~C11 |
 | `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D11 |
 | `E` | 실험·인프라성 기능 (Enhancement) | REQ-E01 |
@@ -335,7 +335,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-10-01 기준 각 prefix 다음 번호: `B24`(B23은 2026-09-30 착수·완료), `C12`, `D12`, `F16`, `P07`, 숫자 `31`.
+2026-10-02 기준 각 prefix 다음 번호: `B25`(B24는 2026-10-02 착수 — 통계 API 인증 누락), `C12`, `D12`, `F16`, `P07`, 숫자 `31`.
 (2026-09-30에 착수 대기 13건을 **B21·B22·F14·F15·C10·C11·P06**으로 예약했다 — 전부 미착수이고 REQ-28은 ⏸.
 예약분은 PROGRESS "미착수 — 번호만 부여된 것" 표가 단일 출처다. 번호는 완료돼도 재사용하지 않는다)
 

@@ -98,8 +98,19 @@ class StatsResponse(BaseModel):
     detection_rate: Optional[float] = None   # (문항수(자동)-오탐-수동)/문항수(자동), 분모 0이면 null(계측 불가)
 
 
+def _visible_sources(current_user: dict) -> list:
+    """현황판이 집계할 SOURCE job — `user`는 본인 소유만, `admin`은 전체(REQ-B24, `list_jobs`와 같은 규칙).
+
+    owner_id 없는 옛 job은 admin만 본다(`ensure_owner_or_admin`과 같은 None 처리).
+    """
+    sources = [j for j in storage.list_jobs() if j.job_type == JobType.SOURCE]
+    if current_user["role"] != "admin":
+        sources = [j for j in sources if j.owner_id == current_user["user_id"]]
+    return sources
+
+
 @router.get("/stats", response_model=StatsResponse)
-def get_stats():
+def get_stats(current_user: dict = Depends(auth_service.get_current_user)):
     """
     요약 통계.
 
@@ -115,8 +126,10 @@ def get_stats():
     "측정 불가"이므로, 0.0을 주면 "문항이 없음"과 "감지가 전부 오탐"이 구별되지 않는다
     (계획서 § 결정 "detection_rate 분모 0 처리").
     """
-    jobs = storage.list_jobs()
-    sources = [j for j in jobs if j.job_type == JobType.SOURCE]
+    sources = _visible_sources(current_user)
+    workbooks = storage.list_workbooks()
+    if current_user["role"] != "admin":
+        workbooks = [w for w in workbooks if w.get("owner_id") == current_user["user_id"]]
 
     total_question_count = sum(j.total_question_count or 0 for j in sources)
     false_positive_count = sum(j.false_positive_count or 0 for j in sources)
@@ -130,7 +143,7 @@ def get_stats():
     return StatsResponse(
         source_count=len(sources),
         question_count=total_question_count,
-        workbook_count=len(storage.list_workbooks()),
+        workbook_count=len(workbooks),
         processing_count=sum(
             1 for j in sources if j.boundaries_status == BoundariesStatus.PROCESSING
         ),
@@ -157,7 +170,10 @@ class StatsDetailResponse(BaseModel):
 
 
 @router.get("/stats/detail", response_model=StatsDetailResponse)
-def get_stats_detail(field: StatsDetailField = Query(...)):
+def get_stats_detail(
+    field: StatsDetailField = Query(...),
+    current_user: dict = Depends(auth_service.get_current_user),
+):
     """
     통계 타일 클릭 시 아코디언에 채울 상세 목록 (REQ-F12 Phase 2).
 
@@ -166,7 +182,7 @@ def get_stats_detail(field: StatsDetailField = Query(...)):
     문항을 읽어 `pages`를 계산한다 — 매 요청 전체 job의 원본을 읽지 않는다는 점에서
     `/api/stats`와 같은 원칙이다.
     """
-    sources = [j for j in storage.list_jobs() if j.job_type == JobType.SOURCE]
+    sources = _visible_sources(current_user)
     items: List[StatsDetailJob] = []
 
     if field in (StatsDetailField.PROCESSING_COUNT, StatsDetailField.QUEUED_COUNT):
