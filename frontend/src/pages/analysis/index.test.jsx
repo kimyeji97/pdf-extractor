@@ -182,8 +182,11 @@ describe('아코디언 (Phase 2)', () => {
     const files = screen.getAllByTestId('stat-detail-file');
     expect(files).toHaveLength(1);
     // 2026-10-03 REQ-F17 갱신 — 현황판 아코디언도 확장자를 뺀다(결정 "분석 목록(현황판 아코디언 포함)").
-    // 이 케이스의 의도("새 field 로 교체된다")는 그대로이고 기대 문자열만 바뀌었다.
-    expect(files[0]).toHaveTextContent('m');
+    // ⚠️ toHaveTextContent 의 **문자열** 인자는 부분 일치라 'm' 으로 적으면 'm.pdf' 에도 통과한다
+    //    (/review 회차 1 에서 단언 약화로 잡혔다). 행 텍스트는 "이름 + 개수"가 이어 붙으므로
+    //    'm3건' 으로 고정한다 — 확장자가 남으면 'm.pdf3건' 이 되어 깨진다.
+    //    아코디언의 확장자 제거 자체는 F17-21 이 따로 지킨다.
+    expect(files[0]).toHaveTextContent('m3건');
   });
 });
 

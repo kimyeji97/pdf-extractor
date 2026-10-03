@@ -433,16 +433,15 @@ def extract_questions_v2(
         LAYOUTS, DEFAULT_LAYOUT, A4_WIDTH_PT, A4_HEIGHT_PT,
     )
 
-    # ── Step 1: 고유 job_id별 PDF 다운로드 + 문제집 이름 조회 ─
+    # ── Step 1: 고유 job_id별 PDF 다운로드 ─────────────────
+    # 출처 이름·파일명은 더 이상 여기서 조회하지 않는다 — 라벨은 **저장된 스냅샷**
+    # (`sel.workbook_name`·`sel.source_filename`)만 쓴다 (REQ-F17, 계약 #12).
     pdf_paths: dict[str, str] = {}
-    workbook_names: dict[str, str] = {}   # {job_id: workbook_name}
     for sel in selections:
         if sel.job_id not in pdf_paths:
             local_path = str(Path(tmpdir) / f"{sel.job_id}.pdf")
             storage.download_file(storage.original_key(sel.job_id), local_path)
             pdf_paths[sel.job_id] = local_path
-            job_status = storage.get_status(sel.job_id)
-            workbook_names[sel.job_id] = (job_status.workbook_name or "") if job_status else ""
 
     # ── Step 2: job_id별 문항 경계 데이터 확보 ─────────────
     boundaries_map: dict[str, list[QuestionBoundary]] = {}
@@ -466,7 +465,10 @@ def extract_questions_v2(
         # REQ-C07 → F17: 프론트 미리보기와 같은 문자열이어야 한다 (계약 #12)
         src_label = build_source_label(
             index=q_global,
-            workbook_name=workbook_names.get(sel.job_id, ""),
+            # 이름도 파일명과 같은 규칙 — **저장된 스냅샷**만 쓴다 (REQ-F17, 계약 #12).
+            # 파일명만 스냅샷으로 바꾸면 비대칭이 돼, 이름을 바꾼 뒤 저장본을 재생성할 때
+            # 미리보기는 옛 이름 · PDF는 새 이름이 된다(/review 회차 1).
+            workbook_name=(sel.workbook_name or ""),
             # 파일명 폴백은 **저장된 스냅샷**에서만 온다 (REQ-F17, 계약 #12) — 프론트가 읽는
             # 값과 같아야 한다. live 상태를 읽으면 그 필드가 없던 옛 저장본에서 갈린다.
             filename=(sel.source_filename or ""),

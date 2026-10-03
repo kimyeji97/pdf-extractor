@@ -258,7 +258,7 @@ export default function SelectionOrderPanel({
       if (labels[b.jobId]) continue;
       const name = byJob.get(b.jobId);
       labels[b.jobId] =
-        nameCount.get(name) > 1 && b.sourceFilename ? b.sourceFilename : name;
+        nameCount.get(name) > 1 && b.sourceFilename ? stripExtension(b.sourceFilename) : name;
     }
     return labels;
   }, [items]);

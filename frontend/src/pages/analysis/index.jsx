@@ -26,7 +26,7 @@ import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { useStatusEvents } from "contexts/NotificationContext";
 import { detectionBadge } from "utils/badges";
-import { resolveDocumentName, resolveFileSubtitle } from "utils/documentName";
+import { resolveDocumentName, resolveFileSubtitle, stripExtension } from "utils/documentName";
 import { isEntryBlocked } from "utils/jobStatus";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
@@ -447,7 +447,7 @@ export default function AnalysisFilePage() {
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: "12px !important" }}>
           {deleteError && <Alert severity="error" sx={{ py: 0 }}>{deleteError}</Alert>}
           <Typography variant="body2" fontWeight={700}>
-            {deleteJobTarget?.workbook_name || deleteJobTarget?.filename}
+            {deleteJobTarget && resolveDocumentName(deleteJobTarget)}
           </Typography>
           <Alert severity="warning" sx={{ py: 0.5 }}>
             원본 PDF·감지된 문항·썸네일이 <b>모두 삭제</b>되며 되돌릴 수 없습니다.
@@ -480,7 +480,7 @@ export default function AnalysisFilePage() {
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "12px !important" }}>
           {editError && <Alert severity="error" sx={{ py: 0 }}>{editError}</Alert>}
           <Typography variant="caption" color="text.disabled">
-            {editJob?.filename}
+            {stripExtension(editJob?.filename)}
           </Typography>
           <TextField
             size="small" fullWidth autoFocus

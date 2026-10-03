@@ -8,7 +8,7 @@
  * 이 체인이 끊기면 목록이 페이지 전체로 늘어나며 내부 스크롤이 사라진다(REQ-B04·B08).
  */
 import { useEffect, useState, useCallback, useRef } from "react";
-import { resolveDocumentName } from "utils/documentName";
+import { resolveDocumentName, resolveFileSubtitle } from "utils/documentName";
 
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
@@ -100,7 +100,8 @@ function JobCard({ job, isSelected, selectedCount = 0, onSelect }) {
       </Box>
 
       <Typography variant="caption" color="text.disabled" noWrap sx={{ display: "block", mt: 0.25 }}>
-        <span title={job.filename}>{job.filename || "unknown.pdf"}</span>
+        {/* 제목과 같은 글자를 두 번 쓰지 않는다 — 공유 헬퍼가 중복이면 null 을 준다 (REQ-F17) */}
+        {resolveFileSubtitle(job) && <span title={job.filename}>{resolveFileSubtitle(job)}</span>}
         {job.workbook_types?.length > 0 && ` · ${job.workbook_types.join(", ")}`}
       </Typography>
 
