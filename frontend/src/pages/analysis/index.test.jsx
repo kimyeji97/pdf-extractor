@@ -181,7 +181,9 @@ describe('아코디언 (Phase 2)', () => {
 
     const files = screen.getAllByTestId('stat-detail-file');
     expect(files).toHaveLength(1);
-    expect(files[0]).toHaveTextContent('m.pdf');
+    // 2026-10-03 REQ-F17 갱신 — 현황판 아코디언도 확장자를 뺀다(결정 "분석 목록(현황판 아코디언 포함)").
+    // 이 케이스의 의도("새 field 로 교체된다")는 그대로이고 기대 문자열만 바뀌었다.
+    expect(files[0]).toHaveTextContent('m');
   });
 });
 

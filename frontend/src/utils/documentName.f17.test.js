@@ -1,7 +1,7 @@
 /**
  * REQ-F17 Phase 1 — 이름 표시 규칙 (확장자 제거 · 제목 · 부제)
  *
- * 검증 계약: docs/plans/PLAN-F17-source-label-format.md `## 검증 계약` (F17-01~09)
+ * 검증 계약: docs/plans/PLAN-F17-source-label-format.md `## 검증 계약` (F17-01~09, F17-18)
  *
  * 제목·부제를 만드는 코드가 지금 **두 벌**이다 — 작업 화면은 `resolveDocumentName`을 쓰는데
  * 분석 목록 카드는 인라인(`job.workbook_name || job.filename || "unknown.pdf"`)이라 폴백까지
@@ -53,7 +53,11 @@ describe('부제(caption) — resolveFileSubtitle', () => {
     expect(resolveFileSubtitle({ filename: '2026 1학기.중간.pdf' })).toBeNull();
   });
 
-  it('[F17-09] 이름이 파일명과 다르면 파일명을 부제로 준다', () => {
-    expect(resolveFileSubtitle({ workbook_name: '심화대비', filename: '2026.중간.pdf' })).toBe('2026.중간.pdf');
+  it('[F17-09] 이름이 파일명과 다르면 확장자 뺀 파일명을 부제로 준다', () => {
+    expect(resolveFileSubtitle({ workbook_name: '심화대비', filename: '2026.중간.pdf' })).toBe('2026.중간');
+  });
+
+  it('[F17-18] 부제에도 확장자가 없다', () => {
+    expect(resolveFileSubtitle({ workbook_name: '심화대비', filename: '기출.PDF' })).toBe('기출');
   });
 });

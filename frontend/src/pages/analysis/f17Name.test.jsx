@@ -1,7 +1,7 @@
 /**
  * REQ-F17 Phase 1 — 화면에서 확장자가 안 보인다 + 제목 생성 코드가 한 벌
  *
- * 검증 계약: docs/plans/PLAN-F17-source-label-format.md `## 검증 계약` (F17-15~17)
+ * 검증 계약: docs/plans/PLAN-F17-source-label-format.md `## 검증 계약` (F17-15~17, F17-20)
  *
  * F17-15 는 **진짜 렌더**다 — 분석 목록은 무대가 있다(`pages/analysis/index.test.jsx` 관례를
  * 그대로 따른다: `ThemeProvider` + `MemoryRouter`, 계약 #25).
@@ -12,6 +12,7 @@
  * 적어 둔 "제목을 만드는 코드가 두 벌이고 폴백이 다르다"를 닫는 케이스다.
  */
 import { readFileSync } from 'node:fs';
+import { globSync } from 'node:fs';
 
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -84,11 +85,24 @@ describe('제목 생성 코드가 한 벌 (소스 스캔)', () => {
     );
   });
 
-  it('[F17-17] 분석 목록 카드 제목이 인라인이 아니라 공유 헬퍼다', () => {
-    const code = stripComments(readFileSync('src/pages/analysis/index.jsx', 'utf-8'));
+  it('[F17-17] frontend/src 어디에도 이름 인라인 체인이 남아 있지 않다', () => {
+    // 한 파일만 읽던 스캔이 StatCards·FileListPanel 을 통과시켜 (b)를 냈다(/review 회차 0).
+    // 전수로 본다 — 새로 생기는 복사본도 여기서 걸린다.
+    const files = globSync('src/**/*.{js,jsx}', { ignore: ['**/*.test.*'] });
+    const offenders = files.filter((f) =>
+      /workbook_name\s*\|\|[^\n]*filename\s*\|\|/.test(stripComments(readFileSync(f, 'utf-8'))),
+    );
 
-    // 인라인 폴백 체인(`workbook_name || filename || "unknown.pdf"`)이 남아 있으면
-    // 두 벌 상태 그대로다 — 공유 헬퍼로 합쳐야 폴백이 갈리지 않는다.
-    expect(code).not.toMatch(/workbook_name\s*\|\|[^\n]*filename\s*\|\|/);
+    expect(offenders).toEqual([]);
+  });
+
+  it('[F17-20] 생성 화면의 camelCase 체인도 공유 헬퍼를 거친다', () => {
+    // 칩·브레드크럼은 `workbookName || sourceFilename` 형태라 위 스캔(snake_case)에 안 걸린다.
+    const files = globSync('src/**/*.{js,jsx}', { ignore: ['**/*.test.*'] });
+    const offenders = files.filter((f) =>
+      /workbookName\s*\|\|\s*[A-Za-z.]*sourceFilename/.test(stripComments(readFileSync(f, 'utf-8'))),
+    );
+
+    expect(offenders).toEqual([]);
   });
 });

@@ -75,8 +75,9 @@ afterEach(() => {
 
 describe('목록 카드 파일명 병기', () => {
   it('[F15-08] 문제집 이름과 파일명이 다르면 카드에 파일명이 보인다', async () => {
+    // 2026-10-03 REQ-F17 갱신 — 부제도 확장자를 뺀다(F17-18). 의도("파일명이 구분 단서로 보인다")는 그대로.
     await renderWith([job()]);
-    expect(await screen.findByText('2026_중3.pdf')).toBeInTheDocument();
+    expect(await screen.findByText('2026_중3')).toBeInTheDocument();
   });
 
   it('[F15-09] 문제집 이름이 없으면 파일명은 한 번만 보인다', async () => {

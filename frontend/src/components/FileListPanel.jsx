@@ -8,6 +8,7 @@
  * 이 체인이 끊기면 목록이 페이지 전체로 늘어나며 내부 스크롤이 사라진다(REQ-B04·B08).
  */
 import { useEffect, useState, useCallback, useRef } from "react";
+import { resolveDocumentName } from "utils/documentName";
 
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
@@ -83,10 +84,10 @@ function JobCard({ job, isSelected, selectedCount = 0, onSelect }) {
           variant="caption"
           fontWeight={600}
           noWrap
-          title={job.workbook_name || job.filename || "unknown.pdf"}
+          title={resolveDocumentName(job)}
           sx={{ minWidth: 0, color: "text.primary" }}
         >
-          {job.workbook_name || job.filename || "unknown.pdf"}
+          {resolveDocumentName(job)}
         </Typography>
 
         <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 0.5 }}>

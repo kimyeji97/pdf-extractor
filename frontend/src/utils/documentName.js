@@ -43,6 +43,8 @@ export function resolveFileSubtitle(jobInfo) {
   // ("2026.중간")에서 마지막 토막까지 잘려 비교가 어긋난다. 확장자를 떼는 쪽은 파일명이고,
   // 제목은 원문 그대로 양쪽(확장자 포함/제외)과 맞춰 본다.
   const title = resolveDocumentName(jobInfo);
-  if (title === filename || title === stripExtension(filename)) return null;
-  return filename;
+  const bare = stripExtension(filename);
+  if (title === filename || title === bare) return null;
+  // 부제도 확장자를 뺀다 (REQ-F17) — "이름을 보여 주는 화면 전부에서 확장자가 안 보임".
+  return bare;
 }

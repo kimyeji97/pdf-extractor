@@ -29,3 +29,21 @@ def test_F17_14_same_string_as_frontend():
         )
         == "1번) 심화대비. p3. 문항 유형 01."
     )
+
+
+def test_F17_19_uses_saved_source_filename_not_live_status():
+    """파일명 폴백은 저장된 `sel.source_filename` 스냅샷에서 온다 (계약 #12).
+
+    프론트는 저장된 값을 읽으므로 백엔드가 live `job_status.filename` 을 읽으면
+    옛 저장본(그 필드가 없던 시절)에서 미리보기와 생성 PDF 가 갈린다 —
+    `/review` 회차 0 의 (b). 소스 스캔으로 live 조회가 사라졌는지 본다.
+    """
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[1] / "app" / "services" / "pdf_service.py"
+    code = source.read_text(encoding="utf-8")
+
+    # 저장 스냅샷을 쓴다
+    assert "sel.source_filename" in code
+    # live 상태의 filename 을 라벨 재료로 긁어 오지 않는다
+    assert "job_status.filename" not in code
