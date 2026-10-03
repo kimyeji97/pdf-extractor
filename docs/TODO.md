@@ -180,3 +180,4 @@
 - [ ] B25 리뷰 이연: 쪽 크기가 **섞인** 문서는 모든 placeholder가 첫 실측 쪽 크기를 쓴다 — REQ-P02-01 가상화의 원래 폴백(`PdfPreviewPanel.jsx` fallbackWidthPt/HeightPt). B25는 "실측이 아예 없는 구간"만 없앴다 (2026-10-03 추가)
 - [ ] B25 리뷰 이연: `queued.test.jsx`가 전체 스위트에서 간헐 Unhandled Error — `@iconify/react` 타이머가 teardown 뒤 발화. 단독 4/4·재실행 73/73 녹색이라 기존 flake (2026-10-03 추가)
 - [ ] B25 미결 이관: 첫 쪽 실측이 끝내 오지 않으면(1쪽 로드 실패) 보관한 이동 요청이 조용히 유실된다 — 알릴지·대체 적용할지. 2026-10-03 `pageSizes` 게이트 도입의 대가(`PdfPreviewPanel.jsx`, `onDocumentLoadError` 미초기화와 같은 자리) (2026-10-03 추가)
+- [ ] F17 리뷰 이연: `pdf_service.py`의 `source_label` 주석 예시가 아직 옛 형식 `"Q1 · 수학문제집 · p.3"` — 형식을 바꾼 커밋이 남긴 것 (2026-10-03 추가)
