@@ -1,7 +1,7 @@
 /**
  * REQ-B25 Phase 1 — 문서 로딩 전에 온 페이지 이동 요청을 보관했다가 로딩 후 적용 (렌더 테스트)
  *
- * 검증 계약: docs/plans/PLAN-B25-stats-page-jump.md `## 검증 계약` (B25-01~06)
+ * 검증 계약: docs/plans/PLAN-B25-stats-page-jump.md `## 검증 계약` (B25-01~08)
  *
  * **`PdfPreviewPanel`의 첫 렌더 테스트다.** 지금까지 무대가 없던 이유는 `react-pdf`가
  * pdf.worker를 물고 들어오기 때문인데, `vi.mock('react-pdf')`로 `Document`·`Page`·`pdfjs`를
@@ -23,6 +23,13 @@
  *    완료 기준의 "212쪽 PDF에서 그 쪽이 **보이는** 상태로 열림"은 **dev 육안** 몫이다.
  *    (계획서 § 검증 계약에 같은 내용을 적어 뒀다 — 녹색이어도 육안 확인을 건너뛰지 말 것)
  *
+ * ⚠️ **쪽 크기 보고(`Page`의 `onLoadSuccess`)는 자동 호출하지 않고 테스트가 발화한다**
+ *    (2026-10-03 2회차). `onDocumentLoadSuccess`가 `pageSizes`를 비우므로, 로딩 직후엔
+ *    1쪽이 "렌더됐지만 아직 0px"이고 2쪽 이후 placeholder는 A4 842pt 가정으로 깔린다 —
+ *    그 구간에 스크롤을 발행하면 계약 #7의 "한 페이지 짧게 안착"이 그대로 재현된다.
+ *    B25-07이 그 구간을, B25-08이 실측 도착 후를 본다. 자동 호출하는 무대로는 **그 구간
+ *    자체를 만들 수 없어** 결함이 안 보였다(`/review` 회차 0이 코드 읽기로 찾아냈다).
+ *
  * ⚠️ 보이는 쪽은 툴바 입력란 `.pdf-page-input`의 값으로 읽는다. `ref.scrollToPage`가
  *    `currentPage`와 함께 갱신하는 값이고, 툴바는 `numPages`가 잡힌 뒤에만 렌더된다.
  *    `onPageChange` prop은 로딩 직후 1쪽으로 한 번 불린 뒤 적용분으로 다시 불리므로
@@ -36,7 +43,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PdfPreviewPanel from 'components/PdfPreviewPanel';
 
 // vi.mock 팩토리는 끌어올려지므로 보관함도 hoisted 여야 한다.
-const stage = vi.hoisted(() => ({ fireLoad: null }));
+const stage = vi.hoisted(() => ({ fireLoad: null, pageLoads: {} }));
 
 vi.mock('react-pdf', () => ({
   // 컴포넌트가 import 시점에 workerSrc 를 대입한다 — 받아 줄 객체만 있으면 된다.
@@ -45,11 +52,23 @@ vi.mock('react-pdf', () => ({
     stage.fireLoad = onLoadSuccess;
     return <div data-testid="pdf-document">{children}</div>;
   },
-  Page: ({ pageNumber }) => <div data-testid={`page-${pageNumber}`} />,
+  // 쪽 크기 보고(onLoadSuccess)를 **자동으로 부르지 않고 보관한다** — 자동 호출하면
+  // "아직 아무 쪽도 실측되지 않은" 상태(B25-07)를 무대에 만들 수 없다.
+  Page: ({ pageNumber, onLoadSuccess }) => {
+    stage.pageLoads[pageNumber] = onLoadSuccess;
+    return <div data-testid={`page-${pageNumber}`} />;
+  },
 }));
 
 /** 문서 로딩 완료를 테스트가 발화한다 (실제로는 react-pdf 가 비동기로 부른다). */
 const loadDocument = (numPages) => act(() => stage.fireLoad({ numPages }));
+
+/**
+ * 한 쪽의 크기 보고를 발화한다. 실제 react-pdf 는 그 쪽 캔버스를 그린 뒤 부르므로,
+ * 이 호출 전까지는 "렌더됐지만 아직 0px" 구간이다 — 계약 #7 이 말하는 그 구간.
+ */
+const loadPage = (pageNumber, width = 595, height = 842) =>
+  act(() => stage.pageLoads[pageNumber]?.({ pageNumber, originalWidth: width, originalHeight: height }));
 
 const renderPanel = () => {
   const ref = createRef();
@@ -62,6 +81,7 @@ const visiblePage = (container) => container.querySelector('.pdf-page-input').va
 
 beforeEach(() => {
   stage.fireLoad = null;
+  stage.pageLoads = {};
 });
 
 describe('로딩 전에 온 이동 요청 (Phase 1)', () => {
@@ -70,6 +90,7 @@ describe('로딩 전에 온 이동 요청 (Phase 1)', () => {
 
     act(() => ref.current.scrollToPage(3));
     loadDocument(5);
+    loadPage(1);
 
     expect(visiblePage(container)).toBe('3');
   });
@@ -79,6 +100,7 @@ describe('로딩 전에 온 이동 요청 (Phase 1)', () => {
 
     act(() => ref.current.scrollToPage(3));
     loadDocument(5);
+    loadPage(1);
 
     expect(getByTestId('page-3')).toBeInTheDocument();
   });
@@ -88,6 +110,7 @@ describe('로딩 전에 온 이동 요청 (Phase 1)', () => {
 
     act(() => ref.current.scrollToPage(3));
     loadDocument(5);
+    loadPage(1);
 
     // 이전 쪽(2)을 함께 렌더하면 0px 상태로 누적 높이가 계산돼 한 쪽 짧게 안착한다.
     // 1쪽은 초기 렌더 큐에 원래 들어 있으므로 판정 대상이 아니다.
@@ -101,8 +124,30 @@ describe('로딩 전에 온 이동 요청 (Phase 1)', () => {
 
     act(() => ref.current.scrollToPage(999));
     loadDocument(5);
+    loadPage(1);
 
     expect(visiblePage(container)).toBe('1');
+  });
+});
+
+describe('적용 시점 — 첫 쪽 실측 전에는 발행하지 않는다 (Phase 1)', () => {
+  it('[B25-07] 어떤 쪽도 실측되기 전에는 보관분을 적용하지 않는다', () => {
+    const { ref, container } = renderPanel();
+
+    act(() => ref.current.scrollToPage(3));
+    loadDocument(5); // 쪽 크기 보고는 아직 없다 — 1쪽이 0px인 구간
+
+    expect(visiblePage(container)).toBe('1');
+  });
+
+  it('[B25-08] 1쪽이 크기를 보고한 뒤 보관분이 적용된다', () => {
+    const { ref, container } = renderPanel();
+
+    act(() => ref.current.scrollToPage(3));
+    loadDocument(5);
+    loadPage(1);
+
+    expect(visiblePage(container)).toBe('3');
   });
 });
 
@@ -111,6 +156,7 @@ describe('로딩 후 이동은 지금과 같다 (회귀)', () => {
     const { ref, container } = renderPanel();
 
     loadDocument(5);
+    loadPage(1);
     act(() => ref.current.scrollToPage(4));
 
     expect(visiblePage(container)).toBe('4');
@@ -120,6 +166,7 @@ describe('로딩 후 이동은 지금과 같다 (회귀)', () => {
     const { ref, container } = renderPanel();
 
     loadDocument(5);
+    loadPage(1);
     act(() => {
       ref.current.scrollToPage(0);
       ref.current.scrollToPage(6);

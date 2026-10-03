@@ -238,6 +238,12 @@ const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
   // numPages 가 커밋된 뒤 이 이펙트에서 적용한다.
   useEffect(() => {
     if (!numPages) return;
+    // numPages 만으로는 이르다 — onDocumentLoadSuccess 가 pageSizes 를 비우고
+    // renderedPages 를 {1} 로 돌리므로, 그 커밋에서는 1쪽이 "렌더됐지만 아직 0px"이고
+    // 2쪽 이후 placeholder 는 A4 기본값(595×842)으로 깔린다. 그 상태로 좌표를 재면
+    // 계약 #7 그대로 한 페이지 짧게 안착하고, 비A4 문서는 쪽 수에 비례해 어긋난다.
+    // 첫 실측이 도착한 뒤에 발행한다 — 그때 fallback 도 실제 크기로 바뀐다.
+    if (Object.keys(pageSizes).length === 0) return;
     const pending = pendingScrollRef.current;
     if (pending == null) return;
     pendingScrollRef.current = null;
@@ -245,7 +251,7 @@ const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
     setCurrentPage(pending);
     setPageInput(String(pending));
     scrollToPage(pending);
-  }, [numPages, scrollToPage]);
+  }, [numPages, pageSizes, scrollToPage]);
 
   const handlePageInputKeyDown = (e) => {
     if (e.key !== "Enter") return;
