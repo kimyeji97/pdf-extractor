@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-02
+> 최종 갱신: 2026-10-03
 
 ## 요구사항 인덱스
 
@@ -137,7 +137,7 @@
 | REQ-F15 | 문제집 이름·파일명 표시 — 감지 알림 제목 문제집 이름 우선 · 목록 카드·작업 화면 헤더에 파일명 병기 | [plan](plans/PLAN-F15-workbook-name-and-filename.md) | 2026-09-30 | ✅ **완료**(F15-01~11 · PR #26 `f18c495` · dev 확인) |
 | REQ-C10 | 감지 문항 이름을 원문으로 표시("문항 유형 01" — 고정 접두어 "문항" + 사용자 이름 \|\| 원문 \|\| 번호) | [plan](plans/PLAN-C10-question-source-title.md) | 2026-10-01 | ✅ **Phase 1~3 완료**(백엔드 감지 원문 `source_text` + 조회 API · 프론트 `utils/questionName` 단일 표시 이름·입력란 고정 접두어, 케이스 30/30 · 백엔드 317 · 프론트 273 · 기출 4종·테스트02 경계 불변 실측). PR #27 main 머지 `b6edc0f`, dev 배포 `c10-b6edc0f` 후 사용자 육안 확인. 원문은 재감지한 파일부터 |
 | REQ-B27 | 알림 사용자별 분리 + 알림별 읽음 — 알림 API 3종 무인증·전 사용자 알림 노출, 전역 읽음 커서 | [plan](plans/PLAN-B27-notification-per-user.md) | 2026-10-02 | ✅ **Phase 1·2 완료**(케이스 35/35 · 백엔드 374/374·프론트 290/290 · 리뷰 3회 후 `206af9b` (b)·(c) 0). PR #31 main 머지 `95b707c`, dev 백엔드·프론트 동반 배포 후 계정 둘로 확인(API 18항목 · 화면 계정 전환) |
-| REQ-B26 | 문항 삭제 [되돌리기]가 복원하지 않음 → 삭제를 토스트 동안 미루고 되돌리면 그대로 | [plan](plans/PLAN-B26-delete-undo-restore.md) | 2026-10-02 | ✅ **Phase 1 완료**(케이스 22/22 · 프론트 312/312 · 리뷰 3회 후 `4c50d43` (b)·(c) 0). 프론트 전용 — PR·dev 배포 전 |
+| REQ-B26 | 문항 삭제 [되돌리기]가 복원하지 않음 → 삭제를 토스트 동안 미루고 되돌리면 그대로 | [plan](plans/PLAN-B26-delete-undo-restore.md) | 2026-10-02 | ✅ **Phase 1 완료**(케이스 22/22 · 프론트 312/312 · 리뷰 3회 후 `4c50d43` (b)·(c) 0). PR #32 main 머지 `7477a91` · **dev 프론트 배포 완료**(2026-10-02 18:57, 머지와 같은 분 — 2026-10-03 라이브 번들로 확인) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -250,6 +250,21 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-10-03
+
+### B26 dev 프론트 배포 — 돌려 보니 전날 이미 떠 있었다 (문서가 반대로 적혀 있었다)
+
+- 사용자 요청으로 `scripts/deploy/frontend-deploy.sh`를 돌렸다. 빌드 2.0s·자산 59개, Worker `twilight-base-302d` Version `a489749b` 배포(트래픽 100%)
+- **`No updated asset files to upload`이 떴다** — Vite 자산은 내용 해시 파일명이라 B26 변경이 들어갔으면 새 파일이 올라가야 한다. 파고들어 보니
+  `wrangler deployments list`의 직전 배포가 **2026-10-02 18:57 KST, PR #32 머지와 같은 분**이었다. 어제 머지 직후 이미 배포돼 있었고 그 번들에 B26이 들어 있었다.
+  이번 실행은 **같은 자산으로 새 버전만 찍은 재배포**(업로드 0.34KiB = 매니페스트만). 무해하지만 **PROGRESS 인덱스는 "PR·dev 배포 전", CLAUDE.md는 "B27까지"**로 둘 다 틀려 있었다
+- **함정 — 배포 여부를 문서로 판정하면 양방향으로 틀린다.** 수동 배포 영역이라 기록이 뒤처지기도(이번) 앞서기도 한다. 라이브를 직접 본다:
+  ① `npx wrangler deployments list | grep '^Created:' | tail -5` ② 라이브 `index.html`의 `assets/*.js` 참조 ↔ 로컬 `dist/index.html` 비교(해시가 같으면 같은 번들)
+  ③ 그 변경의 고유 문자열을 라이브 청크에서 grep. 이번엔 B26의 `"삭제하지 못했습니다"`가 `work-BGkIjcqQ.js`에 있는 것으로 확인했다
+- **함정 — `wrangler login` 세션이 비어 있었다.** 후보 경로 네 곳 모두 자격증명이 없고 `~/Library/Preferences/.wrangler` 자체가 실행 시점에 새로 생겼다. **비대화형 셸에선 OAuth 로그인을 끝낼 수 없다** →
+  사용자에게 `npx wrangler login`을 요청해야 한다. **`--temporary`는 쓰면 안 된다** — 임시 계정으로 붙어 엉뚱한 Worker에 배포된다
+- 빌드가 `work.jsx`·`QuestionAnalysisPanel.jsx`를 컴파일했다(CLAUDE.md "렌더 무대 없는 화면은 `npm run build`를 따로" 조건 충족) · `dist`에 dev API URL 확인·`localhost:8000` 0건(`.env.local` 함정 안 걸림)
 
 ## 2026-10-02
 

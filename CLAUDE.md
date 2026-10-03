@@ -290,7 +290,7 @@ aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS
 docker buildx build --platform linux/amd64 --push -t 504233295989.dkr.ecr.ap-northeast-2.amazonaws.com/pdf-extractor-backend:latest ./backend
 aws ecs update-service --cluster pdf-extractor-cluster --service pdf-extractor-backend-dev-svc --force-new-deployment --region ap-northeast-2
 
-# 배포 (프론트엔드) — Workers `twilight-base-302d`, 자동 배포 없음. `wrangler login`은 이 머신에 돼 있다
+# 배포 (프론트엔드) — Workers `twilight-base-302d`, 자동 배포 없음. `wrangler login`은 비대화형 셸에서 못 한다(사용자에게 요청)
 # ⚠️ `.env.local`이 localhost라 셸 env로 덮어야 한다 (Vite는 셸 env > .env*). 안 덮으면 dev에 localhost가 박힌다
 cd frontend
 VITE_API_BASE_URL=https://dailystudy-workbook-api-dev.yejicraft-cf.com/api npm run build
@@ -368,12 +368,19 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
-⚠️ **dev 프론트는 2026-10-02 main `95b707c` 빌드(B27까지)다** — 실체는 Pages가 아니라
+⚠️ **dev 프론트는 2026-10-02 18:57 main `7477a91` 빌드(B26까지)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
 "배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh`)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**
+⚠️ **그러나 이 줄을 믿고 배포 여부를 판정하지 말 것 — 수동 배포라 기록이 뒤처지기도 앞서기도 한다.**
+2026-10-03에 B26을 배포하려 했더니 전날 머지와 같은 분에 이미 떠 있었고(이 줄은 "B27까지", PROGRESS는 "배포 전"이었다) 재배포가 `No updated asset
+files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler deployments list | grep '^Created:' | tail -5`
+② 라이브 `index.html`의 `assets/*.js` 참조 ↔ 로컬 `dist/index.html`(Vite 내용 해시라 일치 = 같은 번들) ③ 그 변경의 고유 문자열을 라이브 청크에서 grep.
 ⚠️ dev R2 버킷 CORS는 코드가 아니라 버킷 설정이다(wrangler OAuth로만 닿음, 08-27 dev 오리진 추가).
-이 머신에 awscli·docker(colima)·AWS 자격증명·`wrangler login`이 구성돼 배포가 가능하다.
+이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.
+⚠️ **`wrangler login` 세션은 사라져 있을 수 있다** — 2026-10-03에 자격증명이 없었다(`~/Library/Preferences/.wrangler`가 새로 생성됨).
+**비대화형 셸에선 OAuth 로그인을 끝낼 수 없으므로** 사용자에게 `npx wrangler login`을 요청해야 한다(또는 `CLOUDFLARE_API_TOKEN`).
+**`--temporary`로 우회하지 말 것** — 임시 계정에 붙어 엉뚱한 Worker로 배포된다.
 
 ## 계약 (깨면 회귀하는 것들)
 
