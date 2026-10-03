@@ -13,6 +13,7 @@
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { stripExtension } from "utils/documentName";
+import { savePdfToPicker } from "utils/savePdf";
 import { useLocation } from "react-router";
 
 import Box from "@mui/material/Box";
@@ -87,15 +88,10 @@ export default function EditorPage() {
       setGenerateStatus("done");
       try {
         const data = await getStatus(exportJobId);
-        if (data.download_url) {
-          setDownloadUrl(data.download_url);
-          const a = document.createElement("a");
-          a.href = data.download_url;
-          a.download = "workbook.pdf";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        }
+        // REQ-F16: 완료 시 **아무것도 자동으로 받거나 열지 않는다.** URL만 들고 있다가
+        // 사용자가 [다운로드]를 누르면 그때 저장 위치 선택 창을 띄운다 — 창은 사용자
+        // 클릭 안에서만 열 수 있어서다(계획서 § 제약·함정).
+        if (data.download_url) setDownloadUrl(data.download_url);
       } catch {
         // 다운로드 URL 취득 실패는 생성 실패가 아니다 — 결과물은 생성 이력에 있다.
       }
@@ -533,13 +529,17 @@ export default function EditorPage() {
             <Alert severity="success" sx={{ borderRadius: 0, py: 0.5 }}>
               PDF 생성 완료!{" "}
               {downloadUrl && (
-                <a
-                  href={downloadUrl}
-                  download="workbook.pdf"
-                  style={{ color: "inherit", fontWeight: 600 }}
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() => savePdfToPicker(downloadUrl, `${filename.trim() || "문제집"}.pdf`)}
+                  sx={{
+                    border: 0, background: "none", p: 0, cursor: "pointer",
+                    color: "inherit", fontWeight: 600, textDecoration: "underline", font: "inherit",
+                  }}
                 >
-                  다시 다운로드
-                </a>
+                  다운로드
+                </Box>
               )}
             </Alert>
           )}
