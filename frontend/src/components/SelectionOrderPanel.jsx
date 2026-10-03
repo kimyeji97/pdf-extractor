@@ -27,6 +27,7 @@
  * - 목록이 flex 컬럼이므로 항목에 `flexShrink: 0`이 필요하다(계약 #5).
  */
 import { memo, useMemo } from "react";
+import { stripExtension } from "utils/documentName";
 import {
   DndContext,
   closestCenter,
@@ -239,7 +240,7 @@ export default function SelectionOrderPanel({
     const byJob = new Map();
     for (const b of items) {
       if (!byJob.has(b.jobId)) {
-        byJob.set(b.jobId, b.workbookName || b.sourceFilename || "(이름 없음)");
+        byJob.set(b.jobId, b.workbookName || stripExtension(b.sourceFilename) || "(이름 없음)");
       }
     }
     if (byJob.size < 2) return null; // 단일 출처면 표시하지 않는다
@@ -257,7 +258,7 @@ export default function SelectionOrderPanel({
       if (labels[b.jobId]) continue;
       const name = byJob.get(b.jobId);
       labels[b.jobId] =
-        nameCount.get(name) > 1 && b.sourceFilename ? b.sourceFilename : name;
+        nameCount.get(name) > 1 && b.sourceFilename ? stripExtension(b.sourceFilename) : name;
     }
     return labels;
   }, [items]);

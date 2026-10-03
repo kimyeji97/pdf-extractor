@@ -20,6 +20,7 @@
  *    컴포넌트를 옛 파일 경로에 얹는 쪽을 택했다.
  */
 import { useEffect, useState } from "react";
+import { resolveDocumentName } from "utils/documentName";
 import { createPortal } from "react-dom";
 
 import Box from "@mui/material/Box";
@@ -210,7 +211,7 @@ export default function StatsBoard({ refreshTrigger = 0, backgroundRefreshTrigge
                   }}
                 >
                   <Typography variant="body2" noWrap>
-                    {item.workbook_name || item.filename || item.job_id}
+                    {resolveDocumentName(item)}
                   </Typography>
                   {item.pages != null && (
                     <Typography variant="caption" color="text.disabled" component="div">

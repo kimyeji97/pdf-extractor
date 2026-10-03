@@ -12,6 +12,7 @@
  *   3. 순서 편집 항목의 출처 색점 + 이름 (SelectionOrderPanel)
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { stripExtension } from "utils/documentName";
 import { useLocation } from "react-router";
 
 import Box from "@mui/material/Box";
@@ -323,7 +324,7 @@ export default function EditorPage() {
           { label: "홈", to: "/" },
           { label: "생성", to: paths.create },
           ...(selectedJobFilename
-            ? [{ label: selectedWorkbookName || selectedJobFilename }]
+            ? [{ label: selectedWorkbookName || stripExtension(selectedJobFilename) }]
             : []),
         ]}
         actions={

@@ -75,14 +75,18 @@ afterEach(() => {
 
 describe('목록 카드 파일명 병기', () => {
   it('[F15-08] 문제집 이름과 파일명이 다르면 카드에 파일명이 보인다', async () => {
+    // 2026-10-03 REQ-F17 갱신 — 부제도 확장자를 뺀다(F17-18). 의도("파일명이 구분 단서로 보인다")는 그대로.
     await renderWith([job()]);
-    expect(await screen.findByText('2026_중3.pdf')).toBeInTheDocument();
+    expect(await screen.findByText('2026_중3')).toBeInTheDocument();
   });
 
   it('[F15-09] 문제집 이름이 없으면 파일명은 한 번만 보인다', async () => {
+    // 2026-10-03 REQ-F17 갱신 — 이 케이스의 의도("중복으로 두 번 보이지 않는다")는 그대로이고
+    // 기대 문자열만 바뀌었다. F17이 제목에서 확장자를 빼므로 제목은 `2026_중3`이고,
+    // 부제는 제목과 같아져 숨는다(F17-08). 확장자째 문자열은 이제 화면에 없다.
     await renderWith([job({ workbook_name: null })]);
-    await screen.findAllByText('2026_중3.pdf');
-    expect(screen.getAllByText('2026_중3.pdf')).toHaveLength(1);
+    await screen.findAllByText('2026_중3');
+    expect(screen.getAllByText('2026_중3')).toHaveLength(1);
   });
 
   it('[F15-10] 업로드 시각은 그대로 보인다', async () => {

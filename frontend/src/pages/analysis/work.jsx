@@ -155,7 +155,7 @@ export default function AnalysisWorkPage() {
   // 문서 이름은 jobInfo(가드 응답) 하나로만 판단한다 (REQ-B12) — 벨·URL 직접 입력·
   // 새로고침·목록 클릭 어느 경로로 들어와도 같은 이름이 뜨고, 도착 전에는 job-id 대신
   // 로딩 문구를 보인다.
-  const displayName = resolveDocumentName(jobInfo, jobId);
+  const displayName = resolveDocumentName(jobInfo);
 
   // 대기 중(PENDING)이면 재감지가 이미 걸려 있다 — 버튼만 막는다 (REQ-F11 Phase 2).
   // 목록과 같은 판정 함수를 쓴다.

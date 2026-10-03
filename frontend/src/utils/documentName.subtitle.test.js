@@ -19,7 +19,8 @@ const stripComments = (source) =>
 
 describe('resolveFileSubtitle', () => {
   it('[F15-05] 문제집 이름과 파일명이 다르면 파일명을 돌려준다', () => {
-    expect(resolveFileSubtitle({ workbook_name: '중3 기출', filename: '2026_중3.pdf' })).toBe('2026_중3.pdf');
+    // 2026-10-03 REQ-F17 갱신 — 부제도 확장자를 뺀다(F17-18). 의도("다르면 파일명을 돌려준다")는 그대로.
+    expect(resolveFileSubtitle({ workbook_name: '중3 기출', filename: '2026_중3.pdf' })).toBe('2026_중3');
   });
 
   it('[F15-06] 문제집 이름이 없으면 null (파일명이 이미 제목이다)', () => {
