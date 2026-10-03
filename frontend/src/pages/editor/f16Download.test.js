@@ -1,7 +1,7 @@
 /**
  * REQ-F16 Phase 1 — 완료 시 자동으로 받거나 열지 않는다 (소스 스캔)
  *
- * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-06~07)
+ * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-06~07, F16-13)
  *
  * `editor/index.jsx` 는 API mock 이 5~6개 필요해 렌더 무대가 없다(PLAN-B12 § 제약·함정,
  * D11·REQ-30 과 같은 결론). 여기서 보려는 것도 "화면이 어떻게 보이나"가 아니라
@@ -28,7 +28,12 @@ const editorSource = () => {
 const completionBranch = (code) => {
   const start = code.indexOf('setGenerateStatus("done")');
   expect(start).toBeGreaterThan(-1);
-  return code.slice(start, start + 900);
+  // 고정 창은 분기가 길어지면 재유입을 놓친다(/review 회차 0). 다음 분기 시작까지로 잡는다.
+  const rest = code.slice(start);
+  const end = rest.indexOf('onError:');
+  const branch = end > 0 ? rest.slice(0, end) : rest.slice(0, 900);
+  expect(branch).toContain('getStatus');   // 창이 실제로 완료 분기를 덮는지
+  return branch;
 };
 
 describe('생성 완료 분기 (소스 스캔)', () => {
@@ -39,5 +44,17 @@ describe('생성 완료 분기 (소스 스캔)', () => {
 
   it('[F16-07] 완료 시 새 탭으로 열지 않는다', () => {
     expect(completionBranch(editorSource())).not.toMatch(/window\.open/);
+  });
+});
+
+describe('저장 버튼 (소스 스캔)', () => {
+  it('[F16-13] 저장 실패를 화면에 알린다', () => {
+    // promise 를 버리면 picker 이후 모든 실패가 조용하다 — F16 이 자동 다운로드를 없애
+    // 알림이 유일한 피드백 경로다(/review 회차 0).
+    const code = editorSource();
+    const idx = code.indexOf('savePdfToPicker(');
+    expect(idx).toBeGreaterThan(-1);
+
+    expect(code.slice(idx, idx + 300)).toMatch(/catch/);
   });
 });

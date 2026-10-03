@@ -69,6 +69,10 @@ export default function EditorPage() {
   const [generating, setGenerating] = useState(false);
   const [generateStatus, setGenerateStatus] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
+  // 저장 창의 기본 파일명 — **생성 요청에 쓴 이름**을 그대로 쓴다 (REQ-F16).
+  // 입력 칸은 생성 뒤에도 수정 가능해서, 저장 시점에 다시 읽으면 생성 이력의
+  // 이름과 어긋나고 INVALID_CHARS 검사도 안 거친다(/review 회차 0).
+  const [savedFilename, setSavedFilename] = useState("workbook.pdf");
   const [generateError, setGenerateError] = useState("");
   const [exportJobId, setExportJobId] = useState(null);
 
@@ -272,6 +276,8 @@ export default function EditorPage() {
     setGenerateStatus("processing");
     setGenerateError("");
     setDownloadUrl(null);
+    // 검증을 통과한 **이 값**을 저장 창 기본 이름으로 고정한다 (REQ-F16).
+    setSavedFilename(`${trimmed}.pdf`);
     try {
       // 문제집 메타 저장에 필요한 정보를 **생성 요청에 함께 실어 보낸다** (REQ-B10).
       // 종전에는 아래 폴링의 DONE 분기에서 createWorkbookMeta 로 저장했는데, 그 폴링이
@@ -532,7 +538,7 @@ export default function EditorPage() {
                 <Box
                   component="button"
                   type="button"
-                  onClick={() => savePdfToPicker(downloadUrl, `${filename.trim() || "문제집"}.pdf`)}
+                  onClick={() => savePdfToPicker(downloadUrl, savedFilename).catch((e) => setGenerateError(e?.message || "저장하지 못했습니다."))}
                   sx={{
                     border: 0, background: "none", p: 0, cursor: "pointer",
                     color: "inherit", fontWeight: 600, textDecoration: "underline", font: "inherit",
