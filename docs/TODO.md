@@ -177,3 +177,5 @@
 - [ ] B27 리뷰 이연: 알림 스트림이 5xx로 닫히고 토큰 갱신도 5xx면 재연결을 포기 — 백오프 재시도 (`NotificationContext.jsx` onError) (2026-10-02 추가)
 - [ ] B26 리뷰 이연: 재감지 진행 중에도 문항 삭제 가능 — 옛 (번호, k)로 새 경계를 지울 수 있음 (`work.jsx` handleRefresh, 즉시 삭제 시절부터) (2026-10-02 추가)
 - [ ] B26 리뷰 이연: 작업 화면을 떠난 뒤 지연 삭제가 실패하면 알림 없음 — 화면 밖 스낵바로 알릴지 결정 (`QuestionAnalysisPanel.jsx` deleteFailureListeners) (2026-10-02 추가)
+- [ ] B25 리뷰 이연: 쪽 크기가 **섞인** 문서는 모든 placeholder가 첫 실측 쪽 크기를 쓴다 — REQ-P02-01 가상화의 원래 폴백(`PdfPreviewPanel.jsx` fallbackWidthPt/HeightPt). B25는 "실측이 아예 없는 구간"만 없앴다 (2026-10-03 추가)
+- [ ] B25 리뷰 이연: `queued.test.jsx`가 전체 스위트에서 간헐 Unhandled Error — `@iconify/react` 타이머가 teardown 뒤 발화. 단독 4/4·재실행 73/73 녹색이라 기존 flake (2026-10-03 추가)
