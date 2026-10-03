@@ -379,7 +379,11 @@ deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS
 files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler deployments list | grep '^Created:' | tail -5`
 ② 라이브 `index.html`의 `assets/*.js` 참조 ↔ 로컬 `dist/index.html`(Vite 내용 해시라 일치 = 같은 번들) ③ 그 변경의 고유 문자열을 라이브 청크에서 grep.
 ⚠️ dev R2 버킷 CORS는 코드가 아니라 버킷 설정이다(wrangler OAuth로만 닿음, 08-27 dev 오리진 추가).
-이 머신에 awscli·docker(colima)·AWS 자격증명이 구성돼 배포가 가능하다.
+이 머신에 awscli·docker·AWS 자격증명이 구성돼 배포가 가능하다.
+⚠️ **docker 런타임은 머신마다 다르다** — **개인맥은 Docker Desktop**(`open -a Docker`), **회사맥은 colima**(`colima start`).
+데몬이 꺼져 있으면 `backend-build.sh`가 `Cannot connect to the Docker daemon`으로 죽는다. 한쪽만 적어 두면
+다른 머신에서 `colima not found`를 매번 한 번씩 겪는다(2026-10-03 개인맥에서 실제로 걸렸다) —
+런타임 이름을 가정하지 말고 `docker info`로 데몬부터 확인할 것.
 ⚠️ **`wrangler login` 세션은 사라져 있을 수 있다** — 2026-10-03에 자격증명이 없었다(`~/Library/Preferences/.wrangler`가 새로 생성됨).
 **비대화형 셸에선 OAuth 로그인을 끝낼 수 없으므로** 사용자에게 `npx wrangler login`을 요청해야 한다(또는 `CLOUDFLARE_API_TOKEN`).
 **`--temporary`로 우회하지 말 것** — 임시 계정에 붙어 엉뚱한 Worker로 배포된다.
