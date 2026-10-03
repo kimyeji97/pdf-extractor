@@ -55,6 +55,11 @@ const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
   const containerRef = useRef(null);
   const pageRefs = useRef([]);
 
+  // 문서 로딩 전에 들어온 외부 이동 요청 (REQ-B25).
+  // 로딩 전에는 numPages 를 몰라 이동도 범위 검사도 할 수 없으므로 여기 보관하고,
+  // numPages 가 잡힌 뒤 아래 이펙트가 꺼내 적용한다.
+  const pendingScrollRef = useRef(null);
+
   // ── 현재 페이지 변경 통지 (REQ-F07) ─────────────────────
   const onPageChangeRef = useRef(onPageChange);
   useEffect(() => {
@@ -211,7 +216,14 @@ const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
     ref,
     () => ({
       scrollToPage: (pageNum) => {
-        if (!numPages || pageNum < 1 || pageNum > numPages) return;
+        // 아직 로딩 전이면 버리지 않고 보관한다 (REQ-B25) — 현황판에서 ?page= 로
+        // 들어오는 경로는 문서 로딩보다 먼저 도착하므로, 버리면 항상 1쪽이 열렸다.
+        // 범위 검사는 numPages 를 아는 적용 시점으로 미룬다.
+        if (!numPages) {
+          pendingScrollRef.current = pageNum;
+          return;
+        }
+        if (pageNum < 1 || pageNum > numPages) return;
         setCurrentPage(pageNum);
         setPageInput(String(pageNum));
         scrollToPage(pageNum);
@@ -219,6 +231,21 @@ const PdfPreviewPanel = forwardRef(function PdfPreviewPanel(
     }),
     [numPages, scrollToPage]
   );
+
+  // ── 보관한 이동 요청 적용 (REQ-B25) ─────────────────────
+  // onDocumentLoadSuccess 안에서 바로 적용하면 안 된다 — 그 시점의 scrollToPage 는
+  // numPages 가 아직 null 인 클로저라 "다음 페이지"를 렌더 큐에 넣지 못한다(계약 #7).
+  // numPages 가 커밋된 뒤 이 이펙트에서 적용한다.
+  useEffect(() => {
+    if (!numPages) return;
+    const pending = pendingScrollRef.current;
+    if (pending == null) return;
+    pendingScrollRef.current = null;
+    if (pending < 1 || pending > numPages) return;
+    setCurrentPage(pending);
+    setPageInput(String(pending));
+    scrollToPage(pending);
+  }, [numPages, scrollToPage]);
 
   const handlePageInputKeyDown = (e) => {
     if (e.key !== "Enter") return;
