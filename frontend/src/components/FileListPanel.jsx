@@ -99,11 +99,21 @@ function JobCard({ job, isSelected, selectedCount = 0, onSelect }) {
         </Box>
       </Box>
 
-      <Typography variant="caption" color="text.disabled" noWrap sx={{ display: "block", mt: 0.25 }}>
-        {/* 제목과 같은 글자를 두 번 쓰지 않는다 — 공유 헬퍼가 중복이면 null 을 준다 (REQ-F17) */}
-        {resolveFileSubtitle(job) && <span title={job.filename}>{resolveFileSubtitle(job)}</span>}
-        {job.workbook_types?.length > 0 && ` · ${job.workbook_types.join(", ")}`}
-      </Typography>
+      {/* 캡션 = 부제 + 유형. 제목과 겹치면 부제가 null 이므로(REQ-F17) **조각을 모아 join** 한다 —
+          따로 그리면 빈 조각이 구분자를 남겨 " · 수학" 이 된다(/review 회차 2). 짝 소비처인
+          BookCard·PageHeader 는 caption 자체가 없으면 요소째 가린다. */}
+      {(() => {
+        const caption = [
+          resolveFileSubtitle(job),
+          job.workbook_types?.length > 0 ? job.workbook_types.join(", ") : null,
+        ].filter(Boolean).join(" · ");
+
+        return caption ? (
+          <Typography variant="caption" color="text.disabled" noWrap title={caption} sx={{ display: "block", mt: 0.25 }}>
+            {caption}
+          </Typography>
+        ) : null;
+      })()}
 
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.25 }}>
         {job.uploaded_at && (

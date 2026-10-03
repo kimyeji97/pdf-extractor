@@ -47,3 +47,22 @@ def test_F17_19_uses_saved_source_filename_not_live_status():
     assert "sel.source_filename" in code
     # live 상태의 filename 을 라벨 재료로 긁어 오지 않는다
     assert "job_status.filename" not in code
+
+
+def test_F17_22_workbook_name_also_from_saved_snapshot():
+    """출처 **이름**도 저장된 `sel.workbook_name` 을 쓴다 (계약 #12).
+
+    `/review` 회차 1 이 "파일명만 스냅샷이라 비대칭"이라고 잡아 고쳤는데, 회차 2 가
+    **그 수선을 지키는 단언이 0건**임을 찾아냈다 — live 조회로 되돌려도 전부 녹색이었다.
+    F17-19 가 파일명을 보듯 이쪽은 이름을 본다.
+    """
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[1] / "app" / "services" / "pdf_service.py"
+    code = source.read_text(encoding="utf-8")
+
+    # 저장 스냅샷에서 이름을 읽는다
+    assert "sel.workbook_name" in code
+    # live 상태 조회로 이름을 긁어 오지 않는다 (되돌리면 이 둘이 되살아난다)
+    assert "workbook_names" not in code
+    assert "storage.get_status(sel.job_id)" not in code
