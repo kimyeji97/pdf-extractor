@@ -363,14 +363,13 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ### 배포 상태 (세션마다 필요한 사실)
 
-⚠️ **dev 백엔드는 2026-10-02 main `95b707c`(B27까지, 이미지 태그 `b27-95b707c` = `:latest`)로 배포돼 있고 지금은 `desired 0`(내려가 있음)이다.**
-(2026-10-03 B25 육안 확인 때 1로 올렸다가 확인 후 0으로 되돌렸다. B25는 프론트 전용이라 백엔드 이미지는 `95b707c` 그대로다.)
+⚠️ **dev 백엔드는 2026-10-03 main `25ee3d2`(F17까지, 이미지 태그 `f17-25ee3d2` = `:latest`)로 배포됐고 지금 `desired 1`로 켜져 있다**(내릴지 사용자 결정 대기).
+(F17은 `pdf_service`가 바뀌어 **백엔드 배포가 따라왔다** — B25처럼 프론트 전용이 아니었다. 실행 digest `04af8fb8…`가 ECR `f17-25ee3d2`와 일치함을 확인했다.)
 (**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
-⚠️ **dev 프론트는 2026-10-03 main `d3d8593` 내용 빌드(B25까지, Worker Version `cc6dbc42`)다** — 머지 전 브랜치에서 배포했지만
-머지 트리가 브랜치 끝 트리와 동일해 **main 빌드와 같다**(`git diff` 0건 확인, 재배포 불필요). 실체는 Pages가 아니라
+⚠️ **dev 프론트는 2026-10-03 main `25ee3d2` 빌드(F17까지, Worker Version `d3d884fc`)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
 "배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh`)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**
