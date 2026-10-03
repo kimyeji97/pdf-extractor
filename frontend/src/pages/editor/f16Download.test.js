@@ -1,7 +1,7 @@
 /**
  * REQ-F16 Phase 1 — 완료 시 자동으로 받거나 열지 않는다 (소스 스캔)
  *
- * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-06~07, F16-13)
+ * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-06~07, F16-13, F16-16)
  *
  * `editor/index.jsx` 는 API mock 이 5~6개 필요해 렌더 무대가 없다(PLAN-B12 § 제약·함정,
  * D11·REQ-30 과 같은 결론). 여기서 보려는 것도 "화면이 어떻게 보이나"가 아니라
@@ -55,6 +55,26 @@ describe('저장 버튼 (소스 스캔)', () => {
     const idx = code.indexOf('savePdfToPicker(');
     expect(idx).toBeGreaterThan(-1);
 
-    expect(code.slice(idx, idx + 300)).toMatch(/catch/);
+    // ⚠️ `catch` 글자만 보면 `.catch(() => {})` 도 통과한다(/review 회차 1).
+    //    실패를 **화면에 닿게** 하는 상태 전환까지 본다.
+    const near = code.slice(idx, idx + 400);
+    expect(near).toMatch(/catch[\s\S]*setSaveError/);
+  });
+
+  it('[F16-13] 저장 에러가 생성 완료 분기 안에서 렌더된다', () => {
+    // generateError 는 `generateStatus === "error"` 분기에만 있어 저장 실패를 못 보여준다.
+    const code = editorSource();
+    const done = code.indexOf('generateStatus === "done"');
+    expect(done).toBeGreaterThan(-1);
+
+    expect(code.slice(done, done + 900)).toMatch(/saveError/);
+  });
+
+  it('[F16-16] 저장 창 기본 이름을 생성 시점에 고정한다', () => {
+    // 입력 칸을 저장 시점에 다시 읽으면 생성 이력의 이름과 어긋난다(계획서 § 결정).
+    const code = editorSource();
+
+    expect(code).toMatch(/setSavedFilename\(/);
+    expect(code).toMatch(/savePdfToPicker\(\s*downloadUrl\s*,\s*savedFilename/);
   });
 });

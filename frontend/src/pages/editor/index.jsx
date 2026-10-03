@@ -73,6 +73,10 @@ export default function EditorPage() {
   // 입력 칸은 생성 뒤에도 수정 가능해서, 저장 시점에 다시 읽으면 생성 이력의
   // 이름과 어긋나고 INVALID_CHARS 검사도 안 거친다(/review 회차 0).
   const [savedFilename, setSavedFilename] = useState("workbook.pdf");
+  // 저장 실패는 **생성 완료 분기 안에서** 보여야 한다 — generateError 를 쓰면
+  // 그 Alert 이 `generateStatus === "error"` 분기에만 있어 화면에 영영 안 닿는다
+  // (/review 회차 1: "조용한 실패가 형태만 바뀌어 남았다").
+  const [saveError, setSaveError] = useState("");
   const [generateError, setGenerateError] = useState("");
   const [exportJobId, setExportJobId] = useState(null);
 
@@ -538,13 +542,22 @@ export default function EditorPage() {
                 <Box
                   component="button"
                   type="button"
-                  onClick={() => savePdfToPicker(downloadUrl, savedFilename).catch((e) => setGenerateError(e?.message || "저장하지 못했습니다."))}
+                  onClick={() => {
+                    setSaveError("");
+                    savePdfToPicker(downloadUrl, savedFilename)
+                      .catch((e) => setSaveError(e?.message || "저장하지 못했습니다."));
+                  }}
                   sx={{
                     border: 0, background: "none", p: 0, cursor: "pointer",
                     color: "inherit", fontWeight: 600, textDecoration: "underline", font: "inherit",
                   }}
                 >
                   다운로드
+                </Box>
+              )}
+              {saveError && (
+                <Box component="span" sx={{ display: "block", mt: 0.5, color: "error.main", fontWeight: 600 }}>
+                  {saveError}
                 </Box>
               )}
             </Alert>

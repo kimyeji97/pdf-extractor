@@ -1,7 +1,7 @@
 /**
  * REQ-F16 Phase 1 — 생성된 PDF를 브라우저 저장 위치 선택 창으로 저장
  *
- * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-01~05, F16-08~12)
+ * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-01~05, F16-08~12, F16-14~15)
  *
  * 저장 로직을 순수 함수로 뺐다 — `window.showSaveFilePicker`·`fetch`·DOM 을 인자로 받지 않고
  * 전역에서 읽되, 테스트가 그 전역을 갈아끼워 검증한다(브라우저 없이 돈다).
@@ -117,13 +117,33 @@ describe('받기 실패 처리', () => {
     expect(writable.abort).toHaveBeenCalled();
   });
 
-  it('[F16-10] 인증 자격을 실어 보낸다', async () => {
+  it('[F16-10] 우리 API 오리진이면 인증 자격을 실어 보낸다', async () => {
+    // /api/files 는 쿠키 인증이고 dev 는 크로스오리진이다 (계약 #31).
+    global.showSaveFilePicker = makePicker(makeHandle());
+
+    await savePdfToPicker('http://localhost:8000/api/files/results/x/result.pdf', FILENAME);
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ credentials: 'include' }));
+  });
+
+  it('[F16-15] 다른 오리진(R2 공개 도메인)에는 자격·헤더를 붙이지 않는다', async () => {
+    // R2 버킷 CORS 에 AllowCredentials 가 없어 include 면 브라우저가 응답을 막는다.
+    // Authorization 도 preflight 를 유발해 같은 이유로 깨진다 (/review 회차 1).
+    global.showSaveFilePicker = makePicker(makeHandle());
+
+    await savePdfToPicker('https://cdn.dev.test/results/x/result.pdf', FILENAME);
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.anything(), undefined);
+  });
+
+  it('[F16-14] 받을 때 toDownloadUrl 을 거친다 — 캐시 키를 가른다', async () => {
+    // 배선을 안 보면 toDownloadUrl(url) → url 로 되돌려도 통과한다(/review 회차 1).
     global.showSaveFilePicker = makePicker(makeHandle());
 
     await savePdfToPicker(PDF_URL, FILENAME);
 
-    // /api/files 는 쿠키 인증이고 dev 는 크로스오리진이다 (계약 #31).
-    expect(global.fetch).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ credentials: 'include' }));
+    // 두 번째 인자는 오리진에 따라 undefined 라 expect.anything() 으로는 못 본다 — 첫 인자만 본다.
+    expect(global.fetch.mock.calls[0][0]).toContain('dl=1');
   });
 });
 

@@ -8,12 +8,19 @@
  *    브라우저가 "사용자 제스처가 없다"며 거부한다. 그래서 **창부터 띄우고 그 뒤 PDF를 받는다.**
  *    이 순서가 F16-02 로 고정돼 있다. 뒤집으면 단위 테스트는 녹색이어도 실제로 창이 안 뜬다.
  *
+ * ⚠️ **인증 자격은 우리 API 오리진일 때만 붙인다.** 운영·dev 의 `download_url` 은
+ *    `R2_PUBLIC_DOMAIN` 이 있으면 **R2 공개 도메인**이다(`s3_service.generate_download_presigned_url`).
+ *    그 오리진의 CORS 는 버킷 설정이고 `AllowCredentials` 항목이 없어서, `credentials: "include"` 로
+ *    보내면 브라우저가 응답을 통째로 막는다. `Authorization` 도 preflight 를 유발해 같은 이유로 깨진다.
+ *    presigned URL 에 `Authorization` 을 붙이면 S3 호환 API 가 400("only one auth mechanism")이다.
+ *    인증이 필요한 쪽은 **local 모드의 `/api/files/{key}` 뿐**이고 그건 우리 오리진이다. (`/review` 회차 1)
+ *
  * ⚠️ **`<a download>` 는 크로스오리진에서 안 먹는다** — `download` 속성이 무시되고 결과 PDF 에
  *    `Content-Disposition` 도 없어서(`s3_service`) **탭에서 열린다.** 계획서가 `범위 — 제외`로
  *    못 박은 "새 탭으로 열기"가 그 경로에서 일어난다. 그래서 폴백도 **blob 으로 받아** 저장한다 —
  *    blob URL 은 same-origin 이라 `download` 가 먹고 파일명도 보존된다. (`/review` 회차 0)
  */
-import { _authHeaders } from "api/client";
+import { BASE_URL, _authHeaders } from "api/client";
 
 const SIGNED_MARKERS = ["X-Amz-Signature", "X-Amz-Credential", "Signature"];
 
@@ -81,16 +88,15 @@ export async function savePdfToPicker(url, filename) {
 async function downloadViaBlob(url, filename) {
   const blob = await fetchPdf(url);
   const objectUrl = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // ⚠️ 같은 틱에서 해제하면 안 된다 — 하이퍼링크 추적은 click() 중 동기적으로 끝나지 않고
+  //    태스크로 큐잉된다. 폴백의 대상이 바로 Safari·Firefox 라 여기서 끊기면 저장이 깨진다.
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 /**
@@ -98,10 +104,20 @@ async function downloadViaBlob(url, filename) {
  * 프론트와 API 가 다른 오리진이라 자격을 명시해야 한다 (계약 #31).
  */
 async function fetchPdf(url) {
-  const res = await fetch(toDownloadUrl(url), {
-    credentials: "include",
-    headers: _authHeaders(),
-  });
+  const target = toDownloadUrl(url);
+  const res = await fetch(target, isOwnApi(target)
+    ? { credentials: "include", headers: _authHeaders() }
+    : undefined);
   if (!res.ok) throw new Error(`PDF를 받지 못했습니다 (${res.status})`);
   return res.blob();
+}
+
+/** 우리 API 와 같은 오리진인가 — 그때만 자격·헤더를 붙인다(위 주석). */
+function isOwnApi(url) {
+  try {
+    return new URL(url, window.location.origin).origin
+        === new URL(BASE_URL, window.location.origin).origin;
+  } catch {
+    return false;
+  }
 }
