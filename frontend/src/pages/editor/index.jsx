@@ -13,6 +13,7 @@
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { stripExtension } from "utils/documentName";
+import { savePdfToPicker } from "utils/savePdf";
 import { useLocation } from "react-router";
 
 import Box from "@mui/material/Box";
@@ -68,6 +69,14 @@ export default function EditorPage() {
   const [generating, setGenerating] = useState(false);
   const [generateStatus, setGenerateStatus] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
+  // 저장 창의 기본 파일명 — **생성 요청에 쓴 이름**을 그대로 쓴다 (REQ-F16).
+  // 입력 칸은 생성 뒤에도 수정 가능해서, 저장 시점에 다시 읽으면 생성 이력의
+  // 이름과 어긋나고 INVALID_CHARS 검사도 안 거친다(/review 회차 0).
+  const [savedFilename, setSavedFilename] = useState("workbook.pdf");
+  // 저장 실패는 **생성 완료 분기 안에서** 보여야 한다 — generateError 를 쓰면
+  // 그 Alert 이 `generateStatus === "error"` 분기에만 있어 화면에 영영 안 닿는다
+  // (/review 회차 1: "조용한 실패가 형태만 바뀌어 남았다").
+  const [saveError, setSaveError] = useState("");
   const [generateError, setGenerateError] = useState("");
   const [exportJobId, setExportJobId] = useState(null);
 
@@ -87,15 +96,10 @@ export default function EditorPage() {
       setGenerateStatus("done");
       try {
         const data = await getStatus(exportJobId);
-        if (data.download_url) {
-          setDownloadUrl(data.download_url);
-          const a = document.createElement("a");
-          a.href = data.download_url;
-          a.download = "workbook.pdf";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        }
+        // REQ-F16: 완료 시 **아무것도 자동으로 받거나 열지 않는다.** URL만 들고 있다가
+        // 사용자가 [다운로드]를 누르면 그때 저장 위치 선택 창을 띄운다 — 창은 사용자
+        // 클릭 안에서만 열 수 있어서다(계획서 § 제약·함정).
+        if (data.download_url) setDownloadUrl(data.download_url);
       } catch {
         // 다운로드 URL 취득 실패는 생성 실패가 아니다 — 결과물은 생성 이력에 있다.
       }
@@ -275,7 +279,12 @@ export default function EditorPage() {
     setGenerating(true);
     setGenerateStatus("processing");
     setGenerateError("");
+    // 직전 저장 실패 문구를 지운다 — 안 지우면 재생성 뒤 완료 Alert 안에
+    // **저장을 시도하지도 않은 채** 옛 빨간 글씨가 되살아난다(/review 회차 2).
+    setSaveError("");
     setDownloadUrl(null);
+    // 검증을 통과한 **이 값**을 저장 창 기본 이름으로 고정한다 (REQ-F16).
+    setSavedFilename(`${trimmed}.pdf`);
     try {
       // 문제집 메타 저장에 필요한 정보를 **생성 요청에 함께 실어 보낸다** (REQ-B10).
       // 종전에는 아래 폴링의 DONE 분기에서 createWorkbookMeta 로 저장했는데, 그 폴링이
@@ -533,13 +542,26 @@ export default function EditorPage() {
             <Alert severity="success" sx={{ borderRadius: 0, py: 0.5 }}>
               PDF 생성 완료!{" "}
               {downloadUrl && (
-                <a
-                  href={downloadUrl}
-                  download="workbook.pdf"
-                  style={{ color: "inherit", fontWeight: 600 }}
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() => {
+                    setSaveError("");
+                    savePdfToPicker(downloadUrl, savedFilename)
+                      .catch((e) => setSaveError(e?.message || "저장하지 못했습니다."));
+                  }}
+                  sx={{
+                    border: 0, background: "none", p: 0, cursor: "pointer",
+                    color: "inherit", fontWeight: 600, textDecoration: "underline", font: "inherit",
+                  }}
                 >
-                  다시 다운로드
-                </a>
+                  다운로드
+                </Box>
+              )}
+              {saveError && (
+                <Box component="span" sx={{ display: "block", mt: 0.5, color: "error.main", fontWeight: 600 }}>
+                  {saveError}
+                </Box>
               )}
             </Alert>
           )}

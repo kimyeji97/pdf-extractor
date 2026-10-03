@@ -181,3 +181,5 @@
 - [ ] B25 리뷰 이연: `queued.test.jsx`가 전체 스위트에서 간헐 Unhandled Error — `@iconify/react` 타이머가 teardown 뒤 발화. 단독 4/4·재실행 73/73 녹색이라 기존 flake (2026-10-03 추가)
 - [ ] B25 미결 이관: 첫 쪽 실측이 끝내 오지 않으면(1쪽 로드 실패) 보관한 이동 요청이 조용히 유실된다 — 알릴지·대체 적용할지. 2026-10-03 `pageSizes` 게이트 도입의 대가(`PdfPreviewPanel.jsx`, `onDocumentLoadError` 미초기화와 같은 자리) (2026-10-03 추가)
 - [ ] F17 리뷰 이연: `pdf_service.py`의 `source_label` 주석 예시가 아직 옛 형식 `"Q1 · 수학문제집 · p.3"` — 형식을 바꾼 커밋이 남긴 것 (2026-10-03 추가)
+- [ ] F16 리뷰 이연: 생성 이력(`history/index.jsx`)의 다운로드가 아직 **맨 URL `<a download>`** — 크로스오리진이라 `download`가 무시돼 dev 에서 **탭이 열리고**, Origin 없는 그 요청이 `toDownloadUrl` 이 피해 다니는 **캐시 오염원**이다. 없애야 근본 해결 (2026-10-03 추가)
+- [ ] F16 리뷰 이연: `PdfPreviewPanel` 의 `file={pdfUrl}` 은 자격 없는 XHR 이라 **local 모드**의 결과 PDF 미리보기(`/api/files`, 쿠키 인증)가 크로스오리진 5173→8000 에서 못 읽는다 (2026-10-03 추가)

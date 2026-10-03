@@ -664,6 +664,12 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     export 함수는 `_authHeaders()`를 부르거나 **무인증 예외 목록**(`logout`뿐 — 알림 두 함수는 REQ-B27로 인증이 붙어 빠졌다)에 있어야
     통과시킨다. 새 raw fetch를 만들면 헤더를 붙이거나, 백엔드가 정말 무인증일 때만 예외 목록에 **이유와 함께** 올린다.
     문서만으로는 `getStatus`를 놓쳐 PDF 생성 폴링이 401이 됐다(REQ-B23).
+    ⚠️ **그 스캔은 `client.js` 한 파일만 본다 — 다른 파일의 raw fetch 는 안 잡힌다.**
+    REQ-F16 이 `utils/savePdf.js` 에 첫 사례를 만들었다(결과 PDF 를 받아 저장). 거기선 **오리진에 따라 일부러 갈린다** —
+    우리 API 면 `credentials`+`_authHeaders()`, **R2 공개 도메인·presigned 면 맨 CORS GET**이다.
+    자격을 전부 붙이면 R2 버킷 CORS 에 `AllowCredentials` 가 없어 브라우저가 응답을 통째로 막고,
+    presigned 에 `Authorization` 을 붙이면 400 이다(실측 — F16 리뷰 회차 1에서 주 경로가 깨졌다).
+    **`client.js` 밖에 raw fetch 를 만들면 그 파일에 맞는 가드를 직접 둘 것** — B23-03 은 거기까지 안 본다.
 
 ## 상시 이슈
 

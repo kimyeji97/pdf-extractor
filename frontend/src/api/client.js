@@ -70,7 +70,7 @@ function _clearTokens() {
 }
 
 /** `getJobInfo`처럼 apiFetch를 거치지 않는 raw fetch 호출도 이걸로 헤더를 만든다. */
-function _authHeaders() {
+export function _authHeaders() {
   const token = _getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
