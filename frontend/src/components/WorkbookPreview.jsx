@@ -26,6 +26,7 @@ import {
   MIN_CELL_SCALE, MAX_CELL_SCALE, CELL_SCALE_STEP, clampCellScale,
 } from "../utils/workbookLayout";
 import { questionDisplayName } from "utils/questionName";
+import { buildSourceLabel } from "utils/sourceLabel";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
 
@@ -145,12 +146,15 @@ function WorkbookPage({
             const cellScale = clampCellScale(item?.scale ?? 1);
             const imgHpx   = cellHpx - labelHpx;
 
-            // 출처 레이블 텍스트: "번호번. 문제집이름. p페이지. 문항이름" (REQ-C07)
-            const labelParts = [`${globalIdx + 1}번`];
-            if (item.workbookName) labelParts.push(item.workbookName);
-            if (item.pageNum != null) labelParts.push(`p${item.pageNum + 1}`);
-            if (item.displayTitle) labelParts.push(item.displayTitle);
-            const labelText = labelParts.join(". ");
+            // 출처 레이블 "n번) 문제집. p쪽. 문항이름." (REQ-C07 → F17)
+            // 백엔드 pdf_service.build_source_label() 과 같은 문자열이어야 한다 (계약 #12).
+            const labelText = buildSourceLabel({
+              index: globalIdx + 1,
+              workbookName: item.workbookName,
+              filename: item.sourceFilename,
+              pageNum: item.pageNum,
+              questionName: item.displayTitle,
+            });
 
             if (!item.thumbnailUrl) {
               return (

@@ -26,7 +26,7 @@ import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { useStatusEvents } from "contexts/NotificationContext";
 import { detectionBadge } from "utils/badges";
-import { resolveFileSubtitle } from "utils/documentName";
+import { resolveDocumentName, resolveFileSubtitle } from "utils/documentName";
 import { isEntryBlocked } from "utils/jobStatus";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
@@ -98,7 +98,7 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
   return (
     <BookCard
       coverUrl={coverUrl}
-      title={job.workbook_name || job.filename || "unknown.pdf"}
+      title={resolveDocumentName(job)}
       caption={resolveFileSubtitle(job)}
       subtitle={relativeTime(job.uploaded_at)}
       tags={job.workbook_types || []}

@@ -274,6 +274,44 @@ def _insert_cropped_page(
 # v2: 복수 소스 PDF 빌드
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def strip_extension(filename: str) -> str:
+    """마지막 점 뒤를 뺀다. 점이 없으면 그대로 (REQ-F17)."""
+    if not filename:
+        return filename
+    head, sep, _tail = filename.rpartition(".")
+    return head if sep else filename
+
+
+def build_source_label(
+    *,
+    index: int,
+    workbook_name: str = "",
+    filename: str = "",
+    page_num: int | None = None,
+    question_name: str = "",
+) -> str:
+    """출처 문구 "n번) 문제집. p쪽. 문항이름." (REQ-C07 → F17).
+
+    값이 없는 요소는 통째로 빠지므로 끝이 이미 "."일 수 있다 → 마침표는 정확히 하나만 남긴다.
+
+    ⚠️ 계약 #12 — 프론트 `utils/sourceLabel.js`의 `buildSourceLabel()`과 같은 문자열이어야 한다.
+       한쪽만 고치면 미리보기와 생성 PDF가 갈린다.
+    """
+    parts: list[str] = []
+
+    name = workbook_name or strip_extension(filename)
+    if name:
+        parts.append(name)
+    if page_num is not None:
+        parts.append(f"p{page_num + 1}")
+    if question_name:
+        parts.append(question_name)
+
+    body = ". ".join(parts)
+    joined = f"{index}번) {body}" if body else f"{index}번)"
+    return joined if joined.endswith(".") else f"{joined}."
+
+
 def _sel_scale(sel) -> float:
     """선택 항목의 배율을 안전 범위로 clamp한다 (미지정/구버전 저장분은 1.0)."""
     try:
@@ -398,6 +436,7 @@ def extract_questions_v2(
     # ── Step 1: 고유 job_id별 PDF 다운로드 + 문제집 이름 조회 ─
     pdf_paths: dict[str, str] = {}
     workbook_names: dict[str, str] = {}   # {job_id: workbook_name}
+    source_filenames: dict[str, str] = {}  # {job_id: filename} — 이름이 없을 때의 폴백 (REQ-F17)
     for sel in selections:
         if sel.job_id not in pdf_paths:
             local_path = str(Path(tmpdir) / f"{sel.job_id}.pdf")
@@ -405,6 +444,7 @@ def extract_questions_v2(
             pdf_paths[sel.job_id] = local_path
             job_status = storage.get_status(sel.job_id)
             workbook_names[sel.job_id] = (job_status.workbook_name or "") if job_status else ""
+            source_filenames[sel.job_id] = (job_status.filename or "") if job_status else ""
 
     # ── Step 2: job_id별 문항 경계 데이터 확보 ─────────────
     boundaries_map: dict[str, list[QuestionBoundary]] = {}
@@ -425,17 +465,14 @@ def extract_questions_v2(
 
     for sel in selections:
         q_global += 1
-        wb_name = workbook_names.get(sel.job_id, "")
-        page_label = f"p{sel.page_num + 1}"
-        label_parts = [f"{q_global}번"]
-        if wb_name:
-            label_parts.append(wb_name)
-        label_parts.append(page_label)
-        # REQ-C07: 문항 이름 추가 (프론트 미리보기의 displayTitle과 동일 문자열)
-        q_name = (getattr(sel, "label", None) or "").strip()
-        if q_name:
-            label_parts.append(q_name)
-        src_label = ". ".join(label_parts)
+        # REQ-C07 → F17: 프론트 미리보기와 같은 문자열이어야 한다 (계약 #12)
+        src_label = build_source_label(
+            index=q_global,
+            workbook_name=workbook_names.get(sel.job_id, ""),
+            filename=source_filenames.get(sel.job_id, ""),
+            page_num=sel.page_num,
+            question_name=(getattr(sel, "label", None) or "").strip(),
+        )
 
         # ── 구형 수동 지정 영역 (custom_region) ─────────────
         if getattr(sel, "custom_region", None) is not None:
