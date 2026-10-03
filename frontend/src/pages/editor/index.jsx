@@ -279,6 +279,9 @@ export default function EditorPage() {
     setGenerating(true);
     setGenerateStatus("processing");
     setGenerateError("");
+    // 직전 저장 실패 문구를 지운다 — 안 지우면 재생성 뒤 완료 Alert 안에
+    // **저장을 시도하지도 않은 채** 옛 빨간 글씨가 되살아난다(/review 회차 2).
+    setSaveError("");
     setDownloadUrl(null);
     // 검증을 통과한 **이 값**을 저장 창 기본 이름으로 고정한다 (REQ-F16).
     setSavedFilename(`${trimmed}.pdf`);

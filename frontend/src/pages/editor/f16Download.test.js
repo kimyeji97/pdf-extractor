@@ -1,7 +1,7 @@
 /**
  * REQ-F16 Phase 1 — 완료 시 자동으로 받거나 열지 않는다 (소스 스캔)
  *
- * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-06~07, F16-13, F16-16)
+ * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-06~07, F16-13, F16-16, F16-18~19)
  *
  * `editor/index.jsx` 는 API mock 이 5~6개 필요해 렌더 무대가 없다(PLAN-B12 § 제약·함정,
  * D11·REQ-30 과 같은 결론). 여기서 보려는 것도 "화면이 어떻게 보이나"가 아니라
@@ -61,13 +61,22 @@ describe('저장 버튼 (소스 스캔)', () => {
     expect(near).toMatch(/catch[\s\S]*setSaveError/);
   });
 
-  it('[F16-13] 저장 에러가 생성 완료 분기 안에서 렌더된다', () => {
+  it('[F16-18] 저장 에러가 생성 완료 분기 안에서 렌더된다', () => {
     // generateError 는 `generateStatus === "error"` 분기에만 있어 저장 실패를 못 보여준다.
     const code = editorSource();
     const done = code.indexOf('generateStatus === "done"');
     expect(done).toBeGreaterThan(-1);
 
     expect(code.slice(done, done + 900)).toMatch(/saveError/);
+  });
+
+  it('[F16-19] 재생성하면 직전 저장 에러가 비워진다', () => {
+    // 안 지우면 완료 Alert 안에 **저장을 시도하지도 않은 채** 옛 빨간 글씨가 되살아난다.
+    const code = editorSource();
+    const idx = code.indexOf('const handleGenerate');
+    expect(idx).toBeGreaterThan(-1);
+
+    expect(code.slice(idx, idx + 1800)).toMatch(/setSaveError\(""\)/);
   });
 
   it('[F16-16] 저장 창 기본 이름을 생성 시점에 고정한다', () => {

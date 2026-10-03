@@ -1,7 +1,7 @@
 /**
  * REQ-F16 Phase 1 — 생성된 PDF를 브라우저 저장 위치 선택 창으로 저장
  *
- * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-01~05, F16-08~12, F16-14~15)
+ * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-01~05, F16-08~12, F16-14~15, F16-17, F16-20)
  *
  * 저장 로직을 순수 함수로 뺐다 — `window.showSaveFilePicker`·`fetch`·DOM 을 인자로 받지 않고
  * 전역에서 읽되, 테스트가 그 전역을 갈아끼워 검증한다(브라우저 없이 돈다).
@@ -126,6 +126,18 @@ describe('받기 실패 처리', () => {
     expect(global.fetch).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ credentials: 'include' }));
   });
 
+  it('[F16-20] 우리 API 오리진이면 Authorization 헤더도 붙인다', async () => {
+    // credentials 만 보면 headers: _authHeaders() 를 지워도 녹색이다(/review 회차 2).
+    // 쿠키로도 통과하지만 헤더가 있으면 **헤더만** 보는 경로라 의미가 있다.
+    global.showSaveFilePicker = makePicker(makeHandle());
+    localStorage.setItem('access_token', 'TOKEN123');
+
+    await savePdfToPicker('http://localhost:8000/api/files/results/x/result.pdf', FILENAME);
+
+    expect(global.fetch.mock.calls[0][1].headers).toHaveProperty('Authorization');
+    localStorage.removeItem('access_token');
+  });
+
   it('[F16-15] 다른 오리진(R2 공개 도메인)에는 자격·헤더를 붙이지 않는다', async () => {
     // R2 버킷 CORS 에 AllowCredentials 가 없어 include 면 브라우저가 응답을 막는다.
     // Authorization 도 preflight 를 유발해 같은 이유로 깨진다 (/review 회차 1).
@@ -168,7 +180,7 @@ describe('toDownloadUrl — 캐시 키 가르기', () => {
     expect(toDownloadUrl('https://cdn.test/a.pdf')).toContain('dl=1');
   });
 
-  it('[F16-12] presigned URL 에는 손대지 않는다', () => {
+  it('[F16-17] presigned URL 에는 손대지 않는다', () => {
     // 쿼리가 서명 대상이라 파라미터를 더하면 403 이 된다(previewUrl.js 와 같은 이유).
     const signed = 'https://cdn.test/a.pdf?X-Amz-Signature=abc';
     expect(toDownloadUrl(signed)).toBe(signed);

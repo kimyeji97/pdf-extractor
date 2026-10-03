@@ -20,7 +20,13 @@
  *    못 박은 "새 탭으로 열기"가 그 경로에서 일어난다. 그래서 폴백도 **blob 으로 받아** 저장한다 —
  *    blob URL 은 same-origin 이라 `download` 가 먹고 파일명도 보존된다. (`/review` 회차 0)
  */
-import { BASE_URL, _authHeaders } from "api/client";
+import { _authHeaders } from "api/client";
+
+// ⚠️ `client.js` 의 BASE_URL 을 import 하지 않는다 — 테스트가 `api/client` 를 통째로
+//    mock 하면 새 export 는 거기서 undefined 가 되고, `new URL(undefined, origin)` 은
+//    던지지 않고 `/undefined` 로 떨어져 **자격이 조용히 사라진다**(계약 #18·#20 계열).
+//    다른 6개 호출부와 같이 env 를 직독한다. (`/review` 회차 2)
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
 const SIGNED_MARKERS = ["X-Amz-Signature", "X-Amz-Credential", "Signature"];
 
@@ -116,7 +122,7 @@ async function fetchPdf(url) {
 function isOwnApi(url) {
   try {
     return new URL(url, window.location.origin).origin
-        === new URL(BASE_URL, window.location.origin).origin;
+        === new URL(API_BASE, window.location.origin).origin;
   } catch {
     return false;
   }
