@@ -2,7 +2,7 @@
 REQ-B29 Phase 1 — 문제집 메타 저장 실패를 재시도하고, 끝내 실패하면 알린다
 
 검증 계약: docs/plans/PLAN-B29-workbook-meta-save-failure.md `## 검증 계약`
-케이스: B29-01 ~ B29-08
+케이스: B29-01 ~ B29-11
 
 **PDF 는 만들어졌는데 사용자가 닿을 길이 없고 에러도 없는** 경로가 있었다.
 메타 저장이 실패하면 `extract.py` 는 의도적으로 삼키고 `status = DONE` 을 유지하는데
@@ -13,6 +13,10 @@ REQ-F18 이 생성 화면 다운로드를 걷어내 **유일한 탈출구마저 
 무대는 `test_notification_hooks.py` 의 F09-03 과 같다 — `_process_extraction_v2` 를 직접
 부르고 `_save_workbook_meta` 를 대역으로 갈아끼운다. **소스 스캔이 하나도 없다**:
 재시도 횟수는 대역의 호출 수로, 알림은 **저장된 파일**을 읽어 본다.
+
+⚠️ **B29-09 만 대역을 한 단계 아래(`storage.save_workbook`)에 건다** — `_save_workbook_meta`
+   를 통째로 갈아끼우면 "호출부가 무엇을 넘겼나"만 보게 돼 **함수가 그 인자를 쓰는지**는
+   아무도 안 본다(`/review` 회차 1 실측: 저장 줄이 넘겨받은 id 를 무시해도 11건 전부 통과).
 
 ⚠️ `_extract_pool` 은 ProcessPoolExecutor 라 다른 프로세스에서 돌면 monkeypatch 가
    전달되지 않는다 — `inline_extract_pool` 픽스처가 인라인 실행으로 바꾼다.
@@ -166,16 +170,22 @@ def test_B29_08_메타_저장_실패는_다른_문구를_쓴다(run_export, noti
 
 # ── /review 회차 0 반영 ───────────────────────────────────
 
-def test_B29_09_재시도는_같은_workbook_id_로_덮어쓴다(
+def test_B29_09_재시도는_같은_키로_덮어쓴다(
     make_job, inline_extract_pool, notif_files, monkeypatch
 ):
-    """[B29-09] 재시도가 **멱등**이다 — 같은 `workbook_id` 로 덮어쓴다.
+    """[B29-09] 재시도가 **멱등**이다 — 같은 키를 덮어쓴다.
 
-    근거: PLAN § 제약·함정 — "재시도가 **같은 키를 덮어쓴다**"
+    근거: PLAN § 제약·함정 — "**같은 키를 덮어쓰지 않고** 이력에 중복 행을 남긴다"
 
     `_save_workbook_meta` 가 id 를 **안에서** 만들면 재시도마다 다른 키가 돼서,
     PUT 은 올라갔는데 응답에서 터지는 경우(read timeout·connection reset) 같은 PDF 의
     문제집이 이력에 **2건** 뜬다 — 계약 #23 이 "중복으로도 안 잡힌다" 고 경고한 모양이다.
+
+    ⚠️ **대역을 `storage.save_workbook` 에 건다 — `_save_workbook_meta` 가 아니다.**
+       그 함수를 통째로 갈아끼우면 "호출부가 무엇을 넘겼나"만 보게 돼서,
+       **함수가 그 인자를 쓰는지**는 아무도 안 본다 — 실제로 저장 줄이 넘겨받은 id 를
+       무시하도록 되돌려도 11건이 전부 통과했다(`/review` 회차 1 실측).
+       한 단계 내려 **실제 저장 키**를 본다.
     """
     from app.routers import extract as extract_router
 
@@ -185,23 +195,21 @@ def test_B29_09_재시도는_같은_workbook_id_로_덮어쓴다(
         extract_router.pdf_service, "extract_questions_v2", lambda *a, **kw: 5
     )
 
-    seen: list[str | None] = []
+    keys: list[str] = []
 
-    def _meta(*args, **kwargs):
-        # 호출부가 positional 로 넘기든 keyword 로 넘기든 잡는다.
-        seen.append(kwargs.get("workbook_id") or (args[6] if len(args) > 6 else None))
-        if len(seen) < 2:
+    def _save(workbook_id, data):
+        keys.append(workbook_id)
+        if len(keys) < 2:
             raise RuntimeError("R2 일시 오류")
 
-    monkeypatch.setattr(extract_router, "_save_workbook_meta", _meta)
+    monkeypatch.setattr(extract_router.storage, "save_workbook", _save)
 
     extract_router._process_extraction_v2(
         selections=[], export_job_id="job-export", layout="2단", workbook_name="테스트 문제집",
     )
 
-    assert len(seen) == 2
-    assert seen[0] is not None, "호출부가 workbook_id 를 넘겨야 한다 — 안 넘기면 함수가 매번 새로 만든다"
-    assert seen[0] == seen[1], f"재시도가 다른 키를 썼다: {seen}"
+    assert len(keys) == 2, f"재시도가 돌지 않았다: {keys}"
+    assert keys[0] == keys[1], f"재시도가 다른 키로 썼다: {keys}"
 
 
 def test_B29_10_메타_실패는_제목으로도_드러난다(run_export, notif_files):
