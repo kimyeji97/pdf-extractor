@@ -367,7 +367,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ⚠️ **prod 백엔드는 2026-10-05에 띄웠고(REQ-E02 ✅), 당분간(약 한 달) 사용자가 직접 켜고 끄며 월 비용을 본다** — 서비스 `pdf-extractor-backend-prod-svc` · 태스크 정의 `pdf-extractor-backend-prod:1` · 이미지 **`prod-2cc43de`(버전 태그 고정, `:latest` 금지)** · 시크릿 `pdf-extractor/prod` · 로그 `/ecs/pdf-extractor-prod` · API `https://dailystudy-workbook-api.yejicraft-cf.com` · R2 `dailystudy`(prefix `pdf-extractor`). **`desired 0`이어도 장애가 아니다 — 켜고 끄는 건 사용자 몫이니 임의로 켜거나 끄지 말 것.** 상태는 `describe-services`로 직접 본다. prod 프론트는 2026-10-05 Worker **`dailystudy-workbook-prod`**(`wrangler.jsonc` `env.prod`, 커스텀 도메인 `https://dailystudy-workbook.yejicraft-cf.com`, Version `e46e4d4e`, 앱 코드 = `2cc43de`)로 배포됐다 — `frontend-deploy.sh prod`. 상세는 [PLAN-E02](docs/plans/PLAN-E02-prod-environment.md).
 
-⚠️ **dev 백엔드는 2026-10-03 main `25ee3d2`(F17까지, 이미지 태그 `f17-25ee3d2` = `:latest`)로 배포됐고 지금 `desired 1`로 켜져 있다**(내릴지 사용자 결정 대기).
+⚠️ **dev 백엔드는 2026-10-05 main `eaa7f38`(B28까지, 이미지 태그 `b28-eaa7f38` = `:latest`)로 배포됐고 지금 `desired 1`로 켜져 있다**(내릴지 사용자 결정 대기). 실행 태스크 digest `sha256:ffca2c03…` 가 ECR 과 일치함을 확인했다.
 (F17은 `pdf_service`가 바뀌어 **백엔드 배포가 따라왔다** — B25처럼 프론트 전용이 아니었다. 실행 digest `04af8fb8…`가 ECR `f17-25ee3d2`와 일치함을 확인했다.)
 (**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).

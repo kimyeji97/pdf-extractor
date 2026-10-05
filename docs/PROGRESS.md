@@ -141,7 +141,7 @@
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | 2026-10-05 | ✅ Phase 1·2 (케이스 31/31 · 각 `/review` 3회차 · **dev 육안 4건 확인** — 한 번 클릭·창 전환·재다운로드·취소) |
-| REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | — | 🟡 코드·테스트 완료(케이스 7/7 · 백엔드 384 · `/review` 3회차). **dev 육안 남음** — 백엔드 재배포 필요 |
+| REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
@@ -281,6 +281,8 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
   - 이연: [docs/TODO.md] 검색·정렬 NFD/NFC 불일치 별도 REQ — **기록 완료**(2회차 연속 미이행이었다)
   - 이연: [backend/tests/test_b28_pdf_text_nfc.py] B28-06 이 `pdf_service.py` 한 파일만 스캔한다(계약 #31 과 같은 모양) — docstring 에 한계 명시
   - 이연: [docs/plans/PLAN-B28-pdf-text-nfc.md] 검증 계약 표 행 순서가 `B28-05 → B28-07 → B28-06`
+- **dev 육안 확인 완료 (사용자, 2026-10-05)** — 백엔드 재배포(`b28-eaa7f38`, 실행 태스크 digest `sha256:ffca2c03…` 가 ECR 과 일치함을 확인) 뒤 새로 생성한 PDF 에서 ①출처 라벨의 한글이 **온전** ②폭 과대측정이 사라져 **커진 글자(4단 7.80→11.92pt)가 셀을 넘어 잘리지 않음** ③각주 정상. **REQ-B28 ✅**
+  (생성 화면에 다운로드 창이 여전히 뜨는 것은 B28 범위 밖이다 — **REQ-F18** 이 지운다)
 - ⚠️ **계약 번호가 충돌했다 — 같은 날 다른 세션(REQ-E02)이 `#37`·`#38`을 먼저 썼다.** 두 세션이 `CLAUDE.md` 계약 절을 동시에 늘렸고, git 은 서로 다른 줄이라 **충돌 없이 둘 다 머지**해 같은 번호가 두 개씩 생겼다. **E02 가 먼저 main 에 올라갔으므로 B28 쪽을 `#39`·`#40` 으로 밀었다**(계약 번호는 고정 ID 라 재배치하지 않는다는 규칙의 반대 방향 — 아직 main 에 없던 쪽이 양보한다). 코드·테스트·계획서·리뷰의 참조 11건도 함께 갱신했다.
   **git 이 안 잡아 주는 충돌이다** — 번호를 쓰기 전에 `origin/main` 의 계약 절을 먼저 봐야 한다
 - **남은 관문은 dev 육안이다** — 백엔드 변경이라 **ECS 재배포 전에는 안 보인다.** 확인은 **생성된 PDF** 로(미리보기는 처음부터 멀쩡했으므로 아무것도 증명하지 않는다)
