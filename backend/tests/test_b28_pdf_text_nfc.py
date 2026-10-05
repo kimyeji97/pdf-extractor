@@ -2,7 +2,7 @@
 REQ-B28 Phase 1 — PDF 에 그리는 사용자 문자열을 NFC 로 정규화한다
 
 검증 계약: docs/plans/PLAN-B28-pdf-text-nfc.md `## 검증 계약`
-케이스: B28-01 ~ B28-06
+케이스: B28-01 ~ B28-07
 
 **이 결함은 에러를 내지 않는다.** `fitz.Font("korea")` 는 실제로는
 `Droid Sans Fallback Regular` 라 **한글 자모 블록(U+1100~)에 글리프가 거의 없고**,
@@ -110,7 +110,7 @@ def test_B28_01_label_nfd_name_renders_as_nfc(tmp_path):
 
 
 def test_B28_02_footnote_nfd_renders_as_nfc(tmp_path):
-    """[B28-02] 각주도 같다 — 그리는 자리가 둘이라 한쪽만 고치기 쉽다."""
+    """[B28-02] 각주도 같다 — 호출부가 둘이라 한쪽만 고치기 쉽다(통로는 `_draw_text()` 하나)."""
     text = _render_footnote(tmp_path, NAME_NFD)
 
     assert NOTDEF not in text
@@ -179,7 +179,17 @@ def test_B28_06_every_draw_site_normalizes():
        `/review` 회차 1: `ast` 로 바꿨지만 수신자를 `ast.Name` 으로만 봐서 **체이닝·walrus·
        속성·인덱스 4종이 통과**했고, 정상 구현 2종(`safe = _nfc(t)` 경유 · `text=` 키워드)은
        오히려 빨개졌다 — **테스트가 구현 모양을 지시**하고 있었다.
-       → 생성 자체를 `_draw_text()` 하나로 모으고 **그 사실만** 단언한다. 모양은 안 본다.
+       → 생성 자체를 `_draw_text()` 하나로 모으고 **그 사실만** 단언한다.
+
+    ⚠️ **그래도 전수는 아니다 — 소스 스캔은 구문만 본다**(`/review` 회차 2). `fitz.TextWriter`
+       라고 **쓰인** 생성지만 보므로 아래는 **정규화 없이도 통과**한다(전부 실측):
+       별칭 `_fitz.TextWriter(…)`(이 파일 72줄에 `import fitz as _fitz` 가 이미 있다) ·
+       `from fitz import TextWriter as _TW` · `getattr(fitz, "TextWriter")` ·
+       `page.insert_htmlbox()` 처럼 **TextWriter 를 안 거치는 그리기**.
+       열거를 바꿔 가며 세 번 샜고 네 번째도 같아서 **2026-10-05 감수하기로 결정**했다 —
+       레포 전체에서 생성지가 `_draw_text()` 안 한 자리뿐이라 현시점 노출이 0 이다.
+       ⚠️ 그리고 이 스캔은 **`pdf_service.py` 한 파일만** 본다(계약 #31 의 "스캔은 `client.js`
+          한 파일만 본다"와 같은 모양). 다른 모듈에 그리는 코드가 생기면 못 본다.
     """
     source = (
         __import__("pathlib").Path(__file__).resolve().parents[1]

@@ -731,11 +731,18 @@ def _draw_text(page, point, text: str, *, font, fontsize: float, color) -> None:
     """
     PDF 에 글자를 그리는 **유일한 통로** (REQ-B28, 계약 #38).
 
-    `fitz.TextWriter` 를 여기서만 만든다 — 호출부가 직접 만들면 정규화를 빠뜨릴 수 있고,
-    그걸 테스트로 막으려면 "어떤 모양의 호출인지"를 열거해야 한다. 열거는 두 번 샜다
-    (`/review` 회차 0 — 창을 `fontsize` 로 끊기 · 회차 1 — 수신자를 `ast.Name` 으로만 보기).
-    **생성 자체를 한 곳으로 모으면 열거가 끝난다** — B28-06 이 "`fitz.TextWriter(` 는 이
-    함수 안에서만 생성된다 + 이 함수가 `_nfc` 를 거친다" 둘만 단언한다.
+    `fitz.TextWriter` 를 여기서만 만든다 — 호출부가 직접 만들면 정규화를 빠뜨릴 수 있다.
+    B28-06 이 "`fitz.TextWriter(` 는 이 함수 안에서만 생성된다 + 이 함수가 `_nfc` 를 거친다"
+    를 단언한다.
+
+    ⚠️ **그 단언은 전수가 아니다 — 소스 스캔은 구문만 본다.** `fitz.TextWriter` 라고 **쓰인**
+       생성지만 보므로 별칭(`import fitz as _fitz` — 이 파일 72줄에 이미 있다)·
+       `from fitz import TextWriter as _TW`·`getattr(fitz, "TextWriter")`·`page.insert_htmlbox()`
+       같은 우회는 **못 잡는다**(전부 실측 PASS). 열거를 바꿔 가며 세 번 샜고(`/review` 회차
+       0·1·2) 네 번째도 같다 — **구문 스캔으로는 "통로가 하나"를 증명할 수 없다.**
+       2026-10-05 감수하기로 했다: 레포 전체에서 `fitz.TextWriter(` 생성이 이 함수 안 한
+       자리뿐이라 **현시점 노출이 0** 이다. 새로 글자를 그릴 일이 생기면 **반드시 이 함수를
+       거칠 것** — 테스트가 못 막아 준다.
 
     한글은 `TextWriter` + `Font` 로 그린다 — `insert_text`+`add_font` 조합은 이 PyMuPDF
     버전에서 helv 로 폴백돼 한글이 점(·)으로 깨진다 (계약 #10).
@@ -869,7 +876,9 @@ def _build_grid_pdf(
 
         # 출처 레이블 렌더링 (이미지 위에 덮어쓰기)
         # ⚠️ 폭 계산 전에 정규화한다 — 재는 문자열과 그리는 문자열이 같아야 한다 (REQ-B28).
-        #    NFD 는 자모가 낱자로 세어져 **같은 글자가 79% 넓게 측정된다**(실측 570 vs 318pt).
+        #    NFD 는 자모가 낱자로 세어져 **같은 글자가 53% 넓게 측정된다**(실측 486.3 vs
+        #    318.3pt @14pt — 이름만 NFD 인 실제 형태. 라벨 *전체* 를 NFD 로 돌리면 570.3pt
+        #    지만 템플릿 `번)`·`문항` 은 소스 리터럴이라 NFC 다).
         #    그대로 두면 아래 B09 축소가 과하게 걸려 라벨이 쓸데없이 작아진다.
         label_text = _nfc(getattr(region, "source_label", ""))
         if label_text and current_page is not None:
@@ -884,6 +893,8 @@ def _build_grid_pdf(
                 fontsize = max(6.0, fontsize * max_w / text_w)
             # 한글 렌더: TextWriter + Font 사용 (insert_text+add_font 조합은
             # 이 PyMuPDF 버전에서 helv로 폴백되어 한글이 점(·)으로 깨진다 — REQ-B09)
+            # `label_text` 는 위에서 이미 NFC 다 — `_draw_text()` 가 한 번 더 정규화하지만
+            # 멱등이라 비용이 없다. 폭은 **재는 쪽**이, 렌더는 **그리는 쪽**이 각자 보장한다.
             _draw_text(
                 current_page,
                 fitz.Point(cell_x + pad, cell_y + label_h - 4),
