@@ -140,7 +140,7 @@
 | REQ-B26 | 문항 삭제 [되돌리기]가 복원하지 않음 → 삭제를 토스트 동안 미루고 되돌리면 그대로 | [plan](plans/PLAN-B26-delete-undo-restore.md) | 2026-10-02 | ✅ **Phase 1 완료**(케이스 22/22 · 프론트 312/312 · 리뷰 3회 후 `4c50d43` (b)·(c) 0). PR #32 main 머지 `7477a91` · **dev 프론트 배포 완료**(2026-10-02 18:57, 머지와 같은 분 — 2026-10-03 라이브 번들로 확인) |
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
-| REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | — | 🟡 Phase 1·2 **코드·테스트 완료**(케이스 31/31 · 프론트 369 · 각 `/review` 3회차 결함 전부 닫음). **dev 육안 남음** — 저장 창·창 전환은 자동화 불가 |
+| REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | 2026-10-05 | ✅ Phase 1·2 (케이스 31/31 · 각 `/review` 3회차 · **dev 육안 4건 확인** — 한 번 클릭·창 전환·재다운로드·취소) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -277,6 +277,7 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
   - 이연: [frontend/src/pages/editor/f16Download.test.js:79] F16-19가 `setSaveError("")`의 존재만 봐 순서를 안 본다 — 3회 재발의 구조적 원인
   - 이연: [frontend/src/components/PdfPreviewPanel.jsx:352] `file={pdfUrl}`이 자격 없는 XHR이라 local 모드 결과 PDF 미리보기가 크로스오리진에서 못 읽는다
   - 이연: [frontend/src/utils/savePdf.js] `toDownloadUrl`이 `previewUrl.js`의 사실상 복제 — `withCacheKey(url, key)`로 합칠 만하다
+- **dev 육안 4건 확인 완료 (사용자, 2026-10-05)** — ①[PDF 생성] 한 번으로 창→생성→저장 ②**생성 중 다른 창에 갔다 와도 저장됨**(요구 ②, 자동화 불가 항목) ③생성 이력 재다운로드도 같은 창 ④취소하면 생성도 안 함. **REQ-F16 ✅**
 - **Phase 2 완료 기준은 전부 육안이다** — OS 네이티브 저장 창도, 요구 ②(다른 창 갔다 와도 저장)의 탭 포커스 전환도 자동화할 수 없다. 케이스 31/31 녹색이어도 ✅로 올리지 않았다
 
 ## 2026-10-03
