@@ -73,25 +73,34 @@ describe('창 열기 실패·중복 (Phase 2)', () => {
 
     expect(guard).toBeGreaterThan(-1);
     expect(guard).toBeLessThan(pick);
+    // 풀어 주지 않으면 한 번 쓰고 영구 잠김이 된다.
+    expect(body).toMatch(/finally[\s\S]*pickingRef\.current = false/);
   });
 
   it('[F16-30] 창을 못 연 이유를 화면에 알린다', () => {
     // 취소는 null 로 오므로 catch 에 오는 건 진짜 실패다 — 삼키면 미지원과 구분이 안 된다.
+    // ⚠️ 넓은 창은 뒤쪽 `setSaveError("")` 까지 닿아 **catch 를 비워도 통과**한다
+    //    (/review Phase 2 회차 1 실측). catch 블록만 떼어 본다.
     const body = generateBody(editorSource());
-    const pick = body.indexOf('pickSaveTarget');
+    const c = body.indexOf('} catch (e) {');
+    expect(c).toBeGreaterThan(-1);
+    const block = body.slice(c, body.indexOf('} finally {', c));
 
-    expect(body.slice(pick, pick + 700)).toMatch(/catch[\s\S]*setSaveError/);
+    expect(block).toMatch(/setSaveError\(`/);
   });
 });
 
 describe('결과 화면도 창이 먼저 (Phase 2)', () => {
   it('[F16-31] 재다운로드는 getStatus 전에 창을 연다', () => {
     // 뒤에 열면 그 await 동안 활성화가 만료돼 브라우저가 거부한다(dev 는 터널+Fargate).
+    // ⚠️ `indexOf('pickSaveTarget')` 는 **import 줄**을 잡는다 — 호출을 뒤로 되돌려도
+    //    통과했다(/review Phase 2 회차 1 실측). `await` 가 붙은 호출만 본다.
     const code = historySource();
-    const pick = code.indexOf('pickSaveTarget');
+    const pick = code.indexOf('await pickSaveTarget(');
     const status = code.indexOf('await getStatus(wb.result_job_id)');
 
     expect(pick).toBeGreaterThan(-1);
+    expect(status).toBeGreaterThan(-1);
     expect(pick).toBeLessThan(status);
   });
 });

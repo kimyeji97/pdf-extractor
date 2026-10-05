@@ -106,6 +106,11 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // ⚠️ stubGlobal 은 restoreAllMocks 로 안 돌아간다 — 안 풀면 뒤 케이스로 샌다
+  //    (/review Phase 2 회차 1).
+  vi.unstubAllGlobals();
+  delete URL.createObjectURL;
+  delete URL.revokeObjectURL;
   vi.useRealTimers();
 });
 
@@ -164,9 +169,15 @@ describe('생성 이력 — 아코디언 미리보기 (Phase 2)', () => {
     // (내부적으로 fetch)으로 바뀌었다. **의도("미리보기 URL을 재사용하지 않는다")는 그대로**이고
     // 관찰 지점만 앵커 href → fetch 대상으로 옮겼다. 지금은 `?dl=1` 로 캐시 키를 가른다.
     await renderLoaded([wb('wb-1', '중간고사')]);
-    // ⚠️ 직접 대입하면 vi.restoreAllMocks() 가 못 되돌려 뒤 케이스로 샌다 — stubGlobal 을 쓴다.
+    // ⚠️ URL 을 통째로 갈아끼우면 **생성자가 아닌 객체**가 돼 뒤 케이스의 `new URL(...)` 이
+    //    죽는다(toPreviewUrl 이 조용히 catch 로 삼켜 녹색인 채 측정이 멎는다).
+    //    메서드만 spyOn 하고, stubGlobal 은 afterEach 에서 unstub 한다(/review Phase 2 회차 1).
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, blob: async () => 'PDF' })));
-    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:fake'), revokeObjectURL: vi.fn() });
+    // jsdom 의 URL 에는 createObjectURL 이 **없어서** spyOn 이 안 된다. 생성자는 그대로 두고
+    //    메서드만 얹었다가 afterEach 에서 지운다 — URL 을 통째로 갈아끼우면 `new URL(...)` 이
+    //    죽어 뒤 케이스의 toPreviewUrl 이 조용히 삼켜진다(/review Phase 2 회차 1).
+    URL.createObjectURL = vi.fn(() => 'blob:fake');
+    URL.revokeObjectURL = vi.fn();
 
     fireEvent.click(screen.getByRole('button', { name: /다운로드/ }));
 
