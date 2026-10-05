@@ -3,7 +3,9 @@ POST /api/extract         - 문항 추출 작업 시작 (백그라운드)
 GET  /api/status/{job_id} - 작업 상태 조회
 POST /api/extract-v2      - 복수 선택 문항 추출 작업 시작 (백그라운드)
 """
+import logging
 import tempfile
+import time
 import uuid
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
@@ -25,7 +27,17 @@ router = APIRouter()
 # 분리한다 (REQ-P03-04). BackgroundTasks는 sync 함수를 threadpool에서 실행할 뿐이라
 # CPU 작업이 GIL을 점유하는 동안 메인 이벤트 루프·다른 요청 처리가 지연될 수 있었다.
 # ECS Fargate 0.5 vCPU 환경을 고려해 워커 수는 2로 제한.
+logger = logging.getLogger(__name__)
+
 _extract_pool = ProcessPoolExecutor(max_workers=2)
+
+# 문제집 메타 저장 재시도 (REQ-B29) — 실패가 대개 R2 일시 오류라 짧게 몇 번이면 넘어간다.
+# ⚠️ 간격을 길게 두지 말 것: `time.sleep` 이 **Starlette BackgroundTask 스레드**를 잡고 있어
+#    (anyio 스레드풀) 길면 그만큼 다른 배경 작업이 밀린다.
+#    (REQ-B17 의 `analysis_slots` 5개 한도와는 무관하다 — 그건 감지 경로 전용이고
+#     생성은 자체 `ProcessPoolExecutor(max_workers=2)` 를 쓴다. `/review` 회차 0 에서 교정)
+_META_SAVE_ATTEMPTS = 3
+_META_SAVE_WAIT_SEC = 0.5
 
 
 # ── 추출 요청 ─────────────────────────────────────────────
@@ -202,6 +214,7 @@ def _save_workbook_meta(
     workbook_name: str,
     template_id: str | None = None,
     owner_id: str | None = None,
+    workbook_id: str | None = None,
 ) -> None:
     """
     생성 **성공** 직후 문제집 메타를 저장한다 (REQ-B10).
@@ -212,9 +225,15 @@ def _save_workbook_meta(
     → CLAUDE.md 계약 #22.
 
     실패 시에는 호출되지 않는다 — 이력에 미완성 항목이 노출되지 않게 하려는 의도적 선택이다.
+
+    ⚠️ **`workbook_id` 는 호출부가 넘긴다 (REQ-B29).** 여기서 매번 새로 만들면 **재시도가
+       멱등이 아니다** — PUT 은 실제로 올라갔는데 응답에서 클라이언트가 터지는 경우
+       (read timeout·connection reset)에 재시도가 **다른 키**로 또 써서 같은 PDF 의 문제집이
+       이력에 2건 뜬다. 계약 #23 이 "`workbook_id` 가 매번 새로 발급되므로 중복으로도 안
+       잡힌다" 고 경고한 바로 그 모양이다.
     """
     meta = WorkbookMeta(
-        workbook_id=str(uuid.uuid4()),
+        workbook_id=workbook_id or str(uuid.uuid4()),
         created_at=datetime.now(timezone.utc),
         layout=layout,
         selections=[
@@ -258,6 +277,8 @@ def _process_extraction_v2(
     export_status = storage.get_status(export_job_id)
     export_status.status = JobStatus.PROCESSING
     storage.put_status(export_status)
+    # PDF 는 만들어졌는데 문제집 메타만 못 썼는가 (REQ-B29) — 알림 문구가 여기서 갈린다.
+    meta_failed = False
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
@@ -282,14 +303,39 @@ def _process_extraction_v2(
             # 이 분기가 없으면 백엔드 배포 후 프론트 배포 전까지 양쪽이 모두 저장해
             # 같은 문제집이 이력에 2건 뜨고, 그중 하나는 이름이 없다.
             if workbook_name:
-                try:
-                    _save_workbook_meta(
-                        selections, export_job_id, layout, workbook_name, template_id, owner_id
-                    )
-                except Exception as e:
-                    # 메타 저장 실패가 "PDF 생성 실패"로 둔갑하면 안 된다 — PDF는 이미 만들어졌다.
-                    # 상태는 DONE으로 두고 사유만 남긴다.
-                    export_status.error = f"문제집 메타 저장 실패: {e}"
+                # REQ-B29: 몇 번 다시 해 본다. 실패가 대개 R2 일시 오류다.
+                # ⚠️ **id 를 루프 밖에서 한 번만 만든다** — 안에서 만들면 재시도가 다른 키로 써서
+                #    같은 PDF 의 문제집이 이력에 2건 뜬다(계약 #23).
+                workbook_id = str(uuid.uuid4())
+                for attempt in range(1, _META_SAVE_ATTEMPTS + 1):
+                    try:
+                        _save_workbook_meta(
+                            selections, export_job_id, layout, workbook_name,
+                            template_id, owner_id, workbook_id,
+                        )
+                        break
+                    except Exception as e:
+                        if attempt < _META_SAVE_ATTEMPTS:
+                            logger.warning(
+                                "문제집 메타 저장 실패 (%s/%s), 재시도: job=%s %s",
+                                attempt, _META_SAVE_ATTEMPTS, export_job_id, e,
+                            )
+                            time.sleep(_META_SAVE_WAIT_SEC)
+                            continue
+                        # 메타 저장 실패가 "PDF 생성 실패"로 둔갑하면 안 된다 — PDF는 이미 만들어졌다.
+                        # 상태는 DONE으로 두고 사유만 남긴다.
+                        #
+                        # ⚠️ 다만 **알리긴 해야 한다** (REQ-B29). 종전엔 상태가 DONE 이라
+                        #    성공 알림이 나갔고, 결과 화면은 문제집 행 기준이라 그 PDF 가 안 떴다
+                        #    — 사용자는 "완료!" 를 보고 가서 아무것도 못 찾았다. REQ-F18 이
+                        #    생성 화면 다운로드를 걷어내 **유일한 탈출구마저 사라졌다.**
+                        # 운영자도 알아야 한다 — 종전엔 `export_status.error` 문자열 하나가
+                        # 유일한 흔적이라 CloudWatch 에 아무것도 안 갔다 (`/review` 회차 0).
+                        logger.exception(
+                            "문제집 메타 저장 최종 실패: job=%s name=%s", export_job_id, workbook_name
+                        )
+                        export_status.error = f"문제집 메타 저장 실패: {e}"
+                        meta_failed = True
 
         except Exception as e:
             export_status.status = JobStatus.FAILED
@@ -301,4 +347,7 @@ def _process_extraction_v2(
             # 완료 알림 (REQ-F09). ⚠️ `if workbook_name:` **바깥**이다 —
             # 그 분기는 메타 저장 주체를 가르는 것(계약 #23)이지 알림과는 목적이 다르다.
             # 안쪽에 넣으면 구 프론트로 만든 문제집은 영원히 알림이 안 온다.
-            notification_service.emit_export(export_status, workbook_name)
+            # ⚠️ `meta_failed` 를 따로 넘긴다 — `export_status.error` 로는 못 가른다.
+            #    그 필드는 **생성 실패 경로에서도** 채워져서, 신호로 쓰면 severity 는 맞게
+            #    나오는데 **문구가 뒤바뀐다**("생성에 실패했습니다" — PDF 는 만들어졌는데).
+            notification_service.emit_export(export_status, workbook_name, meta_failed=meta_failed)
