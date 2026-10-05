@@ -74,7 +74,7 @@
       유지)라 문제가 없었다. **해결**: `:latest` + `JWT_SECRET_KEY`로 rev 4를 등록해 최신 리비전으로 만들고(1번과 묶음),
       rev 3은 deregister해서 콘솔 기본값이 프로브를 가리키지 않게 한다
 - [x] **밀린 dev 프론트 재배포** ✅ 2026-09-28 (REQ-27 백엔드 배포에 딸려 사용자가 `wrangler deploy`, 로그인 화면 확인)
-- [ ] **→ REQ-E02** 🟡([계획서](plans/PLAN-E02-prod-environment.md) — Phase 1 Cloudflare 완료 2026-10-05) · prod 환경 분리 — **사양 근거: [perf-infra-capacity.md](infra/perf-infra-capacity.md)**(최소 1 vCPU/2GB · 권장 2 vCPU/4GB, 2026-10-01 실측) (현재 dev 하나 — 백엔드 desired 0 토글 운영, 프론트 wrangler 수동 배포)
+- [ ] **→ REQ-E02** 🟡([계획서](plans/PLAN-E02-prod-environment.md) — Phase 1~5 완료 2026-10-05, 재리뷰 대기 · 리뷰 TODO 4건은 루트 `TODO.md`) · prod 환경 분리 — **사양 근거: [perf-infra-capacity.md](infra/perf-infra-capacity.md)**(최소 1 vCPU/2GB · 권장 2 vCPU/4GB, 2026-10-01 실측) (현재 dev 하나 — 백엔드 desired 0 토글 운영, 프론트 wrangler 수동 배포)
 - [ ] 프론트 자동 배포(CI/CD) / 백엔드 배포 파이프라인 — 현재 `.github/workflows` 없음. 프론트는
       main push 시 빌드(`VITE_API_BASE_URL` 주입) + `wrangler deploy`, Cloudflare API 토큰 secret 필요
 - [ ] **전체 인프라 구성 이해** (2026-09-28) — Cloudflare(DNS·Workers·Tunnel·R2) ↔ AWS(ECR·ECS Fargate·

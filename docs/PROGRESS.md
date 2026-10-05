@@ -141,7 +141,7 @@
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | — | 🟡 **코드·테스트 완료**(케이스 20/20 · 프론트 358 · `/review` 3회차 결함 전부 닫음). **dev 육안 남음** — 파일 선택 창은 자동화 불가 |
-| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1~4 완료**(Cloudflare 6/6 · AWS 백엔드 9/9 — prod API `/health` 200, 이미지 `prod-2cc43de` · 배포 스크립트 16/16 `1ee1d8b` · prod 프론트 5/5 — `https://dailystudy-workbook.yejicraft-cf.com`). Phase 5(end-to-end + admin) 남음 |
+| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1~5 완료**(Cloudflare 6/6 · AWS 백엔드 9/9 — prod API `/health` 200, 이미지 `prod-2cc43de` · 배포 스크립트 16/16 `1ee1d8b` · prod 프론트 5/5 — `https://dailystudy-workbook.yejicraft-cf.com`). end-to-end 8/8). 리뷰 회차 0 — (b) 문서 2건 수정 뒤 재리뷰 대기 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -308,6 +308,34 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
   - E02-36 "dev 진입 청크 그대로" → **"prod 배포가 dev Worker에 새 배포를 안 만듦 + dev 번들은 dev API"**: 내 prod 배포(14:14:20) 80초 뒤 **사용자가 dev를 직접 배포**해 기준선(`Bhyi37oW` → `DbJFrFSC`)이 무효가 됐다. 배포 기록상 겹치는 dev 배포 없음
 - ⚠️ **배포 직후 이 머신에서 prod 도메인이 안 열렸다** — 배포 전 조회한 "없음" 응답을 macOS 리졸버가 캐시(`dig`는 IP, `curl`은 resolve 실패). `curl --resolve`로 확인했다. 서비스 문제가 아니다
 - 리뷰: 아직 — 코드 변경 없는 Phase. REQ 마지막 Phase 뒤 `/review E02`
+
+### REQ-E02 — Phase 5(end-to-end + admin) 완료 + 리뷰 회차 0 (🟡)
+
+- 가입은 사용자, `promote-admin.sh <email> .env.prod`로 admin 승격(백필 0건 — prod가 비어 있었다). 업로드·분석·생성·다운로드·알림은 사용자가 브라우저로, 서버 쪽은 R2·공개 URL·로그로 실측: 썸네일 130건 전부 200(401 0) · 공개 `uploads/`·`results/` 200 `application/pdf` · 알림 4건 · 5xx 0
+- **E02-44(dev 버킷 무변화)는 객체 수가 아니라 "prod 식별자가 dev에 섞였나"로 판정** — dev를 사용자가 쓰는 중이라 객체 수는 계속 변한다(75,145 → 75,152). prod job_id·user_id 키 0건
+- 확인용 데이터는 **남겨 둔다**(사용자 결정). prod에 두 번째 가입자(14:57, naver 메일, `user`)가 있다 — 사용자 본인 테스트 계정인지 확인 안 됨
+- admin 권한은 요청마다 저장소에서 읽지만(`_user_from_access_token`) 화면 메뉴는 로그인 응답 기준 — 승격 뒤 재로그인 필요할 수 있음
+- 리뷰: E02 @ 5c4ac04 — (b) 3 · (c) 3 · nit 4
+  - (b): [scripts/deploy/backend-deploy-prod.sh:70] 안정화 대기 실패·시간 초과 시 이전 리비전이 ACTIVE로 남고 재실행하면 영영 정리 안 됨 · PRIMARY 배포가 NEW인지 확인 안 함 · 가설
+    - 방안: A deregister 전 PRIMARY 배포 = NEW 확인 + 실패 시 남은 상태 안내 (+6줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (b): [CLAUDE.md:316] REQ prefix 표의 E 점유 범위가 REQ-E01에 멈춤, 다음 번호에 E 없음 · 실측
+    - 방안: A `E01~E02`·다음 `E03` (2줄, /checkpoint) · TODO · 감수 — 추천 A
+    - 결정: A
+  - (b): [CLAUDE.md:376] dev 프론트 배포 상태 줄의 굵은 표기 깨짐(`**` 3개) · 실측
+    - 방안: A 남는 `**` 제거 (1줄, /checkpoint) · TODO · 감수 — 추천 A
+    - 결정: A
+  - (c): [scripts/deploy/backend-deploy-prod.sh:73] 안정화 직후 이전 리비전 deregister → 즉시 롤백 대상 소실(INACTIVE로는 update-service 불가). 계획서 결정의 부작용 · 가설
+    - 방안: A N-1 유지·N-2 정리로 계획 변경 (/workplan → +5줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/frontend-deploy.sh:18] prod 배포에 미커밋 변경 거부·커밋 기록 없음 — 계획서는 백엔드만 정함 · 가설
+    - 방안: A prod일 때 미커밋 변경 거부 (/workplan → +3줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/backend-deploy-prod.sh:27] HEAD가 origin/main 조상인지 확인 안 함(막으면 브랜치 핫픽스도 막힘) · 가설
+    - 방안: A origin/main 조상일 때만 허용 (/workplan → +3줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+- 리뷰 (b) 문서 2건(CLAUDE.md:316·376)은 이 커밋에서 고쳤다. TODO 4건은 루트 `TODO.md`로(파일 신설). **CLAUDE.md는 `docs/` 밖이라 이 커밋이 E02의 새 "마지막 코드 커밋"이 되어 리뷰 sha(5c4ac04)가 낡는다 → 🟡 유지, `/review E02` 재실행으로 (b) 2건 닫힘 확인 후 ✅**
+- 리뷰 범위 메모: `/code-review`가 짚은 circuit breaker 롤백 시나리오는 prod 서비스 breaker가 꺼져 있어(`enable: false`) 해당 없음 · `workers.dev` 노출은 계정에 서브도메인이 없어 재현 안 됨
 
 ## 2026-10-03
 

@@ -1,6 +1,6 @@
 # PLAN-E02 · 운영(prod) 환경 구성
 
-> 출처: 2026-10-05 세션 「운영환경구성」 · 작성: 2026-10-05 · 상태: 🟡 진행 (Phase 1~4 완료 2026-10-05)
+> 출처: 2026-10-05 세션 「운영환경구성」 · 작성: 2026-10-05 · 상태: 🟡 진행 (Phase 1~5 완료 2026-10-05 · 리뷰 회차 0 — (b) 문서 2건 수정 뒤 재리뷰 대기)
 
 ## 배경
 
@@ -47,6 +47,8 @@
 
 - [x] ~~`dailystudy` 버킷의 기존 객체 4개(24kB)~~ → **그대로 둔다**(2026-10-05 사용자 결정). `docs/` 폴더 표시 · `docs/refund_policy_combined.html`(공개 중인 환불 정책) · `pdf-extractor/` 폴더 표시 · `pdf-extractor/favicon.ico`(05-02, 앱이 안 씀 — 규칙으로 403). 앱 데이터(status·users 등)가 아니라 빈 상태 시작과 안 부딪힌다
 
+- [x] ~~Phase 5 확인용 데이터 정리~~ → **남겨 둔다**(2026-10-05 사용자 결정 "데이터 정리 안해도 돼"). 원본 2·생성 2·알림 4·썸네일 1,608 등이 prod에 남는다
+
 ## 작업 단계
 
 - [x] **Phase 1 — Cloudflare 리소스** — 2026-10-05, 케이스 6/6 (토큰·터널·WAF는 사용자 대시보드, CORS는 wrangler) (일부 사람 손: 토큰·터널은 대시보드)
@@ -61,7 +63,7 @@
 - [x] **Phase 4 — 프론트 prod 배포** — 2026-10-05, 케이스 5/5 (Worker `dailystudy-workbook-prod` Version `e46e4d4e` · 진입 청크 `index-5GZJJjxu.js` · 로그인 화면은 사용자 육안). E02-34·36은 `/testrun` 뒤 기준 교체(표 참조)
       새 Worker + 커스텀 도메인
       완료 기준: 프론트 접속 시 로그인 화면 · 라이브 청크에 prod API URL 있고 `-dev`·`localhost` 없음
-- [ ] **Phase 5 — end-to-end + admin**
+- [x] **Phase 5 — end-to-end + admin** — 2026-10-05, 케이스 8/8 (admin 승격 · 업로드·분석·썸네일·원본 뷰어·생성·다운로드·알림은 사용자 브라우저 + 서버 실측 · dev 버킷 75,152개 중 prod 식별자 0)
       가입 → `promote-admin.sh <email> .env.prod` → 업로드·분석 → 생성·다운로드
       완료 기준: 썸네일 이미지 표시(쿠키 인증) · PDF 다운로드 · 알림 수신 · 데이터가 `dailystudy`에만 생기고 dev 버킷 무변화
 
@@ -74,6 +76,7 @@
 > Phase 2도 외부 리소스만 — 실측 행. E02-07이 `CORS_ALLOWED_ORIGINS` JSON 형식 함정도 덮는다(형식이 틀리면 기동 실패라 200이 불가). E02-10 기준선은 `/implement` 착수 직전에 찍는다. 이미지 태그는 `prod-2cc43de`(2026-10-05 사용자 결정).
 > Phase 3: `backend/tests/test_deploy_scripts.py`(pytest) — 스크립트를 임시 git 저장소에 복사해 돌리고 `npm`·`npx`·`docker`·`aws`는 PATH 앞의 가짜 실행 파일(호출 기록). 가짜 `aws`는 실제 응답 형태를 돌려주고 `--query`·`--output text`를 jmespath로 흉내 낸다 — 스크립트의 AWS 호출 방식을 테스트가 정하지 않기 위해. E02-24는 라이브 배포 대신 로컬 번들 비교(지금 dev 배포 = 작업 중 F16 노출). worktree엔 venv가 없어 `../pdf-extractor/backend/venv`로 실행.
 > Phase 4: 외부 배포만 — 실측 행. E02 브랜치의 앱 코드는 `2cc43de`와 같다(`frontend/`는 `wrangler.jsonc`만 다름)라 "첫 배포 커밋 2cc43de"가 지켜진다. E02-34의 `-dev`는 dev 도메인 둘로 좁혀 판정(라이브러리 문자열 오탐 방지). E02-32는 브라우저로 본다(SPA).
+> Phase 5: 실측 — 가입·업로드·생성·다운로드는 사용자가 브라우저에서(실계정 비밀번호·브라우저 확장 미연결), admin 승격과 서버 쪽 확인(R2 객체·응답 코드·로그)은 Claude. E02-44는 dev가 사용 중이라 객체 수가 아니라 prod 식별자 혼입 여부로 본다.
 > E02-04의 확인용 객체는 판정 직후 지운다(빈 상태 시작 결정). E02-05는 dev의 `localhost:5173`을 prod에 넣지 않는 것으로 판정한다.
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
@@ -114,6 +117,14 @@
 | E02-34 | prod 라이브 번들 | 같은 청크에 dev 도메인(`dailystudy-workbook-api-dev`·`dailystudy-workbook-dev`)과 `localhost:8000`(로컬 API)이 없음 — 맨 `localhost`는 react-router 내부 기본값(`let i="http://localhost"`)이라 기준에서 뺀다(2026-10-05 사용자 승인) | 회귀 | PLAN § 제약·함정 — "안 덮으면 prod에 localhost가 박힌다" | 4 | ✅ |
 | E02-35 | prod 라이브 ↔ 로컬 | 라이브 `index.html`의 `assets/*.js` 참조가 `frontend-deploy.sh prod`로 만든 로컬 `dist/index.html`과 같음 | 실측 | CLAUDE.md § 배포 상태 — "라이브 `index.html`의 `assets/*.js` 참조 ↔ 로컬 `dist/index.html`" | 4 | ✅ |
 | E02-36 | dev 프론트 | prod 배포가 dev Worker에 새 배포를 만들지 않고(dev 배포 기록에 prod 배포 시각 건 없음), dev 번들은 계속 dev API를 가리킴 — 진입 청크 비교는 같은 시각 사용자의 dev 직접 배포로 기준선이 무효가 돼 교체(2026-10-05 사용자 승인) | 회귀 | PLAN § 결정 — "dev는 지금 설정(`twilight-base-302d`) 그대로" | 4 | ✅ |
+| E02-37 | admin 승격 | `promote-admin.sh <email> .env.prod` 실행 뒤 `dailystudy` 버킷의 그 사용자 레코드 role이 `admin` | 실측 | PLAN § 작업 단계 — "`promote-admin.sh <email> .env.prod`" | 5 | ✅ |
+| E02-38 | 업로드·분석 | prod 화면에서 PDF를 올리면(R2 직접 업로드 — 버킷 CORS 경유) 분석이 DONE까지 간다 | 실측 | PLAN § 작업 단계 — "업로드·분석 → 생성·다운로드" | 5 | ✅ |
+| E02-39 | 썸네일 | 분석 화면에 페이지·문항 썸네일이 보이고, 썸네일 요청이 쿠키 인증으로 200 | 실측 | PLAN § 작업 단계 — "썸네일 이미지 표시(쿠키 인증)" | 5 | ✅ |
+| E02-40 | 원본 PDF 뷰어 | 작업 화면에서 원본 PDF가 열린다 — 공개 도메인 `pdf-extractor/uploads/…` 200(WAF 통과) | 회귀 | CLAUDE.md § 계약 #38 — "`uploads/`·`results/`만" | 5 | ✅ |
+| E02-41 | 생성 PDF 다운로드 | 문제집 생성 후 다운로드 성공 — 공개 도메인 `pdf-extractor/results/…` 200 · `application/pdf` | 실측 | PLAN § 작업 단계 — "PDF 다운로드" | 5 | ✅ |
+| E02-42 | 알림 | 분석·생성 완료 알림이 벨·스낵바에 뜨고 `/api/notifications`에 두 job 알림이 있다 | 실측 | PLAN § 작업 단계 — "알림 수신" | 5 | ✅ |
+| E02-43 | prod 버킷 | 이번 job·사용자의 status·uploads·results·users 객체가 `dailystudy/pdf-extractor/` 아래에 생긴다 | 실측 | PLAN § 작업 단계 — "데이터가 `dailystudy`에만 생기고" | 5 | ✅ |
+| E02-44 | dev 버킷 | `dailystudy-dev`에 이번 prod job_id·user_id 키가 하나도 없다(dev는 사용 중이라 객체 수로 판정하지 않음) | 회귀 | PLAN § 작업 단계 — "dev 버킷 무변화" | 5 | ✅ |
 
 ## 제약·함정
 
