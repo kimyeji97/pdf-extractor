@@ -709,12 +709,12 @@ def _apply_watermark(pdf_path: str, image_bytes: bytes) -> None:
 
 def _nfc(text: str) -> str:
     """
-    PDF 에 그리기 직전의 NFC 정규화 (REQ-B28, 계약 #38).
+    PDF 에 그리기 직전의 NFC 정규화 (REQ-B28, 계약 #40).
 
     **macOS 가 올린 파일명은 NFD(자모 분해)** 다 — `학` = `ᄒ`+`ᅡ`+`ᆨ`.
     `_get_label_font()` 가 돌려주는 'korea' 는 실제로는 `Droid Sans Fallback Regular`
     라서 **한글 자모 블록(U+1100~U+11FF)에 글리프가 거의 없고**, `TextWriter.append()`
-    는 글리프 없는 문자를 **에러 없이 notdef 로 치환한다**(계약 #37). 그래서 정규화하지
+    는 글리프 없는 문자를 **에러 없이 notdef 로 치환한다**(계약 #39). 그래서 정규화하지
     않으면 글자가 통째로 사라진다 — 2026-10-05 dev 에서 문제집 이름이 그렇게 깨졌다.
 
     ⚠️ **NFKC 가 아니라 NFC 다.** NFKC 는 호환 문자까지 바꿔(`①`→`1`, `㈜`→`(주)`)
@@ -729,7 +729,7 @@ def _nfc(text: str) -> str:
 
 def _draw_text(page, point, text: str, *, font, fontsize: float, color) -> None:
     """
-    PDF 에 글자를 그리는 **유일한 통로** (REQ-B28, 계약 #38).
+    PDF 에 글자를 그리는 **유일한 통로** (REQ-B28, 계약 #40).
 
     `fitz.TextWriter` 를 여기서만 만든다 — 호출부가 직접 만들면 정규화를 빠뜨릴 수 있다.
     B28-06 이 "`fitz.TextWriter(` 는 이 함수 안에서만 생성된다 + 이 함수가 `_nfc` 를 거친다"

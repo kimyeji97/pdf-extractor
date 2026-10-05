@@ -142,6 +142,7 @@
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | 2026-10-05 | ✅ Phase 1·2 (케이스 31/31 · 각 `/review` 3회차 · **dev 육안 4건 확인** — 한 번 클릭·창 전환·재다운로드·취소) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | — | 🟡 코드·테스트 완료(케이스 7/7 · 백엔드 384 · `/review` 3회차). **dev 육안 남음** — 백엔드 재배포 필요 |
+| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -280,7 +281,105 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
   - 이연: [docs/TODO.md] 검색·정렬 NFD/NFC 불일치 별도 REQ — **기록 완료**(2회차 연속 미이행이었다)
   - 이연: [backend/tests/test_b28_pdf_text_nfc.py] B28-06 이 `pdf_service.py` 한 파일만 스캔한다(계약 #31 과 같은 모양) — docstring 에 한계 명시
   - 이연: [docs/plans/PLAN-B28-pdf-text-nfc.md] 검증 계약 표 행 순서가 `B28-05 → B28-07 → B28-06`
+- ⚠️ **계약 번호가 충돌했다 — 같은 날 다른 세션(REQ-E02)이 `#37`·`#38`을 먼저 썼다.** 두 세션이 `CLAUDE.md` 계약 절을 동시에 늘렸고, git 은 서로 다른 줄이라 **충돌 없이 둘 다 머지**해 같은 번호가 두 개씩 생겼다. **E02 가 먼저 main 에 올라갔으므로 B28 쪽을 `#39`·`#40` 으로 밀었다**(계약 번호는 고정 ID 라 재배치하지 않는다는 규칙의 반대 방향 — 아직 main 에 없던 쪽이 양보한다). 코드·테스트·계획서·리뷰의 참조 11건도 함께 갱신했다.
+  **git 이 안 잡아 주는 충돌이다** — 번호를 쓰기 전에 `origin/main` 의 계약 절을 먼저 봐야 한다
 - **남은 관문은 dev 육안이다** — 백엔드 변경이라 **ECS 재배포 전에는 안 보인다.** 확인은 **생성된 PDF** 로(미리보기는 처음부터 멀쩡했으므로 아무것도 증명하지 않는다)
+### REQ-E02 — 운영(prod) 환경 구성 착수, Phase 1(Cloudflare) 완료 (🟡)
+
+- 오픈(10/6) 전날 prod 환경이 없었다. dev를 복제하되 이름만 `prod`로 — 도메인 `-dev` 제거 · 데이터 빈 상태 시작 · CI/CD는 오픈 후 별도 REQ(사용자 결정)
+- **prod 이미지는 버전 태그 고정** — `:latest`면 dev에 배포한 미검증 이미지가 prod 태스크 재시작 때 딸려 올라간다
+- **버킷을 새로 만들지 않았다** — `dailystudy`(04-19 생성, 공개 도메인 `dailystudy.yejicraft-cf.com`)가 이미 있었고 dev(`dailystudy-dev`)와 이름 짝이 맞는다. 계획서 첫 결정 `dailystudy-prod`를 교체
+- ⚠️ **그 버킷은 이미 환불 정책(`docs/refund_policy_combined.html`)을 공개 서비스 중이었다** — 계획대로 "uploads·results 말고 전부 차단"을 걸었으면 그 페이지가 403이 됐다. WAF 규칙을 `/pdf-extractor/` 안으로 좁혔다. 객체 4개는 그대로 둔다
+- **공개 도메인 경로 제한은 dev에 없는 prod만의 차이** — 공개 도메인은 버킷 전체를 무인증·무만료로 연다. `users/{user_id}.json`(이메일·비밀번호 해시)이 user_id만 알면 읽혔다. **dev는 지금도 그 상태다**(규칙 없음)
+- 실측: prod 토큰으로 dev 버킷 `AccessDenied` 403 · 공개 도메인 `users/`·`status/` 403(객체 유무 무관 — 규칙 차단이지 404가 아니다) · `uploads/`·`results/` 200 · 환불 정책 200
+- ⚠️ **R2 시크릿이 대화 기록에 노출돼 재발급했다** — `.env.prod`에 `KEY=` 없이 값이 붙은 줄이 있었고, `=` 기준 sed 마스킹이 그 줄을 통과시켰다. env 파일은 키 이름만 뽑아 본다
+- wrangler OAuth는 zone 권한이 `read`뿐이라 **WAF 규칙은 대시보드에서만** 만들 수 있다(R2 CORS·터널 조회는 가능)
+- 작업 트리를 F16 세션과 공유하고 있어(그쪽이 브랜치를 바꿈) E02는 **worktree `../pdf-extractor-e02` · 브랜치 `feat/E02-prod-environment`**로 분리했다. `backend/.env.prod`(gitignore)는 원래 디렉토리에 있다
+- 리뷰 생략 — 코드 커밋 없음(Phase 1은 외부 설정만)
+
+### REQ-E02 — Phase 2(AWS 백엔드) 완료 — prod API 가동 (🟡)
+
+- prod 백엔드가 떴다: 서비스 `pdf-extractor-backend-prod-svc`(desired 1) · 태스크 정의 `prod:1`(dev rev 8 복제, 이미지·시크릿 ARN·로그 그룹만 교체 + CORS 시크릿 추가) · 시크릿 `pdf-extractor/prod`(JWT 새로 발급) · 로그 `/ecs/pdf-extractor-prod`. **지금부터 상시 ~$85/월**
+- **이미지는 `backend-build.sh`로 안 만들었다** — 스크립트가 `:latest`도 덮어써 dev가 다음 재시작 때 그 이미지를 받는다. `prod-2cc43de` 태그만 `docker buildx`로 직접 푸시. 또 작업 worktree HEAD가 문서 커밋이라 스크립트로는 태그가 `prod-3fdf38a-dirty`가 됐을 것 → `2cc43de` 분리 worktree에서 빌드. `25ee3d2..2cc43de` 사이 backend 변경 0건이라 dev 실행 이미지와 내용이 같다
+- **cloudflared는 dev처럼 `:latest`**(사용자 결정) — 완료 기준 "`:latest` 없음"은 backend 이미지 한정으로 계획서에 명시. 착수 중 dev 태스크 정의를 보고서야 cloudflared도 `:latest`인 걸 알았다(실체 2026.9.3)
+- **CORS 시크릿은 dev에 없던 키**다 — dev는 코드 기본값(dev 프론트 + localhost)에 기대고 있었다. prod는 `CORS_ALLOWED_ORIGINS`를 JSON 배열로 넣어 기동 성공(형식이 틀리면 `/health`부터 안 뜬다)
+- 실측: `/health` 200 · 실행 digest = `prod-2cc43de`(`ca24e394…`) · CORS preflight prod 프론트만 허용(dev 프론트·localhost는 400) · 터널 healthy · dev는 착수 전 기준선과 같음(rev 8 · 같은 태스크 · 같은 digest)
+- 실행 역할은 dev·prod 공용 — 인라인 정책 Resource에 `prod*` 추가
+- dev 백엔드는 여전히 켜져 있다(10/03부터 desired 1) — 내릴지 사용자 결정 대기
+- 리뷰 생략 — 코드 커밋 없음(Phase 2도 외부 설정만)
+
+### REQ-E02 — Phase 3(배포 스크립트) 완료 + 계약 #37·#38 (🟡)
+
+- `frontend-deploy.sh dev|prod`(인자 필수) · `wrangler.jsonc` `env.prod`(Worker `dailystudy-workbook-prod` + 커스텀 도메인) · 신규 `backend-deploy-prod.sh prod-<HEAD>`(빌드·푸시 → 리비전 복제·이미지만 교체 → 서비스 갱신 → 안정화 → 이전 리비전 deregister). 결정 2건(Worker 방식·백엔드 스크립트 범위)은 `/testgen` 중 사용자가 정했다
+- **백엔드 스크립트는 "배포만" 안을 기각** — 빌드를 `backend-build.sh`에 맡기면 그 스크립트가 `latest`를 덮어 계약 #37을 스스로 깬다. 빌드부터 한 손에 둬야 태그가 하나로 고정된다
+- 거부 4종(태그 없음·`latest`·HEAD 불일치·미커밋 변경)은 **아무것도 호출하기 전에** 판정한다 — 이미지가 커밋과 달라지면 태그가 거짓말을 한다
+- **스크립트 테스트는 레포 최초** — 임시 git 저장소에 스크립트를 복사하고 `npm`·`npx`·`docker`·`aws`를 PATH 앞의 가짜로 바꿔 호출만 기록한다. 가짜 `aws`가 `--query`·`--output text`를 jmespath(boto3 의존성)로 흉내 내서, 스크립트가 AWS를 어떻게 부르든 테스트가 구현을 고정하지 않는다
+- **E02-24(dev 결과 불변)는 라이브 배포가 아니라 로컬 번들 비교로 판정** — 지금 main을 dev에 올리면 작업 중인 F16이 노출된다. 같은 커밋에서 옛 명령과 새 스크립트의 `dist`가 파일 단위로 동일(`index.html` `f632f963…`)
+- `wrangler deploy --env prod --dry-run`으로 `env.prod`가 `assets`를 물려받는 것 확인(경고 없음)
+- worktree엔 `backend/venv`가 없어 원래 디렉토리 venv로 pytest를 돈다(`../pdf-extractor/backend/venv/bin/python -m pytest -k E02`)
+- 계약 승격: **#37** prod backend 이미지 `:latest` 금지 · **#38** R2 공개 URL 경로를 늘리면 prod WAF 허용 경로도 — 둘 다 dev·테스트에선 안 드러나고 prod에서만 터진다
+- 리뷰: 아직 — REQ 마지막 Phase 뒤 `/review E02`
+
+### REQ-E02 — Phase 4(프론트 prod 배포) 완료 (🟡)
+
+- `frontend-deploy.sh prod`로 첫 배포 — Worker `dailystudy-workbook-prod`가 새로 생기고 커스텀 도메인 `dailystudy-workbook.yejicraft-cf.com`이 붙었다(Version `e46e4d4e`). E02 브랜치의 `frontend/`는 `2cc43de`와 `wrangler.jsonc`만 달라 **"첫 배포 커밋 2cc43de" 결정이 그대로 지켜진다**
+- 실측: 라이브 진입 청크 `index-5GZJJjxu.js` = 로컬 `dist`(청크 20개 내용까지 동일) · prod API URL 6개 청크 · dev 도메인·`localhost:8000` 0건 · 로그인 화면은 사용자 육안(브라우저 확장 미연결)
+- ⚠️ **검증 기준 2건을 `/testrun` 뒤 바꿨다(사용자 승인)** — 계획을 조용히 맞춘 게 아니라 기준이 틀렸던 것:
+  - E02-34 "`localhost` 없음" → **"`localhost:8000` 없음"**: 걸린 건 react-router 내부 `let i="http://localhost"`(브라우저에선 `location.origin`으로 덮임). 함정이 막으려던 건 API 주소가 로컬로 박히는 것이다. dev 번들에도 같은 문자열이 있다
+  - E02-36 "dev 진입 청크 그대로" → **"prod 배포가 dev Worker에 새 배포를 안 만듦 + dev 번들은 dev API"**: 내 prod 배포(14:14:20) 80초 뒤 **사용자가 dev를 직접 배포**해 기준선(`Bhyi37oW` → `DbJFrFSC`)이 무효가 됐다. 배포 기록상 겹치는 dev 배포 없음
+- ⚠️ **배포 직후 이 머신에서 prod 도메인이 안 열렸다** — 배포 전 조회한 "없음" 응답을 macOS 리졸버가 캐시(`dig`는 IP, `curl`은 resolve 실패). `curl --resolve`로 확인했다. 서비스 문제가 아니다
+- 리뷰: 아직 — 코드 변경 없는 Phase. REQ 마지막 Phase 뒤 `/review E02`
+
+### REQ-E02 — Phase 5(end-to-end + admin) 완료 + 리뷰 회차 0 (🟡)
+
+- 가입은 사용자, `promote-admin.sh <email> .env.prod`로 admin 승격(백필 0건 — prod가 비어 있었다). 업로드·분석·생성·다운로드·알림은 사용자가 브라우저로, 서버 쪽은 R2·공개 URL·로그로 실측: 썸네일 130건 전부 200(401 0) · 공개 `uploads/`·`results/` 200 `application/pdf` · 알림 4건 · 5xx 0
+- **E02-44(dev 버킷 무변화)는 객체 수가 아니라 "prod 식별자가 dev에 섞였나"로 판정** — dev를 사용자가 쓰는 중이라 객체 수는 계속 변한다(75,145 → 75,152). prod job_id·user_id 키 0건
+- 확인용 데이터는 **남겨 둔다**(사용자 결정). prod에 두 번째 가입자(14:57, naver 메일, `user`)가 있다 — 사용자 본인 테스트 계정인지 확인 안 됨
+- admin 권한은 요청마다 저장소에서 읽지만(`_user_from_access_token`) 화면 메뉴는 로그인 응답 기준 — 승격 뒤 재로그인 필요할 수 있음
+- 리뷰: E02 @ 5c4ac04 — (b) 3 · (c) 3 · nit 4
+  - (b): [scripts/deploy/backend-deploy-prod.sh:70] 안정화 대기 실패·시간 초과 시 이전 리비전이 ACTIVE로 남고 재실행하면 영영 정리 안 됨 · PRIMARY 배포가 NEW인지 확인 안 함 · 가설
+    - 방안: A deregister 전 PRIMARY 배포 = NEW 확인 + 실패 시 남은 상태 안내 (+6줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (b): [CLAUDE.md:316] REQ prefix 표의 E 점유 범위가 REQ-E01에 멈춤, 다음 번호에 E 없음 · 실측
+    - 방안: A `E01~E02`·다음 `E03` (2줄, /checkpoint) · TODO · 감수 — 추천 A
+    - 결정: A
+  - (b): [CLAUDE.md:376] dev 프론트 배포 상태 줄의 굵은 표기 깨짐(`**` 3개) · 실측
+    - 방안: A 남는 `**` 제거 (1줄, /checkpoint) · TODO · 감수 — 추천 A
+    - 결정: A
+  - (c): [scripts/deploy/backend-deploy-prod.sh:73] 안정화 직후 이전 리비전 deregister → 즉시 롤백 대상 소실(INACTIVE로는 update-service 불가). 계획서 결정의 부작용 · 가설
+    - 방안: A N-1 유지·N-2 정리로 계획 변경 (/workplan → +5줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/frontend-deploy.sh:18] prod 배포에 미커밋 변경 거부·커밋 기록 없음 — 계획서는 백엔드만 정함 · 가설
+    - 방안: A prod일 때 미커밋 변경 거부 (/workplan → +3줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/backend-deploy-prod.sh:27] HEAD가 origin/main 조상인지 확인 안 함(막으면 브랜치 핫픽스도 막힘) · 가설
+    - 방안: A origin/main 조상일 때만 허용 (/workplan → +3줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+- 리뷰 (b) 문서 2건(CLAUDE.md:316·376)은 이 커밋에서 고쳤다. TODO 4건은 루트 `TODO.md`로(파일 신설). **CLAUDE.md는 `docs/` 밖이라 이 커밋이 E02의 새 "마지막 코드 커밋"이 되어 리뷰 sha(5c4ac04)가 낡는다 → 🟡 유지, `/review E02` 재실행으로 (b) 2건 닫힘 확인 후 ✅**
+- 리뷰 범위 메모: `/code-review`가 짚은 circuit breaker 롤백 시나리오는 prod 서비스 breaker가 꺼져 있어(`enable: false`) 해당 없음 · `workers.dev` 노출은 계정에 서브도메인이 없어 재현 안 됨
+
+### REQ-E02 — 재리뷰 회차 1 → ✅
+
+- 리뷰: E02 @ 2e75c3d — (b) 1 · (c) 4 · nit 1
+  - (b): [scripts/deploy/backend-deploy-prod.sh:70] 안정화 대기 실패·시간 초과 시 이전 리비전이 ACTIVE로 남고 재실행하면 영영 정리 안 됨 · PRIMARY 배포가 NEW인지 확인 안 함 · 가설
+    - 방안: A deregister 전 PRIMARY 배포 = NEW 확인 + 실패 시 남은 상태 안내 (+6줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/backend-deploy-prod.sh:73] 안정화 직후 이전 리비전 deregister → 즉시 롤백 대상 소실(INACTIVE로는 update-service 불가). 계획서 결정의 부작용 · 가설
+    - 방안: A N-1 유지·N-2 정리로 계획 변경 (/workplan → +5줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/frontend-deploy.sh:18] prod 배포에 미커밋 변경 거부·커밋 기록 없음 — 계획서는 백엔드만 정함 · 가설
+    - 방안: A prod일 때 미커밋 변경 거부 (/workplan → +3줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/backend-deploy-prod.sh:27] HEAD가 origin/main 조상인지 확인 안 함(막으면 브랜치 핫픽스도 막힘) · 가설
+    - 방안: A origin/main 조상일 때만 허용 (/workplan → +3줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [CLAUDE.md:100·349] 루트 `TODO.md` 신설로 TODO 파일이 둘인데 CLAUDE.md는 `docs/TODO.md`만 가리킴 — 다음 세션이 리뷰 TODO를 놓칠 수 있음 · 실측
+    - 방안: A CLAUDE.md에 두 파일 역할 1줄 (/checkpoint, 재리뷰 1회 추가) · TODO · 감수 — 추천 A
+    - 결정: 감수
+- 직전 (b) CLAUDE.md:316·376 → 닫힘(2e75c3d). 재리뷰는 delta(`5c4ac04..2e75c3d`)만 독립 에이전트로
+- ⚠️ **"마지막 코드 커밋"에 문서 커밋이 잡혔다** — 게이트 명령이 `docs/` 밖 변경을 코드로 보는데 이 REQ는 `CLAUDE.md`(계약·배포 상태)를 `docs:` 커밋에서 여러 번 고쳤다. 그래서 리뷰 (b)를 문서로 고친 커밋이 sha를 밀어 재리뷰가 한 번 더 필요했다. CLAUDE.md를 바꾸는 REQ는 리뷰 전에 CLAUDE.md 수정을 끝내 둘 것
+- ✅ 조건: 리뷰 sha `2e75c3d` = 마지막 코드 커밋 · 수정 결정 2건 닫힘 · 나머지 TODO 4·감수 1(빈 결정 없음). TODO 4건은 이미 루트 `TODO.md`에 있다(중복 추가 안 함)
+- ⚠️ CLAUDE.md 배포 상태 줄의 "REQ-E02 진행 중"은 이 커밋에서 고치지 않았다 — 고치면 그 커밋이 다시 마지막 코드 커밋이 된다. 머지 뒤 E02를 메시지에 안 넣은 커밋으로 정리
 
 ### REQ-F16 Phase 2 — 클릭 한 번으로 저장 (🟡 리뷰 3회, dev 육안 남음)
 
