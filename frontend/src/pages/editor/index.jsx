@@ -13,8 +13,7 @@
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { stripExtension } from "utils/documentName";
-import { pickSaveTarget, savePdfToPicker, writePdfToHandle } from "utils/savePdf";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
@@ -38,7 +37,6 @@ import SelectionOrderPanel from "components/SelectionOrderPanel";
 import WorkbookPreview from "components/WorkbookPreview";
 import {
   startExtractV2,
-  getStatus,
   getWorkbook,
   listTemplates,
 } from "api/client";
@@ -51,6 +49,7 @@ const LAYOUTS = ["세로 2단", "가로 2단", "4단", "6단"];
 
 export default function EditorPage() {
   const { state } = useLocation();
+  const navigate = useNavigate();
   const initialWorkbookId = state?.initialWorkbookId ?? null;
   const [jobId, setJobId] = useState(null);
   const [selectedJobFilename, setSelectedJobFilename] = useState(null);
@@ -68,83 +67,28 @@ export default function EditorPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generateStatus, setGenerateStatus] = useState(null);
-  const [downloadUrl, setDownloadUrl] = useState(null);
-  // 저장 창의 기본 파일명 — **생성 요청에 쓴 이름**을 그대로 쓴다 (REQ-F16).
-  // 입력 칸은 생성 뒤에도 수정 가능해서, 저장 시점에 다시 읽으면 생성 이력의
-  // 이름과 어긋나고 INVALID_CHARS 검사도 안 거친다(/review 회차 0).
-  const [savedFilename, setSavedFilename] = useState("workbook.pdf");
-  // 저장 실패는 **생성 완료 분기 안에서** 보여야 한다 — generateError 를 쓰면
-  // 그 Alert 이 `generateStatus === "error"` 분기에만 있어 화면에 영영 안 닿는다
-  // (/review 회차 1: "조용한 실패가 형태만 바뀌어 남았다").
-  const [saveError, setSaveError] = useState("");
-  // 생성 시작 전에 받아 둔 저장 대상 (REQ-F16 Phase 2).
-  // state 가 아니라 ref 인 이유: 완료 콜백이 읽기만 하고, 바뀌어도 다시 그릴 게 없다.
-  const saveHandleRef = useRef(null);
-  // 이중 클릭 방어 — setGenerating 은 비동기라 picker await 동안 버튼이 살아 있다.
-  const pickingRef = useRef(false);
-
-  /**
-   * 생성이 실패했을 때 덧붙일 안내 — 위치를 **미리 골랐으면** 브라우저가 창 확인 시점에
-   * 파일을 만들어 뒀다(`createWritable` 이 아니다). 지울 방법이 없어 알려만 준다.
-   * ⚠️ 기존 파일을 덮어쓰기로 골랐다면 내용은 그대로다(비우는 건 `createWritable` 이고
-   *    실패 시엔 안 불린다) — 그래서 "지워라"가 아니라 "생겼을 수 있다"로 적는다.
-   */
-  const leftoverNotice = () => {
-    if (!saveHandleRef.current) return "";
-    saveHandleRef.current = null;
-    return " 저장하려던 자리에 빈 파일이 생겼을 수 있습니다(새 이름으로 저장한 경우).";
-  };
   const [generateError, setGenerateError] = useState("");
   const [exportJobId, setExportJobId] = useState(null);
 
   // 생성 완료 감시는 전역 알림 피드가 한다 (REQ-F09 Phase 3). 종전에는 이 화면이 2초마다
   // getStatus 를 캐물었고, 화면을 떠나면 감시가 죽었다.
   //
-  // ⚠️ 조회가 0이 되지는 않는다 — 알림 항목에는 download_url 이 없어서(job_id·created_at·
-  //    severity·kind·title·message 뿐) 완료를 안 뒤 **한 번** getStatus 로 받아 온다.
-  //    폴링 N회가 완료 시점 1회로 줄어드는 것이지 사라지는 게 아니다 (2026-08-07 결정).
-  //
-  // ⚠️ 자동 다운로드가 이 훅 안에 있는 것이 곧 B10 불변식이다 — 훅은 화면이 살아 있을 때만
-  //    콜백을 부르므로, 떠난 사용자에게 다운로드가 튀어나오지 않는다. 전역으로 올리지 말 것.
+  // REQ-F18 이후로는 완료 시 조회조차 하지 않는다 — 받는 일이 결과 화면으로 갔다.
+  // (F16 시절엔 알림에 download_url 이 없어 완료 뒤 getStatus 를 한 번 더 불렀다)
   useJobCompletion(exportJobId, {
-    onDone: async () => {
+    // REQ-F18: 이 화면은 **만드는 곳**이다 — 받는 일은 결과 화면이 한다(사용자 결정).
+    // 그래서 완료 시 할 일은 상태 전환뿐이고, `download_url` 을 받아 올 이유도 없다.
+    onDone: () => {
       setExportJobId(null);
       setGenerating(false);
       setGenerateStatus("done");
-      try {
-        const data = await getStatus(exportJobId);
-        // REQ-F16: 완료 시 **아무것도 자동으로 받거나 열지 않는다.** URL만 들고 있다가
-        // 사용자가 [다운로드]를 누르면 그때 저장 위치 선택 창을 띄운다 — 창은 사용자
-        // 클릭 안에서만 열 수 있어서다(계획서 § 제약·함정).
-        if (!data.download_url) {
-          setSaveError(("다운로드 URL을 가져오지 못했습니다." + leftoverNotice()).trim());
-          return;
-        }
-        // 받아 둔 위치가 있으면 **바로 쓴다** — 추가 클릭이 없다 (REQ-F16 Phase 2).
-        if (saveHandleRef.current) {
-          try {
-            await writePdfToHandle(saveHandleRef.current, data.download_url);
-            return;
-          } catch (e) {
-            // 다른 창에 갔다 오면 브라우저가 핸들 권한을 다시 물을 수 있는데 그 재요청도
-            // 활성화를 요구해 여기선 못 띄운다 → [다운로드] 버튼을 되살려 사용자 클릭을 받는다.
-            setSaveError(e?.message || "저장하지 못했습니다. 아래에서 다시 받아 주세요.");
-          } finally {
-            saveHandleRef.current = null;
-          }
-        }
-        setDownloadUrl(data.download_url);
-      } catch {
-        setSaveError(("다운로드 URL을 가져오지 못했습니다." + leftoverNotice()).trim());
-        // 다운로드 URL 취득 실패는 생성 실패가 아니다 — 결과물은 생성 이력에 있다.
-      }
     },
     // 실패 문구의 출처는 서버 알림 하나다 (REQ-C09).
     onError: (n) => {
       setExportJobId(null);
       setGenerating(false);
       setGenerateStatus("error");
-      setGenerateError((n?.message || "PDF 생성에 실패했습니다.") + leftoverNotice());
+      setGenerateError(n?.message || "PDF 생성에 실패했습니다.");
     },
   });
 
@@ -311,39 +255,14 @@ export default function EditorPage() {
       return;
     }
     setFilenameError("");
-    // ⚠️ 저장 실패 문구 초기화는 **picker 앞**이어야 한다 — 뒤에 두면 아래 catch 가 세운
-    //    값을 같은 동기 블록에서 지워 버린다(/review Phase 2 회차 1). 이 REQ 에서 세 번째로
-    //    같은 자리에 걸렸다: "상태엔 썼는데 화면엔 안 닿는다".
-    setSaveError("");
 
-    // ⚠️ **동기 가드가 먼저다.** 아래 await 동안 `generating` 이 false 면 버튼이 살아 있어
-    //    이중 클릭에 생성이 두 번 돈다(작업 2개·이력 2줄). state 는 비동기라 ref 로 막는다.
-    if (pickingRef.current) return;
-    pickingRef.current = true;
-
-    // ⚠️ 저장 위치를 **생성보다 먼저** 받는다 — showSaveFilePicker 는 transient user
-    //    activation 을 요구해서 폴링(수 초) 뒤에 열면 브라우저가 거부한다(계약·F16-02).
-    //    취소하면 "안 만들겠다"로 읽어 생성도 하지 않는다 (계획서 § 결정).
-    saveHandleRef.current = null;
-    const supported = typeof window.showSaveFilePicker === "function";
-    try {
-      saveHandleRef.current = await pickSaveTarget(`${trimmed}.pdf`);
-      if (!saveHandleRef.current && supported) return;   // 취소 — 생성도 하지 않는다
-    } catch (e) {
-      // 취소(AbortError)는 pickSaveTarget 이 null 로 돌려주므로 여기 오는 건 **진짜 실패**다
-      // (활성화 상실·창 중복·보안 컨텍스트). 삼키면 "미지원 브라우저"와 구분이 안 된다.
-      saveHandleRef.current = null;
-      setSaveError(`저장 위치를 열지 못했습니다 (${e?.name || "오류"}). 생성 후 [다운로드]로 받아 주세요.`);
-    } finally {
-      pickingRef.current = false;
-    }
-
+    // REQ-F18: 저장 위치를 미리 받던 블록이 여기 있었다 — 받는 일이 결과 화면으로 갔다.
+    // 그 블록이 사라지면서 **첫 await 보다 먼저** `setGenerating(true)` 가 오게 됐고,
+    // F16 이 두던 동기 ref 가드(`pickingRef`)도 같이 불필요해졌다 — 그 가드는 picker
+    // await 동안 버튼이 살아 있는 것을 막던 것이다.
     setGenerating(true);
     setGenerateStatus("processing");
     setGenerateError("");
-    setDownloadUrl(null);
-    // 검증을 통과한 **이 값**을 저장 창 기본 이름으로 고정한다 (REQ-F16).
-    setSavedFilename(`${trimmed}.pdf`);
     try {
       // 문제집 메타 저장에 필요한 정보를 **생성 요청에 함께 실어 보낸다** (REQ-B10).
       // 종전에는 아래 폴링의 DONE 분기에서 createWorkbookMeta 로 저장했는데, 그 폴링이
@@ -375,7 +294,7 @@ export default function EditorPage() {
     } catch (e) {
       setGenerating(false);
       setGenerateStatus("error");
-      setGenerateError((e.message || "요청 실패") + leftoverNotice());
+      setGenerateError(e.message || "요청 실패");
     }
   };
 
@@ -599,28 +518,19 @@ export default function EditorPage() {
           )}
           {generateStatus === "done" && (
             <Alert severity="success" sx={{ borderRadius: 0, py: 0.5 }}>
-              PDF 생성 완료!{" "}
-              {downloadUrl && (
-                <Button
-                  size="small"
-                  variant="contained"
-                  color="success"
-                  startIcon={<Icon icon="material-symbols:download-rounded" />}
-                  onClick={() => {
-                    setSaveError("");
-                    savePdfToPicker(downloadUrl, savedFilename)
-                      .catch((e) => setSaveError(e?.message || "저장하지 못했습니다."));
-                  }}
-                  sx={{ ml: 1 }}
-                >
-                  다운로드
-                </Button>
-              )}
-              {saveError && (
-                <Box component="span" sx={{ display: "block", mt: 0.5, color: "error.main", fontWeight: 600 }}>
-                  {saveError}
-                </Box>
-              )}
+              {/* REQ-F18: 받는 일은 결과 화면이 한다 — 여기선 어디로 가면 되는지만 알린다.
+                  이동은 링크일 뿐이라 다운로드 재유입이 아니다(계획서 § 결정). */}
+              PDF 생성 완료! 결과 화면에서 받을 수 있습니다.{" "}
+              <Button
+                size="small"
+                variant="contained"
+                color="success"
+                startIcon={<Icon icon="material-symbols:arrow-forward-rounded" />}
+                onClick={() => navigate(paths.results)}
+                sx={{ ml: 1 }}
+              >
+                결과로 이동
+              </Button>
             </Alert>
           )}
           {generateStatus === "error" && (

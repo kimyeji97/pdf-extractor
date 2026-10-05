@@ -1,7 +1,7 @@
 /**
  * REQ-F16 Phase 2 — 클릭 한 번으로: 생성 전에 위치를 받아 두고 완료되면 바로 쓴다 (소스 스캔)
  *
- * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-21~22, F16-24~31)
+ * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-27~28, F16-31) — F16-21·22·24·25·26·29·30 은 REQ-F18 로 폐기
  *
  * `editor/index.jsx`·`history/index.jsx` 는 API mock 이 여럿 필요해 렌더 무대가 없다
  * (PLAN-B12 § 제약·함정, D11·REQ-30 과 같은 결론). 여기서 보려는 것도 **순서와 배선**이라
@@ -43,53 +43,6 @@ const generateBody = (code) => {
   return rest.slice(0, end);
 };
 
-describe('생성 흐름 — 창이 먼저 (Phase 2)', () => {
-  it('[F16-21] 생성 요청 전에 위치 선택 창을 연다', () => {
-    const body = generateBody(editorSource());
-    const pick = body.indexOf('pickSaveTarget');
-    const start = body.indexOf('startExtractV2');
-
-    expect(pick).toBeGreaterThan(-1);
-    expect(start).toBeGreaterThan(-1);
-    // 뒤집히면 활성화가 만료돼 실제 브라우저가 창을 거부한다.
-    expect(pick).toBeLessThan(start);
-  });
-
-  it('[F16-22] 창에서 취소하면 생성하지 않는다', () => {
-    // 취소는 "안 만들겠다"로 읽는다(계획서 § 결정) — 핸들이 없으면 조기 반환해야 한다.
-    const body = generateBody(editorSource());
-    const pick = body.indexOf('pickSaveTarget');
-
-    expect(body.slice(pick, pick + 300)).toMatch(/return/);
-  });
-});
-
-describe('창 열기 실패·중복 (Phase 2)', () => {
-  it('[F16-29] 이중 클릭으로 생성이 두 번 돌지 않는다', () => {
-    // setGenerating 은 비동기라 picker await 동안 버튼이 살아 있다 — 동기 ref 가 필요하다.
-    const body = generateBody(editorSource());
-    const guard = body.indexOf('pickingRef.current');
-    const pick = body.indexOf('pickSaveTarget');
-
-    expect(guard).toBeGreaterThan(-1);
-    expect(guard).toBeLessThan(pick);
-    // 풀어 주지 않으면 한 번 쓰고 영구 잠김이 된다.
-    expect(body).toMatch(/finally[\s\S]*pickingRef\.current = false/);
-  });
-
-  it('[F16-30] 창을 못 연 이유를 화면에 알린다', () => {
-    // 취소는 null 로 오므로 catch 에 오는 건 진짜 실패다 — 삼키면 미지원과 구분이 안 된다.
-    // ⚠️ 넓은 창은 뒤쪽 `setSaveError("")` 까지 닿아 **catch 를 비워도 통과**한다
-    //    (/review Phase 2 회차 1 실측). catch 블록만 떼어 본다.
-    const body = generateBody(editorSource());
-    const c = body.indexOf('} catch (e) {');
-    expect(c).toBeGreaterThan(-1);
-    const block = body.slice(c, body.indexOf('} finally {', c));
-
-    expect(block).toMatch(/setSaveError\(`/);
-  });
-});
-
 describe('결과 화면도 창이 먼저 (Phase 2)', () => {
   it('[F16-31] 재다운로드는 getStatus 전에 창을 연다', () => {
     // 뒤에 열면 그 await 동안 활성화가 만료돼 브라우저가 거부한다(dev 는 터널+Fargate).
@@ -102,33 +55,6 @@ describe('결과 화면도 창이 먼저 (Phase 2)', () => {
     expect(pick).toBeGreaterThan(-1);
     expect(status).toBeGreaterThan(-1);
     expect(pick).toBeLessThan(status);
-  });
-});
-
-describe('완료 처리 (Phase 2)', () => {
-  it('[F16-24] 완료되면 받아 둔 핸들에 바로 쓴다', () => {
-    const code = editorSource();
-    const done = code.indexOf('setGenerateStatus("done")');
-    expect(done).toBeGreaterThan(-1);
-
-    expect(code.slice(done, done + 900)).toMatch(/writePdfToHandle/);
-  });
-
-  it('[F16-25] 핸들 쓰기가 막히면 다운로드 버튼을 다시 보여 준다', () => {
-    const code = editorSource();
-    const done = code.indexOf('setGenerateStatus("done")');
-
-    // 실패를 잡아 버튼을 되살리는 상태 전환이 있어야 한다.
-    expect(code.slice(done, done + 900)).toMatch(/catch[\s\S]*setDownloadUrl/);
-  });
-
-  it('[F16-26] 그 버튼이 인라인 링크가 아니라 Button 이다', () => {
-    const code = editorSource();
-    const idx = code.indexOf('savePdfToPicker(');
-    expect(idx).toBeGreaterThan(-1);
-
-    // 눈에 잘 띄어야 한다(계획서 § 결정) — variant 를 가진 Button 으로 그린다.
-    expect(code.slice(Math.max(0, idx - 600), idx)).toMatch(/<Button[\s\S]*variant=/);
   });
 });
 
