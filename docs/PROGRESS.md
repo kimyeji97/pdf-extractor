@@ -142,7 +142,7 @@
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | 2026-10-05 | ✅ Phase 1·2 (케이스 31/31 · 각 `/review` 3회차 · **dev 육안 4건 확인** — 한 번 클릭·창 전환·재다운로드·취소) |
 | REQ-F18 | 생성/결과 업무 분리 — 생성 화면 다운로드 제거 · 진입 시 페이지 목록 스크롤 | [plan](plans/PLAN-F18-split-download-and-list-scroll.md) | 2026-10-05 | ✅ 케이스 10/10 · `/review` 2회차 · **dev 육안 3건 확인** |
-| REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | — | 🟡 코드·테스트 완료(케이스 11/11 · 백엔드 410 · `/review` 3회차). **배포·확인 남음** |
+| REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 
@@ -284,6 +284,8 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
     - 결정: **수정** → `f0f9d51` (재리뷰 상한이라 자체 변형 실측으로 검증 — M6 통과→FAIL)
   - 이연: "3회" 상한 미고정 → **결정: 수정** → `f0f9d51` (M8 통과→FAIL)
   - 이연: B29-08 부정 단언 → **결정: 수정** → `f0f9d51` (M7 통과→FAIL)
+- **prod 확인 완료 (사용자, 2026-10-06)** — `prod-51acedb`(rev 3) 배포 후 **정상 생성이 돌아 회귀 없음**을 확인. B29 는 "실패했을 때" 를 고친 것이라 **정상 경로가 안 깨졌는지**가 관문이었다(사용자 결정 ㄴ). **실패 경로는 R2 를 일부러 끊어야 재현돼 육안이 불가능**하고, 대신 케이스가 **실제 저장 키(`storage.save_workbook`)와 저장된 알림 파일**을 직접 읽는다. **REQ-B29 ✅**
+- ⚠️ **dev 백엔드에는 B29 가 없다**(`b28-eaa7f38`). 올릴 필요가 없다 — dev 는 `:latest` 를 쓰므로 **다음 `backend-build.sh` 때 자동으로 따라오고**, B29 는 메타 저장이 실패해야 드러나 dev 에서 볼 것도 없다. prod 배포는 `latest` 를 건드리지 않는다(계약 #37)
 - 케이스 **B29-01~11 (11/11)** · 백엔드 **410 passed**
 
 ## 2026-10-05
