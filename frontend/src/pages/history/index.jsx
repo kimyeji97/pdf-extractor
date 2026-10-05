@@ -34,6 +34,7 @@ import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 import { toPreviewUrl } from "utils/previewUrl";
+import { savePdfToPicker } from "utils/savePdf";
 import paths from "routes/paths";
 import { INFO_CHIP } from "utils/badges";
 
@@ -145,9 +146,10 @@ export default function HistoryPage() {
     try {
       const data = await getStatus(wb.result_job_id);
       if (data.download_url) {
-        const a = document.createElement("a"); a.href = data.download_url;
-        a.download = `${wb.filename || wb.name || "workbook"}.pdf`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        // REQ-F16 Phase 2 — 생성 화면과 같은 저장 위치 선택 창을 쓴다.
+        // 맨 URL <a download> 는 크로스오리진에서 download 가 무시돼 **탭이 열렸고**,
+        // Origin 없는 그 요청이 toDownloadUrl 이 피해 다니는 캐시 오염원이기도 했다.
+        await savePdfToPicker(data.download_url, `${wb.filename || wb.name || "workbook"}.pdf`);
       } else { alert("다운로드 URL을 가져올 수 없습니다."); }
     } catch (e) { alert("다운로드 실패: " + e.message); }
     finally     { setDownloadingId(null); }

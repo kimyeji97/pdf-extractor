@@ -53,6 +53,50 @@ export function toDownloadUrl(url) {
 }
 
 /**
+ * 저장 위치만 먼저 받아 둔다 (REQ-F16 Phase 2).
+ *
+ * `showSaveFilePicker` 는 **transient user activation** 을 요구한다 — 생성 폴링(수 초) 뒤에
+ * 열면 브라우저가 거부한다. 그래서 [PDF 생성] 클릭 **안에서** 이걸 먼저 부르고, 생성이 끝나면
+ * 받아 둔 핸들에 `writePdfToHandle()` 로 쓴다. 사용자가 누르는 건 한 번이다.
+ *
+ * @returns {Promise<FileSystemFileHandle|null>} 취소하면 `null` — 호출부는 생성도 하지 않는다
+ */
+export async function pickSaveTarget(filename) {
+  if (typeof globalThis.showSaveFilePicker !== "function") return null;
+  try {
+    return await globalThis.showSaveFilePicker({
+      suggestedName: filename,
+      types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
+    });
+  } catch (e) {
+    if (e?.name === "AbortError") return null;
+    throw e;
+  }
+}
+
+/**
+ * 받아 둔 핸들에 PDF 를 쓴다 (REQ-F16 Phase 2).
+ *
+ * ⚠️ **성공했을 때만 쓴다** — 위치를 먼저 고르는 순서라, 받기가 실패했는데 `createWritable()`
+ *    을 부르면 고른 자리에 **빈 파일이 남는다**(그 호출이 파일을 비운다). 그래서 `fetchPdf` 가
+ *    끝난 **뒤에** 연다.
+ */
+export async function writePdfToHandle(handle, url) {
+  const blob = await fetchPdf(url);
+
+  const writable = await handle.createWritable();
+  try {
+    await writable.write(blob);
+    await writable.close();
+  } catch (e) {
+    await writable.abort?.().catch(() => {});
+    throw e;
+  }
+}
+
+/**
+ * 한 번에: 창을 열고 받아서 쓴다 (Phase 1 경로 — 결과 화면 재다운로드가 쓴다).
+ *
  * @param {string} url      결과 PDF URL
  * @param {string} filename 저장 창에 채울 기본 파일명
  */

@@ -159,17 +159,19 @@ describe('생성 이력 — 아코디언 미리보기 (Phase 2)', () => {
     expect(screen.getByTestId('pdf-preview').dataset.pdfUrl).toContain('preview=1');
   });
 
-  it('[D09-07] 다운로드 링크에는 preview 쿼리가 붙지 않는다', async () => {
+  it('[D09-07] 다운로드 경로에는 preview 쿼리가 붙지 않는다', async () => {
+    // 2026-10-05 REQ-F16 Phase 2 갱신 — 다운로드가 `<a download>` 에서 저장 위치 선택 창
+    // (내부적으로 fetch)으로 바뀌었다. **의도("미리보기 URL을 재사용하지 않는다")는 그대로**이고
+    // 관찰 지점만 앵커 href → fetch 대상으로 옮겼다. 지금은 `?dl=1` 로 캐시 키를 가른다.
     await renderLoaded([wb('wb-1', '중간고사')]);
-    const anchors = [];
-    vi.spyOn(document.body, 'appendChild').mockImplementation((node) => {
-      if (node.tagName === 'A') anchors.push(node.getAttribute('href'));
-      return node;
-    });
+    global.fetch = vi.fn(async () => ({ ok: true, blob: async () => 'PDF' }));
+    global.URL.createObjectURL = vi.fn(() => 'blob:fake');
+    global.URL.revokeObjectURL = vi.fn();
 
     fireEvent.click(screen.getByRole('button', { name: /다운로드/ }));
 
-    await waitFor(() => expect(anchors).toEqual(['https://cdn.example.com/result.pdf']));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch.mock.calls[0][0]).not.toContain('preview=1');
   });
 });
 

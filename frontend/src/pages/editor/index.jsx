@@ -13,7 +13,7 @@
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { stripExtension } from "utils/documentName";
-import { savePdfToPicker } from "utils/savePdf";
+import { pickSaveTarget, savePdfToPicker, writePdfToHandle } from "utils/savePdf";
 import { useLocation } from "react-router";
 
 import Box from "@mui/material/Box";
@@ -77,6 +77,9 @@ export default function EditorPage() {
   // 그 Alert 이 `generateStatus === "error"` 분기에만 있어 화면에 영영 안 닿는다
   // (/review 회차 1: "조용한 실패가 형태만 바뀌어 남았다").
   const [saveError, setSaveError] = useState("");
+  // 생성 시작 전에 받아 둔 저장 대상 (REQ-F16 Phase 2).
+  // state 가 아니라 ref 인 이유: 완료 콜백이 읽기만 하고, 바뀌어도 다시 그릴 게 없다.
+  const saveHandleRef = useRef(null);
   const [generateError, setGenerateError] = useState("");
   const [exportJobId, setExportJobId] = useState(null);
 
@@ -99,7 +102,21 @@ export default function EditorPage() {
         // REQ-F16: 완료 시 **아무것도 자동으로 받거나 열지 않는다.** URL만 들고 있다가
         // 사용자가 [다운로드]를 누르면 그때 저장 위치 선택 창을 띄운다 — 창은 사용자
         // 클릭 안에서만 열 수 있어서다(계획서 § 제약·함정).
-        if (data.download_url) setDownloadUrl(data.download_url);
+        if (!data.download_url) return;
+        // 받아 둔 위치가 있으면 **바로 쓴다** — 추가 클릭이 없다 (REQ-F16 Phase 2).
+        if (saveHandleRef.current) {
+          try {
+            await writePdfToHandle(saveHandleRef.current, data.download_url);
+            return;
+          } catch (e) {
+            // 다른 창에 갔다 오면 브라우저가 핸들 권한을 다시 물을 수 있는데 그 재요청도
+            // 활성화를 요구해 여기선 못 띄운다 → [다운로드] 버튼을 되살려 사용자 클릭을 받는다.
+            setSaveError(e?.message || "저장하지 못했습니다. 아래에서 다시 받아 주세요.");
+          } finally {
+            saveHandleRef.current = null;
+          }
+        }
+        setDownloadUrl(data.download_url);
       } catch {
         // 다운로드 URL 취득 실패는 생성 실패가 아니다 — 결과물은 생성 이력에 있다.
       }
@@ -276,6 +293,18 @@ export default function EditorPage() {
       return;
     }
     setFilenameError("");
+
+    // ⚠️ 저장 위치를 **생성보다 먼저** 받는다 — showSaveFilePicker 는 transient user
+    //    activation 을 요구해서 폴링(수 초) 뒤에 열면 브라우저가 거부한다(계약·F16-02).
+    //    취소하면 "안 만들겠다"로 읽어 생성도 하지 않는다 (계획서 § 결정).
+    saveHandleRef.current = null;
+    try {
+      saveHandleRef.current = await pickSaveTarget(`${trimmed}.pdf`);
+      if (!saveHandleRef.current && typeof window.showSaveFilePicker === "function") return;
+    } catch {
+      saveHandleRef.current = null;   // 미지원 브라우저 등 — 완료 후 버튼 경로로 간다
+    }
+
     setGenerating(true);
     setGenerateStatus("processing");
     setGenerateError("");
@@ -542,21 +571,20 @@ export default function EditorPage() {
             <Alert severity="success" sx={{ borderRadius: 0, py: 0.5 }}>
               PDF 생성 완료!{" "}
               {downloadUrl && (
-                <Box
-                  component="button"
-                  type="button"
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  startIcon={<Icon icon="material-symbols:download-rounded" />}
                   onClick={() => {
                     setSaveError("");
                     savePdfToPicker(downloadUrl, savedFilename)
                       .catch((e) => setSaveError(e?.message || "저장하지 못했습니다."));
                   }}
-                  sx={{
-                    border: 0, background: "none", p: 0, cursor: "pointer",
-                    color: "inherit", fontWeight: 600, textDecoration: "underline", font: "inherit",
-                  }}
+                  sx={{ ml: 1 }}
                 >
                   다운로드
-                </Box>
+                </Button>
               )}
               {saveError && (
                 <Box component="span" sx={{ display: "block", mt: 0.5, color: "error.main", fontWeight: 600 }}>
