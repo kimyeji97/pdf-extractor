@@ -13,7 +13,7 @@
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { stripExtension } from "utils/documentName";
-import { savePdfToPicker } from "utils/savePdf";
+import { pickSaveTarget, savePdfToPicker, writePdfToHandle } from "utils/savePdf";
 import { useLocation } from "react-router";
 
 import Box from "@mui/material/Box";
@@ -77,6 +77,23 @@ export default function EditorPage() {
   // 그 Alert 이 `generateStatus === "error"` 분기에만 있어 화면에 영영 안 닿는다
   // (/review 회차 1: "조용한 실패가 형태만 바뀌어 남았다").
   const [saveError, setSaveError] = useState("");
+  // 생성 시작 전에 받아 둔 저장 대상 (REQ-F16 Phase 2).
+  // state 가 아니라 ref 인 이유: 완료 콜백이 읽기만 하고, 바뀌어도 다시 그릴 게 없다.
+  const saveHandleRef = useRef(null);
+  // 이중 클릭 방어 — setGenerating 은 비동기라 picker await 동안 버튼이 살아 있다.
+  const pickingRef = useRef(false);
+
+  /**
+   * 생성이 실패했을 때 덧붙일 안내 — 위치를 **미리 골랐으면** 브라우저가 창 확인 시점에
+   * 파일을 만들어 뒀다(`createWritable` 이 아니다). 지울 방법이 없어 알려만 준다.
+   * ⚠️ 기존 파일을 덮어쓰기로 골랐다면 내용은 그대로다(비우는 건 `createWritable` 이고
+   *    실패 시엔 안 불린다) — 그래서 "지워라"가 아니라 "생겼을 수 있다"로 적는다.
+   */
+  const leftoverNotice = () => {
+    if (!saveHandleRef.current) return "";
+    saveHandleRef.current = null;
+    return " 저장하려던 자리에 빈 파일이 생겼을 수 있습니다(새 이름으로 저장한 경우).";
+  };
   const [generateError, setGenerateError] = useState("");
   const [exportJobId, setExportJobId] = useState(null);
 
@@ -99,8 +116,26 @@ export default function EditorPage() {
         // REQ-F16: 완료 시 **아무것도 자동으로 받거나 열지 않는다.** URL만 들고 있다가
         // 사용자가 [다운로드]를 누르면 그때 저장 위치 선택 창을 띄운다 — 창은 사용자
         // 클릭 안에서만 열 수 있어서다(계획서 § 제약·함정).
-        if (data.download_url) setDownloadUrl(data.download_url);
+        if (!data.download_url) {
+          setSaveError(("다운로드 URL을 가져오지 못했습니다." + leftoverNotice()).trim());
+          return;
+        }
+        // 받아 둔 위치가 있으면 **바로 쓴다** — 추가 클릭이 없다 (REQ-F16 Phase 2).
+        if (saveHandleRef.current) {
+          try {
+            await writePdfToHandle(saveHandleRef.current, data.download_url);
+            return;
+          } catch (e) {
+            // 다른 창에 갔다 오면 브라우저가 핸들 권한을 다시 물을 수 있는데 그 재요청도
+            // 활성화를 요구해 여기선 못 띄운다 → [다운로드] 버튼을 되살려 사용자 클릭을 받는다.
+            setSaveError(e?.message || "저장하지 못했습니다. 아래에서 다시 받아 주세요.");
+          } finally {
+            saveHandleRef.current = null;
+          }
+        }
+        setDownloadUrl(data.download_url);
       } catch {
+        setSaveError(("다운로드 URL을 가져오지 못했습니다." + leftoverNotice()).trim());
         // 다운로드 URL 취득 실패는 생성 실패가 아니다 — 결과물은 생성 이력에 있다.
       }
     },
@@ -109,7 +144,7 @@ export default function EditorPage() {
       setExportJobId(null);
       setGenerating(false);
       setGenerateStatus("error");
-      setGenerateError(n?.message || "PDF 생성에 실패했습니다.");
+      setGenerateError((n?.message || "PDF 생성에 실패했습니다.") + leftoverNotice());
     },
   });
 
@@ -276,12 +311,36 @@ export default function EditorPage() {
       return;
     }
     setFilenameError("");
+    // ⚠️ 저장 실패 문구 초기화는 **picker 앞**이어야 한다 — 뒤에 두면 아래 catch 가 세운
+    //    값을 같은 동기 블록에서 지워 버린다(/review Phase 2 회차 1). 이 REQ 에서 세 번째로
+    //    같은 자리에 걸렸다: "상태엔 썼는데 화면엔 안 닿는다".
+    setSaveError("");
+
+    // ⚠️ **동기 가드가 먼저다.** 아래 await 동안 `generating` 이 false 면 버튼이 살아 있어
+    //    이중 클릭에 생성이 두 번 돈다(작업 2개·이력 2줄). state 는 비동기라 ref 로 막는다.
+    if (pickingRef.current) return;
+    pickingRef.current = true;
+
+    // ⚠️ 저장 위치를 **생성보다 먼저** 받는다 — showSaveFilePicker 는 transient user
+    //    activation 을 요구해서 폴링(수 초) 뒤에 열면 브라우저가 거부한다(계약·F16-02).
+    //    취소하면 "안 만들겠다"로 읽어 생성도 하지 않는다 (계획서 § 결정).
+    saveHandleRef.current = null;
+    const supported = typeof window.showSaveFilePicker === "function";
+    try {
+      saveHandleRef.current = await pickSaveTarget(`${trimmed}.pdf`);
+      if (!saveHandleRef.current && supported) return;   // 취소 — 생성도 하지 않는다
+    } catch (e) {
+      // 취소(AbortError)는 pickSaveTarget 이 null 로 돌려주므로 여기 오는 건 **진짜 실패**다
+      // (활성화 상실·창 중복·보안 컨텍스트). 삼키면 "미지원 브라우저"와 구분이 안 된다.
+      saveHandleRef.current = null;
+      setSaveError(`저장 위치를 열지 못했습니다 (${e?.name || "오류"}). 생성 후 [다운로드]로 받아 주세요.`);
+    } finally {
+      pickingRef.current = false;
+    }
+
     setGenerating(true);
     setGenerateStatus("processing");
     setGenerateError("");
-    // 직전 저장 실패 문구를 지운다 — 안 지우면 재생성 뒤 완료 Alert 안에
-    // **저장을 시도하지도 않은 채** 옛 빨간 글씨가 되살아난다(/review 회차 2).
-    setSaveError("");
     setDownloadUrl(null);
     // 검증을 통과한 **이 값**을 저장 창 기본 이름으로 고정한다 (REQ-F16).
     setSavedFilename(`${trimmed}.pdf`);
@@ -316,7 +375,7 @@ export default function EditorPage() {
     } catch (e) {
       setGenerating(false);
       setGenerateStatus("error");
-      setGenerateError(e.message || "요청 실패");
+      setGenerateError((e.message || "요청 실패") + leftoverNotice());
     }
   };
 
@@ -542,21 +601,20 @@ export default function EditorPage() {
             <Alert severity="success" sx={{ borderRadius: 0, py: 0.5 }}>
               PDF 생성 완료!{" "}
               {downloadUrl && (
-                <Box
-                  component="button"
-                  type="button"
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  startIcon={<Icon icon="material-symbols:download-rounded" />}
                   onClick={() => {
                     setSaveError("");
                     savePdfToPicker(downloadUrl, savedFilename)
                       .catch((e) => setSaveError(e?.message || "저장하지 못했습니다."));
                   }}
-                  sx={{
-                    border: 0, background: "none", p: 0, cursor: "pointer",
-                    color: "inherit", fontWeight: 600, textDecoration: "underline", font: "inherit",
-                  }}
+                  sx={{ ml: 1 }}
                 >
                   다운로드
-                </Box>
+                </Button>
               )}
               {saveError && (
                 <Box component="span" sx={{ display: "block", mt: 0.5, color: "error.main", fontWeight: 600 }}>
