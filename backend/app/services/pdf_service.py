@@ -644,14 +644,14 @@ def _apply_footnote(pdf_path: str, text: str) -> None:
     font = _get_label_font()
 
     for page in doc:
-        tw = fitz.TextWriter(page.rect)
-        tw.append(
+        _draw_text(
+            page,
             fitz.Point(_FOOTNOTE_MARGIN, page.rect.height - _FOOTNOTE_MARGIN),
-            _nfc(text),
+            text,
             font=font,
             fontsize=_FOOTNOTE_FONT_SIZE,
+            color=_hex_to_rgb01(_FOOTNOTE_COLOR),
         )
-        tw.write_text(page, color=_hex_to_rgb01(_FOOTNOTE_COLOR))
 
     tmp_path = pdf_path + ".tmp"
     doc.save(tmp_path, garbage=4, deflate=True)
@@ -720,12 +720,29 @@ def _nfc(text: str) -> str:
     ⚠️ **NFKC 가 아니라 NFC 다.** NFKC 는 호환 문자까지 바꿔(`①`→`1`, `㈜`→`(주)`)
        사용자가 쓴 글자를 말없이 고친다.
 
-    ⚠️ **정규화는 `build_source_label()` 이 아니라 여기(그리는 자리)에 있다.**
-       그 함수는 프론트 `utils/sourceLabel.js` 와 **글자 그대로** 같아야 하는 짝이고
-       (계약 #12), 거기에 넣으면 각주가 안 덮인다. 새 `tw.append()` 자리를 만들면
-       여기를 거칠 것 — B28-06 이 전수 검사한다.
+    ⚠️ **정규화는 `build_source_label()` 이 아니라 그리는 자리에 있다.** 그 함수는 프론트
+       `utils/sourceLabel.js` 와 **글자 그대로** 같아야 하는 짝이고(계약 #12), 거기에 넣으면
+       각주가 안 덮인다. 그리는 자리는 아래 `_draw_text()` 하나로 모았다.
     """
     return unicodedata.normalize("NFC", text)
+
+
+def _draw_text(page, point, text: str, *, font, fontsize: float, color) -> None:
+    """
+    PDF 에 글자를 그리는 **유일한 통로** (REQ-B28, 계약 #38).
+
+    `fitz.TextWriter` 를 여기서만 만든다 — 호출부가 직접 만들면 정규화를 빠뜨릴 수 있고,
+    그걸 테스트로 막으려면 "어떤 모양의 호출인지"를 열거해야 한다. 열거는 두 번 샜다
+    (`/review` 회차 0 — 창을 `fontsize` 로 끊기 · 회차 1 — 수신자를 `ast.Name` 으로만 보기).
+    **생성 자체를 한 곳으로 모으면 열거가 끝난다** — B28-06 이 "`fitz.TextWriter(` 는 이
+    함수 안에서만 생성된다 + 이 함수가 `_nfc` 를 거친다" 둘만 단언한다.
+
+    한글은 `TextWriter` + `Font` 로 그린다 — `insert_text`+`add_font` 조합은 이 PyMuPDF
+    버전에서 helv 로 폴백돼 한글이 점(·)으로 깨진다 (계약 #10).
+    """
+    writer = fitz.TextWriter(page.rect)
+    writer.append(point, _nfc(text), font=font, fontsize=fontsize)
+    writer.write_text(page, color=color)
 
 
 def _get_label_font() -> "fitz.Font":
@@ -867,16 +884,14 @@ def _build_grid_pdf(
                 fontsize = max(6.0, fontsize * max_w / text_w)
             # 한글 렌더: TextWriter + Font 사용 (insert_text+add_font 조합은
             # 이 PyMuPDF 버전에서 helv로 폴백되어 한글이 점(·)으로 깨진다 — REQ-B09)
-            tw = fitz.TextWriter(current_page.rect)
-            tw.append(
+            _draw_text(
+                current_page,
                 fitz.Point(cell_x + pad, cell_y + label_h - 4),
-                # 위에서 이미 정규화됐다 — 멱등이라 비용이 없고, **그리는 자리에서
-                # NFC 임이 눈에 보이는 것**이 계약 #38 의 요지다(B28-06 이 전수 검사).
-                _nfc(label_text),
+                label_text,
                 font=label_font,
                 fontsize=fontsize,
+                color=(0.25, 0.25, 0.35),
             )
-            tw.write_text(current_page, color=(0.25, 0.25, 0.35))
 
     # 세로 구분선 그리기 — 마지막 페이지에만 아니라 모든 완성된 페이지에 적용 (REQ-C05)
     if divider_xs:

@@ -168,17 +168,18 @@ def test_B28_05_premise_unnormalized_nfd_loses_glyphs():
 
 
 def test_B28_06_every_draw_site_normalizes():
-    """[B28-06] `tw.append(` 호출이 **전부** 정규화를 거친다.
+    """[B28-06] PDF 에 글자를 그리는 통로가 **하나**이고, 그 통로가 정규화한다.
 
     이 프로젝트의 반복된 실패가 **"절반만 고쳤다"** 다(F16·F17 리뷰 회차마다 나왔다).
-    그리는 자리가 둘이라 라벨만 고치고 각주를 빼먹기 쉽고, **세 번째 자리가
-    생기면** 동작 케이스(B28-01·02)는 그걸 못 본다.
+    **세 번째 draw site 가 생겨도** 동작 케이스(B28-01·02)는 그걸 못 본다.
 
-    ⚠️ **문자열 검색으로 하지 않는다**(`/review` 회차 0 의 (b)). `"tw.append("` 를
-       `startswith` 로 찾으면 **docstring 의 산문까지 draw site 로 센다** — 실제로
-       `_nfc` 의 주석이 세 번째 "자리"로 잡혀 분모 가드를 부풀렸고, 창을 `fontsize`
-       로 끊은 탓에 **`fontsize=` 없는 새 draw site 가 녹색으로 통과**했다(변형 실측).
-       `ast` 로 **실제 호출만** 고른다.
+    ⚠️ **"어떤 모양의 호출인가"를 열거하지 않는다 — 두 번 샜다.**
+       `/review` 회차 0: 문자열 검색이 docstring 산문을 세고, 창을 `fontsize` 로 끊어
+       **`fontsize=` 없는 새 draw site 가 통과**했다.
+       `/review` 회차 1: `ast` 로 바꿨지만 수신자를 `ast.Name` 으로만 봐서 **체이닝·walrus·
+       속성·인덱스 4종이 통과**했고, 정상 구현 2종(`safe = _nfc(t)` 경유 · `text=` 키워드)은
+       오히려 빨개졌다 — **테스트가 구현 모양을 지시**하고 있었다.
+       → 생성 자체를 `_draw_text()` 하나로 모으고 **그 사실만** 단언한다. 모양은 안 본다.
     """
     source = (
         __import__("pathlib").Path(__file__).resolve().parents[1]
@@ -186,40 +187,39 @@ def test_B28_06_every_draw_site_normalizes():
     ).read_text(encoding="utf-8")
     tree = ast.parse(source)
 
-    # `tw = fitz.TextWriter(...)` 로 묶인 이름들 — 변수명을 `tw` 로 가정하지 않는다.
-    writers = {
-        target.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        for target in node.targets
-        if isinstance(target, ast.Name)
-        and isinstance(node.value, ast.Call)
-        and ast.unparse(node.value.func).endswith("TextWriter")
-    }
-    assert writers, "TextWriter 를 만드는 자리를 못 찾았다 — 무대가 틀렸다"
+    wrapper = next(
+        (n for n in ast.walk(tree)
+         if isinstance(n, ast.FunctionDef) and n.name == "_draw_text"),
+        None,
+    )
+    assert wrapper is not None, "`_draw_text()` 통로가 없다 — 무대가 틀렸다"
 
-    sites = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "append"
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id in writers
+    # ① TextWriter 는 그 통로 안에서만 만든다.
+    creations = [
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and ast.unparse(n.func) == "fitz.TextWriter"
     ]
+    assert creations, "`fitz.TextWriter(` 생성을 못 찾았다 — 무대가 틀렸다"
+    outside = [
+        n.lineno for n in creations
+        if not (wrapper.lineno <= n.lineno <= wrapper.end_lineno)
+    ]
+    assert not outside, (
+        f"`_draw_text()` 밖에서 TextWriter 를 만든다 ({outside}줄) — "
+        f"그 자리는 정규화를 건너뛸 수 있다"
+    )
 
-    # 0건이면 어떤 구현도 통과한다 — 분모부터 고정한다 (계약 #25 "0건은 초록색").
-    assert len(sites) >= 2, f"그리는 자리를 못 찾았다 (찾은 수: {len(sites)})"
+    # ② 그 통로가 정규화를 거친다. (함수가 하나뿐이라 본문 검사로 충분하다)
+    assert "_nfc(" in ast.get_source_segment(source, wrapper), (
+        "`_draw_text()` 가 `_nfc` 를 거치지 않는다"
+    )
 
-    for call in sites:
-        drawn = [
-            arg for arg in call.args
-            if isinstance(arg, ast.Call) and ast.unparse(arg.func) == "_nfc"
-        ]
-        assert drawn, (
-            f"정규화를 거치지 않는 draw site 가 있다 "
-            f"({call.lineno}줄): {ast.unparse(call)}"
-        )
+    # ③ 분모 — 그릴 자리가 실제로 남아 있다 (0건은 초록색, 계약 #25).
+    users = [
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and ast.unparse(n.func) == "_draw_text"
+    ]
+    assert len(users) >= 2, f"그리는 자리를 못 찾았다 (찾은 수: {len(users)})"
 
 
 def test_B28_07_nfd_renders_at_same_font_size_as_nfc(tmp_path):
@@ -232,10 +232,12 @@ def test_B28_07_nfd_renders_at_same_font_size_as_nfc(tmp_path):
 
     근거: PLAN § 결정 — "재는 문자열과 그리는 문자열이 달라지면 새 불일치가 생긴다"
 
-    ⚠️ **레이아웃은 `4단`이어야 한다.** `가로 2단`은 셀이 한 칸이라 폭이 ~571pt 고,
-       이 라벨은 NFD 로 재도 570.3pt 라 **축소가 아예 안 걸려 양쪽 다 14.0** 이 된다
-       — 그 무대에서는 폭 계산을 되돌려도 통과했다(실측). 4단은 셀이 좁아
+    ⚠️ **레이아웃은 `4단`이어야 한다.** `가로 2단`은 셀이 한 칸이라 `max_w=551pt` 인데
+       이 라벨은 NFD 로 재도 **486.3pt** 라 **축소가 아예 안 걸려 양쪽 다 14.0** 이 된다
+       — 그 무대에서는 폭 계산을 되돌려도 통과했다(실측). 4단은 `max_w=271pt` 라
        **11.92 vs 7.80** 으로 갈린다.
+       (NFC 318.3 vs NFD 486.3pt @14pt. **570.3 은 라벨 *전체* 를 NFD 로 돌렸을 때**고,
+        현실은 **이름만 NFD** 다 — 템플릿 `번)`·`문항` 은 파이썬 소스 리터럴이라 NFC)
     """
     def label_size(name: str) -> float:
         out = str(tmp_path / f"size_{len(name)}.pdf")
@@ -266,5 +268,10 @@ def test_B28_07_nfd_renders_at_same_font_size_as_nfc(tmp_path):
         doc.close()
         assert sizes, "라벨 span 을 못 찾았다 — 무대가 틀렸다"
         return round(sizes[0], 3)
+
+    # 분모 — 축소가 **실제로 걸린 무대**여야 한다. 양쪽 다 상한 14.0(또는 하한 6.0)에
+    # 붙으면 비교가 저절로 같아져 **버그가 되살아난 채로 녹색**이 된다(/review 회차 1 실측:
+    # 셀을 넓히면 그대로 통과했다). 레이아웃 상수가 바뀌면 여기서 먼저 터진다.
+    assert 6.0 < label_size(NAME_NFC) < 14.0
 
     assert label_size(NAME_NFD) == label_size(NAME_NFC)
