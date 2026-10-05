@@ -11,6 +11,7 @@ PDF 처리 서비스 v2
   - 부분 영역   → show_pdf_page() : 벡터 기반 클리핑, 래스터화 없이 선명도 유지
 """
 
+import unicodedata
 import fitz         # pymupdf
 import pdfplumber
 from dataclasses import dataclass
@@ -643,14 +644,14 @@ def _apply_footnote(pdf_path: str, text: str) -> None:
     font = _get_label_font()
 
     for page in doc:
-        tw = fitz.TextWriter(page.rect)
-        tw.append(
+        _draw_text(
+            page,
             fitz.Point(_FOOTNOTE_MARGIN, page.rect.height - _FOOTNOTE_MARGIN),
             text,
             font=font,
             fontsize=_FOOTNOTE_FONT_SIZE,
+            color=_hex_to_rgb01(_FOOTNOTE_COLOR),
         )
-        tw.write_text(page, color=_hex_to_rgb01(_FOOTNOTE_COLOR))
 
     tmp_path = pdf_path + ".tmp"
     doc.save(tmp_path, garbage=4, deflate=True)
@@ -704,6 +705,51 @@ def _apply_watermark(pdf_path: str, image_bytes: bytes) -> None:
     doc.save(tmp_path, garbage=4, deflate=True)
     doc.close()
     Path(tmp_path).replace(pdf_path)
+
+
+def _nfc(text: str) -> str:
+    """
+    PDF 에 그리기 직전의 NFC 정규화 (REQ-B28, 계약 #40).
+
+    **macOS 가 올린 파일명은 NFD(자모 분해)** 다 — `학` = `ᄒ`+`ᅡ`+`ᆨ`.
+    `_get_label_font()` 가 돌려주는 'korea' 는 실제로는 `Droid Sans Fallback Regular`
+    라서 **한글 자모 블록(U+1100~U+11FF)에 글리프가 거의 없고**, `TextWriter.append()`
+    는 글리프 없는 문자를 **에러 없이 notdef 로 치환한다**(계약 #39). 그래서 정규화하지
+    않으면 글자가 통째로 사라진다 — 2026-10-05 dev 에서 문제집 이름이 그렇게 깨졌다.
+
+    ⚠️ **NFKC 가 아니라 NFC 다.** NFKC 는 호환 문자까지 바꿔(`①`→`1`, `㈜`→`(주)`)
+       사용자가 쓴 글자를 말없이 고친다.
+
+    ⚠️ **정규화는 `build_source_label()` 이 아니라 그리는 자리에 있다.** 그 함수는 프론트
+       `utils/sourceLabel.js` 와 **글자 그대로** 같아야 하는 짝이고(계약 #12), 거기에 넣으면
+       각주가 안 덮인다. 그리는 자리는 아래 `_draw_text()` 하나로 모았다.
+    """
+    return unicodedata.normalize("NFC", text)
+
+
+def _draw_text(page, point, text: str, *, font, fontsize: float, color) -> None:
+    """
+    PDF 에 글자를 그리는 **유일한 통로** (REQ-B28, 계약 #40).
+
+    `fitz.TextWriter` 를 여기서만 만든다 — 호출부가 직접 만들면 정규화를 빠뜨릴 수 있다.
+    B28-06 이 "`fitz.TextWriter(` 는 이 함수 안에서만 생성된다 + 이 함수가 `_nfc` 를 거친다"
+    를 단언한다.
+
+    ⚠️ **그 단언은 전수가 아니다 — 소스 스캔은 구문만 본다.** `fitz.TextWriter` 라고 **쓰인**
+       생성지만 보므로 별칭(`import fitz as _fitz` — 이 파일 72줄에 이미 있다)·
+       `from fitz import TextWriter as _TW`·`getattr(fitz, "TextWriter")`·`page.insert_htmlbox()`
+       같은 우회는 **못 잡는다**(전부 실측 PASS). 열거를 바꿔 가며 세 번 샜고(`/review` 회차
+       0·1·2) 네 번째도 같다 — **구문 스캔으로는 "통로가 하나"를 증명할 수 없다.**
+       2026-10-05 감수하기로 했다: 레포 전체에서 `fitz.TextWriter(` 생성이 이 함수 안 한
+       자리뿐이라 **현시점 노출이 0** 이다. 새로 글자를 그릴 일이 생기면 **반드시 이 함수를
+       거칠 것** — 테스트가 못 막아 준다.
+
+    한글은 `TextWriter` + `Font` 로 그린다 — `insert_text`+`add_font` 조합은 이 PyMuPDF
+    버전에서 helv 로 폴백돼 한글이 점(·)으로 깨진다 (계약 #10).
+    """
+    writer = fitz.TextWriter(page.rect)
+    writer.append(point, _nfc(text), font=font, fontsize=fontsize)
+    writer.write_text(page, color=color)
 
 
 def _get_label_font() -> "fitz.Font":
@@ -829,7 +875,12 @@ def _build_grid_pdf(
         )
 
         # 출처 레이블 렌더링 (이미지 위에 덮어쓰기)
-        label_text = getattr(region, "source_label", "")
+        # ⚠️ 폭 계산 전에 정규화한다 — 재는 문자열과 그리는 문자열이 같아야 한다 (REQ-B28).
+        #    NFD 는 자모가 낱자로 세어져 **같은 글자가 53% 넓게 측정된다**(실측 486.3 vs
+        #    318.3pt @14pt — 이름만 NFD 인 실제 형태. 라벨 *전체* 를 NFD 로 돌리면 570.3pt
+        #    지만 템플릿 `번)`·`문항` 은 소스 리터럴이라 NFC 다).
+        #    그대로 두면 아래 B09 축소가 과하게 걸려 라벨이 쓸데없이 작아진다.
+        label_text = _nfc(getattr(region, "source_label", ""))
         if label_text and current_page is not None:
             label_rect = fitz.Rect(cell_x, cell_y, cell_x + cell_w, cell_y + label_h)
             current_page.draw_rect(label_rect, color=None, fill=(0.96, 0.96, 0.98), width=0)
@@ -842,14 +893,16 @@ def _build_grid_pdf(
                 fontsize = max(6.0, fontsize * max_w / text_w)
             # 한글 렌더: TextWriter + Font 사용 (insert_text+add_font 조합은
             # 이 PyMuPDF 버전에서 helv로 폴백되어 한글이 점(·)으로 깨진다 — REQ-B09)
-            tw = fitz.TextWriter(current_page.rect)
-            tw.append(
+            # `label_text` 는 위에서 이미 NFC 다 — `_draw_text()` 가 한 번 더 정규화하지만
+            # 멱등이라 비용이 없다. 폭은 **재는 쪽**이, 렌더는 **그리는 쪽**이 각자 보장한다.
+            _draw_text(
+                current_page,
                 fitz.Point(cell_x + pad, cell_y + label_h - 4),
                 label_text,
                 font=label_font,
                 fontsize=fontsize,
+                color=(0.25, 0.25, 0.35),
             )
-            tw.write_text(current_page, color=(0.25, 0.25, 0.35))
 
     # 세로 구분선 그리기 — 마지막 페이지에만 아니라 모든 완성된 페이지에 적용 (REQ-C05)
     if divider_xs:

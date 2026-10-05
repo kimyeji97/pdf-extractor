@@ -188,3 +188,7 @@
 - [ ] F16 리뷰 이연: `savePdf.js` 의 `toDownloadUrl` 이 `previewUrl.js` 의 사실상 복제(`SIGNED_MARKERS` 까지 동일) — `withCacheKey(url, key)` 하나로 합칠 만하다 (2026-10-03 회차 2 → 2026-10-05 재확인)
 - [ ] F16 nit 이연: `supported` 판정이 3중 복제 — `savePdf.js` 는 `globalThis.showSaveFilePicker`, 호출부(`history:153`·`editor:328`)는 `window.showSaveFilePicker`. 갈리면 취소/미지원 분류가 조용히 뒤집힌다. `pickSaveTarget` 이 지원 여부를 함께 돌려주는 쪽이 낫다 (2026-10-05 추가)
 - [ ] F16 nit 이연: `f16Phase2.test.js` F16-24·25 의 고정 900자 창이 `onError:` 분기까지 번진다(실측 `onError:` +790 · 창 끝 `setGenerateStatus("error")` +870) — `f16Download.test.js` 의 `completionBranch()` 처럼 `indexOf('onError:')` 로 끊을 것 (2026-10-05 추가)
+- [ ] **B28 후속 (별도 REQ 예약 — 계획서 § 범위 제외가 약속한 것)**: **검색·정렬·중복 판정의 NFD/NFC 불일치.** macOS 업로드분은 이름이 **NFD** 로 저장되는데 브라우저 IME 입력은 **NFC** 라, `workbook.py:64`·`browse.py:259` 의 맨 substring 매칭이 **목록에 뻔히 보이는 문제집을 검색에서 0건**으로 만든다(실측: `'학기' in NFD저장분` → `False`). **B28 이 PDF 를 고치고 나면 이게 유일하게 남는 사용자 가시 증상이다.** 저장 시점 정규화 + 기존 저장분 처리까지 묶어서 볼 것 (2026-10-05 추가)
+- [ ] B28 리뷰 이연: B28-06 스캔이 `pdf_service.py` **한 파일만** 본다 — 다른 모듈에 그리는 코드가 생기면 못 잡는다(계약 #31 의 "스캔은 `client.js` 한 파일만 본다"와 같은 모양). docstring 에 한계는 명시해 뒀다 (2026-10-05 추가)
+- [ ] B28 리뷰 이연 (감수분): `fitz.TextWriter` **정확 일치** 스캔이라 별칭(`import fitz as _fitz`)·`from fitz import TextWriter`·`getattr(fitz,"TextWriter")`·`page.insert_htmlbox()` 우회를 못 잡는다(실측). **구문 스캔으로는 "통로가 하나"를 증명할 수 없어** 2026-10-05 감수했다 — 끝내려면 런타임 가드나 타입 경계가 필요하다 (2026-10-05 추가)
+- [ ] B28 리뷰 이연: 계획서 검증 계약 표 행 순서가 `B28-05 → B28-07 → B28-06` (2026-10-05 추가)
