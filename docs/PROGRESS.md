@@ -141,7 +141,7 @@
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | — | 🟡 **코드·테스트 완료**(케이스 20/20 · 프론트 358 · `/review` 3회차 결함 전부 닫음). **dev 육안 남음** — 파일 선택 창은 자동화 불가 |
-| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1·2 완료**(Cloudflare 케이스 6/6 · AWS 백엔드 9/9 — prod API `/health` 200, 이미지 `prod-2cc43de`). Phase 3(배포 스크립트)부터 남음 |
+| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1~3 완료**(Cloudflare 6/6 · AWS 백엔드 9/9 — prod API `/health` 200, 이미지 `prod-2cc43de` · 배포 스크립트 16/16 `1ee1d8b`). Phase 4(프론트 prod 배포)·5(end-to-end) 남음 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -286,6 +286,18 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 - 실행 역할은 dev·prod 공용 — 인라인 정책 Resource에 `prod*` 추가
 - dev 백엔드는 여전히 켜져 있다(10/03부터 desired 1) — 내릴지 사용자 결정 대기
 - 리뷰 생략 — 코드 커밋 없음(Phase 2도 외부 설정만)
+
+### REQ-E02 — Phase 3(배포 스크립트) 완료 + 계약 #37·#38 (🟡)
+
+- `frontend-deploy.sh dev|prod`(인자 필수) · `wrangler.jsonc` `env.prod`(Worker `dailystudy-workbook-prod` + 커스텀 도메인) · 신규 `backend-deploy-prod.sh prod-<HEAD>`(빌드·푸시 → 리비전 복제·이미지만 교체 → 서비스 갱신 → 안정화 → 이전 리비전 deregister). 결정 2건(Worker 방식·백엔드 스크립트 범위)은 `/testgen` 중 사용자가 정했다
+- **백엔드 스크립트는 "배포만" 안을 기각** — 빌드를 `backend-build.sh`에 맡기면 그 스크립트가 `latest`를 덮어 계약 #37을 스스로 깬다. 빌드부터 한 손에 둬야 태그가 하나로 고정된다
+- 거부 4종(태그 없음·`latest`·HEAD 불일치·미커밋 변경)은 **아무것도 호출하기 전에** 판정한다 — 이미지가 커밋과 달라지면 태그가 거짓말을 한다
+- **스크립트 테스트는 레포 최초** — 임시 git 저장소에 스크립트를 복사하고 `npm`·`npx`·`docker`·`aws`를 PATH 앞의 가짜로 바꿔 호출만 기록한다. 가짜 `aws`가 `--query`·`--output text`를 jmespath(boto3 의존성)로 흉내 내서, 스크립트가 AWS를 어떻게 부르든 테스트가 구현을 고정하지 않는다
+- **E02-24(dev 결과 불변)는 라이브 배포가 아니라 로컬 번들 비교로 판정** — 지금 main을 dev에 올리면 작업 중인 F16이 노출된다. 같은 커밋에서 옛 명령과 새 스크립트의 `dist`가 파일 단위로 동일(`index.html` `f632f963…`)
+- `wrangler deploy --env prod --dry-run`으로 `env.prod`가 `assets`를 물려받는 것 확인(경고 없음)
+- worktree엔 `backend/venv`가 없어 원래 디렉토리 venv로 pytest를 돈다(`../pdf-extractor/backend/venv/bin/python -m pytest -k E02`)
+- 계약 승격: **#37** prod backend 이미지 `:latest` 금지 · **#38** R2 공개 URL 경로를 늘리면 prod WAF 허용 경로도 — 둘 다 dev·테스트에선 안 드러나고 prod에서만 터진다
+- 리뷰: 아직 — REQ 마지막 Phase 뒤 `/review E02`
 
 ## 2026-10-03
 

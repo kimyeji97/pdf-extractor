@@ -99,7 +99,9 @@ pdf-extractor/
 │   ├── infra/                              # 인프라 명세 및 배포 가이드
 │   └── TODO.md                             # 남은 작업 순서표 (미착수·후속·신규 항목)
 │
-├── scripts/deploy/backend-build.sh         # 백엔드 빌드·ECR 푸시 (scripts/ops/ = 운영 스크립트)
+├── scripts/deploy/backend-build.sh         # dev 백엔드 빌드·ECR 푸시(:latest 갱신) (scripts/ops/ = 운영 스크립트)
+├── scripts/deploy/backend-deploy-prod.sh   # prod 백엔드 빌드·배포 한 번에 — `prod-<HEAD>` 태그만 (계약 #37)
+├── scripts/deploy/frontend-deploy.sh       # 프론트 빌드·배포 `dev|prod` (인자 필수)
 ├── QUICKSTART.md                           # 로컬 개발 셋업 가이드
 └── README.md                               # 프로젝트 개요
 ```
@@ -373,7 +375,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
 ⚠️ **dev 프론트는 2026-10-03 main `25ee3d2` 빌드(F17까지, Worker Version `d3d884fc`)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
-"배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh`)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
+"배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh dev` — 2026-10-05부터 `dev|prod` 인자 필수)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**
 ⚠️ **그러나 이 줄을 믿고 배포 여부를 판정하지 말 것 — 수동 배포라 기록이 뒤처지기도 앞서기도 한다.**
 2026-10-03에 B26을 배포하려 했더니 전날 머지와 같은 분에 이미 떠 있었고(이 줄은 "B27까지", PROGRESS는 "배포 전"이었다) 재배포가 `No updated asset
@@ -672,6 +674,20 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     자격을 전부 붙이면 R2 버킷 CORS 에 `AllowCredentials` 가 없어 브라우저가 응답을 통째로 막고,
     presigned 에 `Authorization` 을 붙이면 400 이다(실측 — F16 리뷰 회차 1에서 주 경로가 깨졌다).
     **`client.js` 밖에 raw fetch 를 만들면 그 파일에 맞는 가드를 직접 둘 것** — B23-03 은 거기까지 안 본다.
+
+### 배포 (prod)
+
+37. **prod 태스크 정의의 backend 이미지는 버전 태그로 고정한다 — `:latest` 금지** — dev는 `:latest`라 `backend-build.sh`가
+    `latest`를 덮어쓰면 다음 재시작 때 따라간다. prod가 같은 태그를 쓰면 **dev에 올린 미검증 이미지가 prod 태스크 재시작
+    (장애 복구·스케일)에 조용히 실린다** — 배포한 적 없는데 바뀐다. 그래서 prod 이미지는 `prod-<커밋>` 태그만 푸시하고
+    `latest`는 건드리지 않는다. cloudflared는 예외로 `:latest`(2026-10-05 사용자 결정 — 보안 패치 자동 수용).
+    ⚠️ 콘솔 "서비스 업데이트"는 최신 활성 리비전을 고르므로 실험 리비전은 deregister(배포 상태 절, 2026-09-28). (REQ-E02)
+38. **R2 공개 URL을 만드는 경로를 새로 추가하면 prod WAF 허용 경로도 함께 고친다** — prod 공개 도메인
+    `dailystudy.yejicraft-cf.com`은 WAF 규칙 `dailystudy-prod-r2-public-paths`가 `/pdf-extractor/` 안에서
+    **`uploads/`·`results/`만** 통과시킨다(`users/{id}.json` 등 버킷 전체가 무인증·무만료로 열리는 걸 막으려고).
+    지금 공개 URL을 만드는 코드는 `generate_download_presigned_url` 호출부(원본·결과) 둘뿐이다. 썸네일 등을 공개 URL로
+    바꾸면 **dev엔 규칙이 없어 dev·테스트 모두 녹색인데 prod에서만 403**이 난다. `R2_ROOT_PREFIX`를 바꿔도 같다.
+    규칙은 대시보드에서만 고친다(wrangler OAuth는 zone `read`뿐). 같은 버킷의 `docs/`(환불 정책 공개)는 규칙 밖이다. (REQ-E02)
 
 ## 상시 이슈
 

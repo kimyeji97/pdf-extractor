@@ -1,6 +1,6 @@
 # PLAN-E02 · 운영(prod) 환경 구성
 
-> 출처: 2026-10-05 세션 「운영환경구성」 · 작성: 2026-10-05 · 상태: 🟡 진행 (Phase 1·2 완료 2026-10-05)
+> 출처: 2026-10-05 세션 「운영환경구성」 · 작성: 2026-10-05 · 상태: 🟡 진행 (Phase 1~3 완료 2026-10-05)
 
 ## 배경
 
@@ -39,6 +39,8 @@
 | 이미지 | **prod는 버전 태그 고정, `:latest` 금지** | `:latest`면 dev 배포 뒤 prod 태스크가 재시작될 때 미검증 이미지로 바뀐다 | dev와 같은 `:latest` |
 | cloudflared 이미지 | **dev처럼 `cloudflare/cloudflared:latest`** — `:latest` 금지는 backend 이미지에만 | 2026-10-05 사용자 결정(Phase 2 착수 중). 착수 시점 실체는 2026.9.3(dev 실행 digest `072c067d…`와 같음) | `2026.9.3` 고정(재시작 때 몰래 안 바뀌지만 보안 패치를 손으로 올려야 함) |
 | prod 이미지 빌드 | **`prod-2cc43de` 태그 하나만 푸시** — `backend-build.sh`를 안 쓰고 `docker buildx` 직접. `2cc43de` 분리 worktree(clean)에서 빌드 | `backend-build.sh`는 `:latest`도 덮어써 dev 재시작에 닿는다. 작업 worktree의 HEAD는 문서 커밋(`3fdf38a`)이라 스크립트로는 태그가 `prod-3fdf38a-dirty`가 된다 | `backend-build.sh prod` 그대로(dev `latest` 갱신) — prod 전용 경로는 Phase 3 스크립트 몫 |
+| prod 프론트 Worker | **wrangler `env.prod`** — 이름 `dailystudy-workbook-prod`, 커스텀 도메인도 `env.prod`에 둔다. 배포는 `wrangler deploy --env prod`, dev는 지금 설정(`twilight-base-302d`) 그대로 | 2026-10-05 사용자 결정(`/testgen E02 3`) | 별도 설정 파일 `wrangler.prod.jsonc` + `-c` |
+| 백엔드 prod 배포 스크립트 | **`backend-deploy-prod.sh prod-<커밋>` 한 번에** — 태그 하나만 빌드·푸시 → 현재 리비전을 복제해 이미지만 바꾼 새 리비전 등록 → 서비스 갱신 → 안정화 대기 → 이전 리비전 deregister. 태그는 HEAD와 일치해야 하고, 커밋 안 된 변경이 있으면 거부 | 2026-10-05 사용자 결정(`/testgen E02 3`). `backend-build.sh`는 `latest`도 덮는다(계약 #37) · 실험 리비전이 남으면 콘솔이 그걸 고른다 | 배포만(빌드는 `backend-build.sh`에 `latest` 끄는 옵션) |
 | 시크릿 | `pdf-extractor/prod` 신설 — **JWT 키 새로 발급**, `CORS_ALLOWED_ORIGINS`는 prod 프론트만 | dev 키 재사용 시 dev 토큰이 prod에서 통한다 | dev 시크릿 복제 |
 
 ## 미결 질문
@@ -53,7 +55,7 @@
 - [x] **Phase 2 — AWS 백엔드** — 2026-10-05, 케이스 9/9 (태스크 정의 `prod:1` · 이미지 `prod-2cc43de` · 터널 healthy)
       시크릿 · 로그 그룹 · 실행 역할의 새 시크릿 읽기 권한 · 태스크 정의 rev 1(2 vCPU/4GB, 버전 태그) · 서비스 desired 1
       완료 기준: `https://dailystudy-workbook-api.yejicraft-cf.com/health` 200 · 실행 digest = 지정 태그 digest · prod 태스크 정의에 `:latest` 없음(**backend 이미지 한정** — cloudflared는 결정 표대로 `:latest`) · dev 서비스 변화 없음
-- [ ] **Phase 3 — 배포 스크립트**
+- [x] **Phase 3 — 배포 스크립트** — 2026-10-05 `1ee1d8b`, 케이스 16/16(자동 15 + 실측 E02-24 dev 번들 파일 단위 동일)
       `frontend-deploy.sh dev|prod`(API URL·Worker 이름 분기, 인자 없으면 실패) · 백엔드 prod 배포 스크립트(태그 인자 필수, `latest` 거부)
       완료 기준: dev 배포 결과 불변(라이브 번들 해시 확인) · prod 스크립트가 태그 없이·`latest`로 실행하면 거부
 - [ ] **Phase 4 — 프론트 prod 배포**
@@ -70,6 +72,7 @@
 > 작성: 2026-10-05 · 스펙: 이 계획서(스펙 문서 없음) · 검증: `/testrun E02`
 > Phase 1은 외부 리소스만 다뤄 코드가 없다 — 전부 실측(수동) 행. Phase 3(스크립트) 케이스는 착수 직전 `/testgen`에서 추가한다.
 > Phase 2도 외부 리소스만 — 실측 행. E02-07이 `CORS_ALLOWED_ORIGINS` JSON 형식 함정도 덮는다(형식이 틀리면 기동 실패라 200이 불가). E02-10 기준선은 `/implement` 착수 직전에 찍는다. 이미지 태그는 `prod-2cc43de`(2026-10-05 사용자 결정).
+> Phase 3: `backend/tests/test_deploy_scripts.py`(pytest) — 스크립트를 임시 git 저장소에 복사해 돌리고 `npm`·`npx`·`docker`·`aws`는 PATH 앞의 가짜 실행 파일(호출 기록). 가짜 `aws`는 실제 응답 형태를 돌려주고 `--query`·`--output text`를 jmespath로 흉내 낸다 — 스크립트의 AWS 호출 방식을 테스트가 정하지 않기 위해. E02-24는 라이브 배포 대신 로컬 번들 비교(지금 dev 배포 = 작업 중 F16 노출). worktree엔 venv가 없어 `../pdf-extractor/backend/venv`로 실행.
 > E02-04의 확인용 객체는 판정 직후 지운다(빈 상태 시작 결정). E02-05는 dev의 `localhost:5173`을 prod에 넣지 않는 것으로 판정한다.
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
@@ -89,6 +92,22 @@
 | E02-13 | prod API CORS | prod 프론트 오리진 preflight엔 허용 헤더, dev 프론트·`localhost:5173` 오리진엔 없음 | 정상 | PLAN § 결정 — "`CORS_ALLOWED_ORIGINS`는 prod 프론트만" | 2 | ✅ |
 | E02-14 | 로그 | backend·cloudflared 로그가 `/ecs/pdf-extractor-prod`에 쌓임 | 정상 | PLAN § 범위 — "로그 그룹 `/ecs/pdf-extractor-prod`" | 2 | ✅ |
 | E02-15 | prod 태스크 정의 family | ACTIVE 리비전이 서비스가 쓰는 것 하나뿐(실험 리비전 없음) | 회귀 | PLAN § 제약·함정 — "prod 실험 리비전은 반드시 deregister" | 2 | ✅ |
+| E02-16 | `frontend-deploy.sh` | 인자 없이 실행하면 실패하고 `npm`·`npx`를 부르지 않음 | 예외 | PLAN § 작업 단계 — "인자 없으면 실패" | 3 | ✅ |
+| E02-17 | `frontend-deploy.sh` | `dev`·`prod`가 아닌 인자(`stage`)도 실패하고 `npm`·`npx`를 부르지 않음 | 예외 | PLAN § 작업 단계 — "API URL·Worker 이름 분기" | 3 | ✅ |
+| E02-18 | `frontend-deploy.sh dev` | 빌드 시 `VITE_API_BASE_URL`이 `https://dailystudy-workbook-api-dev.yejicraft-cf.com/api` | 회귀 | PLAN § 작업 단계 — "dev 배포 결과 불변" | 3 | ✅ |
+| E02-19 | `frontend-deploy.sh dev` | `npx wrangler deploy`를 `--env` 없이 부름 | 회귀 | PLAN § 결정 — "dev는 지금 설정(`twilight-base-302d`) 그대로" | 3 | ✅ |
+| E02-20 | `frontend-deploy.sh prod` | 빌드 시 `VITE_API_BASE_URL`이 `https://dailystudy-workbook-api.yejicraft-cf.com/api` | 정상 | PLAN § 작업 단계 — "API URL·Worker 이름 분기" | 3 | ✅ |
+| E02-21 | `frontend-deploy.sh prod` | `npx wrangler deploy --env prod`로 부름 | 정상 | PLAN § 결정 — "배포는 `wrangler deploy --env prod`" | 3 | ✅ |
+| E02-22 | `frontend/wrangler.jsonc` | 최상위 `name`이 여전히 `twilight-base-302d` | 회귀 | PLAN § 결정 — "dev는 지금 설정(`twilight-base-302d`) 그대로" | 3 | ✅ |
+| E02-23 | `frontend/wrangler.jsonc` | `env.prod.name`이 `dailystudy-workbook-prod`이고 `env.prod.routes`에 커스텀 도메인 `dailystudy-workbook.yejicraft-cf.com` | 정상 | PLAN § 결정 — "이름 `dailystudy-workbook-prod`, 커스텀 도메인도 `env.prod`에 둔다" | 3 | ✅ |
+| E02-24 | dev 빌드 번들(실측, 수동) | 같은 커밋에서 옛 명령과 새 스크립트(dev)의 `dist/index.html`이 같음 | 실측 | PLAN § 작업 단계 — "dev 배포 결과 불변(라이브 번들 해시 확인)" | 3 | ✅ |
+| E02-25 | `backend-deploy-prod.sh` | 태그 없이 실행하면 실패하고 `docker`·`aws`를 부르지 않음 | 예외 | PLAN § 작업 단계 — "태그 인자 필수" | 3 | ✅ |
+| E02-26 | `backend-deploy-prod.sh` | 태그 `latest`면 실패하고 `docker`·`aws`를 부르지 않음 | 예외 | PLAN § 작업 단계 — "`latest` 거부" | 3 | ✅ |
+| E02-27 | `backend-deploy-prod.sh` | 태그가 `prod-<HEAD>`와 다르면 실패하고 `docker`·`aws`를 부르지 않음 | 예외 | PLAN § 결정 — "태그는 HEAD와 일치해야 하고" | 3 | ✅ |
+| E02-28 | `backend-deploy-prod.sh` | 커밋 안 된 변경이 있으면 실패하고 `docker`·`aws`를 부르지 않음 | 예외 | PLAN § 결정 — "커밋 안 된 변경이 있으면 거부" | 3 | ✅ |
+| E02-29 | `backend-deploy-prod.sh`(정상 실행) | `docker`·`aws` 호출 인자 어디에도 `pdf-extractor-backend:latest`가 없음(cloudflared `:latest`는 결정대로 예외) | 회귀 | CLAUDE.md § 계약 #37 — "`latest`는 건드리지 않는다" | 3 | ✅ |
+| E02-30 | `backend-deploy-prod.sh`(정상 실행) | 새 리비전의 backend 이미지는 `…:<태그>`이고, 나머지(cloudflared 이미지·시크릿·cpu/memory 등)는 현재 리비전과 같음 | 정상 | PLAN § 결정 — "현재 리비전을 복제해 이미지만 바꾼 새 리비전 등록" | 3 | ✅ |
+| E02-31 | `backend-deploy-prod.sh`(정상 실행) | 서비스를 새 리비전으로 갱신 → 안정화 대기 → 그 뒤에 이전 리비전 deregister(순서) | 정상 | PLAN § 결정 — "안정화 대기 → 이전 리비전 deregister" | 3 | ✅ |
 
 ## 제약·함정
 
