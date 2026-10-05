@@ -105,33 +105,9 @@ export async function savePdfToPicker(url, filename) {
     await downloadViaBlob(url, filename);
     return;
   }
-
-  let handle;
-  try {
-    // ① 먼저 창 — 사용자 제스처가 살아 있는 동안에.
-    handle = await globalThis.showSaveFilePicker({
-      suggestedName: filename,
-      types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
-    });
-  } catch (e) {
-    // 사용자가 창을 닫은 것은 실패가 아니다 — 조용히 끝낸다.
-    if (e?.name === "AbortError") return;
-    throw e;
-  }
-
-  // ② 그 다음 내용을 받는다. **쓰기 전에** 응답을 확인한다 —
-  //    안 보면 401/403/404 본문이 그대로 "PDF" 로 저장된다.
-  const blob = await fetchPdf(url);
-
-  // ③ 쓴다. createWritable() 은 고른 파일을 **이미 비우므로**, 실패하면 abort 로 되돌린다.
-  const writable = await handle.createWritable();
-  try {
-    await writable.write(blob);
-    await writable.close();
-  } catch (e) {
-    await writable.abort?.().catch(() => {});
-    throw e;
-  }
+  const handle = await pickSaveTarget(filename);
+  if (!handle) return;          // 사용자가 창을 닫았다 — 실패가 아니다
+  await writePdfToHandle(handle, url);
 }
 
 /** 미지원 브라우저(Safari·Firefox) 폴백 — blob 으로 받아야 `download` 가 먹는다. */

@@ -34,7 +34,7 @@ import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 import { toPreviewUrl } from "utils/previewUrl";
-import { savePdfToPicker } from "utils/savePdf";
+import { pickSaveTarget, savePdfToPicker, writePdfToHandle } from "utils/savePdf";
 import paths from "routes/paths";
 import { INFO_CHIP } from "utils/badges";
 
@@ -143,13 +143,18 @@ export default function HistoryPage() {
   const handleDownload = async (wb) => {
     if (!wb.result_job_id) return;
     setDownloadingId(wb.workbook_id);
+    // ⚠️ 창을 **getStatus 앞에서** 연다 — 뒤에 열면 그 await 동안 transient user activation
+    //    이 만료돼(Chrome 약 5초) 브라우저가 창을 거부한다. dev 는 터널+Fargate 라 콜드 스타트면
+    //    쉽게 넘긴다. Phase 2 가 생성 화면에서 피한 바로 그 함정이다(/review Phase 2 회차 0).
+    const name = `${wb.filename || wb.name || "workbook"}.pdf`;
+    const handle = await pickSaveTarget(name).catch(() => null);
     try {
       const data = await getStatus(wb.result_job_id);
       if (data.download_url) {
-        // REQ-F16 Phase 2 — 생성 화면과 같은 저장 위치 선택 창을 쓴다.
         // 맨 URL <a download> 는 크로스오리진에서 download 가 무시돼 **탭이 열렸고**,
         // Origin 없는 그 요청이 toDownloadUrl 이 피해 다니는 캐시 오염원이기도 했다.
-        await savePdfToPicker(data.download_url, `${wb.filename || wb.name || "workbook"}.pdf`);
+        if (handle) await writePdfToHandle(handle, data.download_url);
+        else await savePdfToPicker(data.download_url, name);
       } else { alert("다운로드 URL을 가져올 수 없습니다."); }
     } catch (e) { alert("다운로드 실패: " + e.message); }
     finally     { setDownloadingId(null); }

@@ -1,7 +1,7 @@
 /**
  * REQ-F16 Phase 2 — 클릭 한 번으로: 생성 전에 위치를 받아 두고 완료되면 바로 쓴다 (소스 스캔)
  *
- * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-21~22, F16-24~28)
+ * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-21~22, F16-24~31)
  *
  * `editor/index.jsx`·`history/index.jsx` 는 API mock 이 여럿 필요해 렌더 무대가 없다
  * (PLAN-B12 § 제약·함정, D11·REQ-30 과 같은 결론). 여기서 보려는 것도 **순서와 배선**이라
@@ -36,8 +36,11 @@ const generateBody = (code) => {
   const start = code.indexOf('const handleGenerate');
   expect(start).toBeGreaterThan(-1);
   const rest = code.slice(start);
-  const end = rest.indexOf('\n  const ', 10);
-  return end > 0 ? rest.slice(0, end) : rest;
+  // ⚠️ 끝을 못 찾으면 **파일 전체**를 훑어 어떤 부정/순서 단언도 의미를 잃는다
+  //    (계약 #25 "0건은 초록색" 계열 — /review Phase 2 회차 0 에서 실제로 그 상태였다).
+  const end = rest.indexOf('\n  };');
+  expect(end).toBeGreaterThan(0);
+  return rest.slice(0, end);
 };
 
 describe('생성 흐름 — 창이 먼저 (Phase 2)', () => {
@@ -58,6 +61,38 @@ describe('생성 흐름 — 창이 먼저 (Phase 2)', () => {
     const pick = body.indexOf('pickSaveTarget');
 
     expect(body.slice(pick, pick + 300)).toMatch(/return/);
+  });
+});
+
+describe('창 열기 실패·중복 (Phase 2)', () => {
+  it('[F16-29] 이중 클릭으로 생성이 두 번 돌지 않는다', () => {
+    // setGenerating 은 비동기라 picker await 동안 버튼이 살아 있다 — 동기 ref 가 필요하다.
+    const body = generateBody(editorSource());
+    const guard = body.indexOf('pickingRef.current');
+    const pick = body.indexOf('pickSaveTarget');
+
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(pick);
+  });
+
+  it('[F16-30] 창을 못 연 이유를 화면에 알린다', () => {
+    // 취소는 null 로 오므로 catch 에 오는 건 진짜 실패다 — 삼키면 미지원과 구분이 안 된다.
+    const body = generateBody(editorSource());
+    const pick = body.indexOf('pickSaveTarget');
+
+    expect(body.slice(pick, pick + 700)).toMatch(/catch[\s\S]*setSaveError/);
+  });
+});
+
+describe('결과 화면도 창이 먼저 (Phase 2)', () => {
+  it('[F16-31] 재다운로드는 getStatus 전에 창을 연다', () => {
+    // 뒤에 열면 그 await 동안 활성화가 만료돼 브라우저가 거부한다(dev 는 터널+Fargate).
+    const code = historySource();
+    const pick = code.indexOf('pickSaveTarget');
+    const status = code.indexOf('await getStatus(wb.result_job_id)');
+
+    expect(pick).toBeGreaterThan(-1);
+    expect(pick).toBeLessThan(status);
   });
 });
 

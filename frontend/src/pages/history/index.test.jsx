@@ -164,9 +164,9 @@ describe('생성 이력 — 아코디언 미리보기 (Phase 2)', () => {
     // (내부적으로 fetch)으로 바뀌었다. **의도("미리보기 URL을 재사용하지 않는다")는 그대로**이고
     // 관찰 지점만 앵커 href → fetch 대상으로 옮겼다. 지금은 `?dl=1` 로 캐시 키를 가른다.
     await renderLoaded([wb('wb-1', '중간고사')]);
-    global.fetch = vi.fn(async () => ({ ok: true, blob: async () => 'PDF' }));
-    global.URL.createObjectURL = vi.fn(() => 'blob:fake');
-    global.URL.revokeObjectURL = vi.fn();
+    // ⚠️ 직접 대입하면 vi.restoreAllMocks() 가 못 되돌려 뒤 케이스로 샌다 — stubGlobal 을 쓴다.
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, blob: async () => 'PDF' })));
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:fake'), revokeObjectURL: vi.fn() });
 
     fireEvent.click(screen.getByRole('button', { name: /다운로드/ }));
 

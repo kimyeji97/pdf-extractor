@@ -80,6 +80,8 @@ export default function EditorPage() {
   // 생성 시작 전에 받아 둔 저장 대상 (REQ-F16 Phase 2).
   // state 가 아니라 ref 인 이유: 완료 콜백이 읽기만 하고, 바뀌어도 다시 그릴 게 없다.
   const saveHandleRef = useRef(null);
+  // 이중 클릭 방어 — setGenerating 은 비동기라 picker await 동안 버튼이 살아 있다.
+  const pickingRef = useRef(false);
   const [generateError, setGenerateError] = useState("");
   const [exportJobId, setExportJobId] = useState(null);
 
@@ -126,7 +128,11 @@ export default function EditorPage() {
       setExportJobId(null);
       setGenerating(false);
       setGenerateStatus("error");
-      setGenerateError(n?.message || "PDF 생성에 실패했습니다.");
+      // 위치를 먼저 골랐으면 **브라우저가 그 시점에 이미 빈 파일을 만들어 뒀다**
+      //  (createWritable 이 아니라 창 확인이 만든다). 지울 방법이 없으니 알려 준다.
+      const left = saveHandleRef.current ? " 고른 자리에 빈 파일이 남았으니 지워 주세요." : "";
+      saveHandleRef.current = null;
+      setGenerateError((n?.message || "PDF 생성에 실패했습니다.") + left);
     },
   });
 
@@ -294,15 +300,26 @@ export default function EditorPage() {
     }
     setFilenameError("");
 
+    // ⚠️ **동기 가드가 먼저다.** 아래 await 동안 `generating` 이 false 면 버튼이 살아 있어
+    //    이중 클릭에 생성이 두 번 돈다(작업 2개·이력 2줄). state 는 비동기라 ref 로 막는다.
+    if (pickingRef.current) return;
+    pickingRef.current = true;
+
     // ⚠️ 저장 위치를 **생성보다 먼저** 받는다 — showSaveFilePicker 는 transient user
     //    activation 을 요구해서 폴링(수 초) 뒤에 열면 브라우저가 거부한다(계약·F16-02).
     //    취소하면 "안 만들겠다"로 읽어 생성도 하지 않는다 (계획서 § 결정).
     saveHandleRef.current = null;
+    const supported = typeof window.showSaveFilePicker === "function";
     try {
       saveHandleRef.current = await pickSaveTarget(`${trimmed}.pdf`);
-      if (!saveHandleRef.current && typeof window.showSaveFilePicker === "function") return;
-    } catch {
-      saveHandleRef.current = null;   // 미지원 브라우저 등 — 완료 후 버튼 경로로 간다
+      if (!saveHandleRef.current && supported) return;   // 취소 — 생성도 하지 않는다
+    } catch (e) {
+      // 취소(AbortError)는 pickSaveTarget 이 null 로 돌려주므로 여기 오는 건 **진짜 실패**다
+      // (활성화 상실·창 중복·보안 컨텍스트). 삼키면 "미지원 브라우저"와 구분이 안 된다.
+      saveHandleRef.current = null;
+      setSaveError(`저장 위치를 열지 못했습니다 (${e?.name || "오류"}). 생성 후 [다운로드]로 받아 주세요.`);
+    } finally {
+      pickingRef.current = false;
     }
 
     setGenerating(true);
