@@ -71,8 +71,12 @@ describe('목록 스크롤 배선 (Phase 2)', () => {
     const call = effect.indexOf('pageListScroll(');
     expect(call).toBeGreaterThan(-1);
 
-    // 호출보다 **앞에서** 이미 처리한 값과 비교해 걸러야 한다.
-    expect(effect.slice(0, call)).toMatch(/entryScrollRef\.current !==/);
+    // 호출보다 **앞에서** 이미 처리한 키와 비교해 걸러야 한다.
+    const before = effect.slice(0, call);
+    expect(before).toMatch(/entryScrollRef\.current !==/);
+    // ⚠️ 비교만 보면 **대입을 지운 구현**(가드가 영원히 참 → 매번 스크롤)이 통과한다
+    //    (/review 회차 1 변형 실측). 키를 실제로 찍는지까지 본다.
+    expect(before).toMatch(/entryScrollRef\.current\s*=\s*entryKey/);
   });
 
   it('[F18-09] 선택 변경 핸들러에서는 목록을 스크롤하지 않는다', () => {

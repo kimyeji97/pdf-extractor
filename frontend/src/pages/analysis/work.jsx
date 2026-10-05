@@ -96,7 +96,11 @@ export default function AnalysisWorkPage() {
   const viewerRef    = useRef(null);
   // 페이지 목록 스크롤 컨테이너 — 진입 시 선택된 쪽을 보이게 한다 (REQ-F18)
   const pageListRef  = useRef(null);
-  // 진입 스크롤을 이미 처리한 `?page=` 값 — **1회 가드** (REQ-F18, /review 회차 0)
+  // 진입 스크롤을 이미 처리한 키 `"<jobId>:<page>"` — **1회 가드** (REQ-F18, /review 회차 0)
+  // ⚠️ jobId 를 키에 넣는다. `?page=` 만 쓰면 **다른 문서에 같은 쪽 번호로 진입할 때**
+  //    스크롤이 조용히 안 될 수 있고, 지금 그게 안전한 유일한 이유가
+  //    `router.tsx` 의 `<Suspense key={location.pathname}>`(경로가 바뀌면 재마운트)다.
+  //    그 key 를 누가 걷어내면 에러도 테스트 실패도 없이 깨진다 (/review 회차 1).
   const entryScrollRef = useRef(null);
 
   // ── 페이지 로드 ───────────────────────────────────────
@@ -255,8 +259,9 @@ export default function AnalysisWorkPage() {
       //    ② 이 effect 는 `pages` 가 deps 라 **재감지 완료가 fetchPages 를 다시 부르면
       //       재실행된다**(work.jsx 의 onDone). 가드가 없으면 사용자가 다른 쪽을 보던
       //       중에 목록이 `?page=` 로 튄다 (/review 회차 0 의 (b))
-      if (entryScrollRef.current !== pageParam) {
-        entryScrollRef.current = pageParam;
+      const entryKey = `${jobId}:${pageParam}`;
+      if (entryScrollRef.current !== entryKey) {
+        entryScrollRef.current = entryKey;
         pageListScroll(pageListRef.current, target.page_num);
       }
     }
