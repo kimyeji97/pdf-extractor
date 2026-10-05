@@ -96,6 +96,8 @@ export default function AnalysisWorkPage() {
   const viewerRef    = useRef(null);
   // 페이지 목록 스크롤 컨테이너 — 진입 시 선택된 쪽을 보이게 한다 (REQ-F18)
   const pageListRef  = useRef(null);
+  // 진입 스크롤을 이미 처리한 `?page=` 값 — **1회 가드** (REQ-F18, /review 회차 0)
+  const entryScrollRef = useRef(null);
 
   // ── 페이지 로드 ───────────────────────────────────────
   const fetchPages = useCallback(async (jid) => {
@@ -240,14 +242,23 @@ export default function AnalysisWorkPage() {
     if (pdfUrlLoading || !pdfUrl) return;
     if (pages.length === 0) return;
 
-    const target = resolveTargetPage(pages, searchParams.get("page"));
+    const pageParam = searchParams.get("page");
+    const target = resolveTargetPage(pages, pageParam);
     if (target) {
       handlePageClick(target);
       // REQ-F18: 왼쪽 목록도 그 쪽이 보이게 한다 — 뷰어만 가면 "지금 몇 쪽인지"가
       // 목록에서 안 보인다(212쪽 문서에서 깊은 쪽으로 진입할 때 특히).
-      // ⚠️ **여기서만 부른다.** 선택 변경을 트리거로 삼으면 뷰어를 스크롤할 때마다
-      //    목록이 끌려간다 (계획서 § 제약·함정, F18-09 가 지킨다).
-      pageListScroll(pageListRef.current, target.page_num);
+      //
+      // ⚠️ **여기서만, 그리고 같은 `?page=` 로는 한 번만.** 두 가지를 다 지켜야 한다 —
+      //    ① 선택 변경을 트리거로 삼으면 뷰어를 스크롤할 때마다 목록이 끌려간다
+      //       (계획서 § 제약·함정, F18-09 가 지킨다)
+      //    ② 이 effect 는 `pages` 가 deps 라 **재감지 완료가 fetchPages 를 다시 부르면
+      //       재실행된다**(work.jsx 의 onDone). 가드가 없으면 사용자가 다른 쪽을 보던
+      //       중에 목록이 `?page=` 로 튄다 (/review 회차 0 의 (b))
+      if (entryScrollRef.current !== pageParam) {
+        entryScrollRef.current = pageParam;
+        pageListScroll(pageListRef.current, target.page_num);
+      }
     }
   }, [pages, pdfUrl, pdfUrlLoading, searchParams, handlePageClick]);
 

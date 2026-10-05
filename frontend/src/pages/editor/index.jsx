@@ -37,7 +37,6 @@ import SelectionOrderPanel from "components/SelectionOrderPanel";
 import WorkbookPreview from "components/WorkbookPreview";
 import {
   startExtractV2,
-  getStatus,
   getWorkbook,
   listTemplates,
 } from "api/client";

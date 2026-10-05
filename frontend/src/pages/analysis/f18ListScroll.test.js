@@ -44,13 +44,35 @@ const blockOf = (code, decl) => {
 };
 
 describe('목록 스크롤 배선 (Phase 2)', () => {
-  it('[F18-08] 진입 effect 안에서 목록 스크롤을 부른다', () => {
-    // 진입 effect 는 `?page=` 를 1회 처리하는 자리다 — resolveTargetPage 가 그 표지다.
-    const code = workSource();
-    const idx = code.indexOf('resolveTargetPage(pages');
-    expect(idx).toBeGreaterThan(-1);
+  /**
+   * 진입 effect 본문 — `resolveTargetPage(pages` 부터 **그 effect 의 deps 배열**까지.
+   *
+   * ⚠️ 고정 창(400자)을 쓰면 안 된다 — effect 는 197자에서 끝나는데 400자는
+   *    `handleViewerPageChange` 본문까지 닿아, **스크롤 호출을 그 핸들러 맨 위로 옮겨도
+   *    F18-08 이 통과**했다(/review 회차 0 실측). 구문으로 닫는다.
+   */
+  const entryEffect = (code) => {
+    const start = code.indexOf('resolveTargetPage(pages');
+    expect(start).toBeGreaterThan(-1);
+    const rest = code.slice(start);
+    const end = rest.indexOf('}, [pages,');
+    expect(end).toBeGreaterThan(0);
+    return rest.slice(0, end);
+  };
 
-    expect(code.slice(idx, idx + 400)).toMatch(/pageListScroll\(/);
+  it('[F18-08] 진입 effect 안에서 목록 스크롤을 부른다', () => {
+    expect(entryEffect(workSource())).toMatch(/pageListScroll\(/);
+  });
+
+  it('[F18-10] 같은 `?page=` 로는 한 번만 스크롤한다', () => {
+    // 이 effect 는 `pages` 가 deps 라 **재감지 완료가 fetchPages 를 다시 부르면 재실행된다**.
+    // 가드가 없으면 사용자가 다른 쪽을 보던 중에 목록이 `?page=` 로 튄다(/review 회차 0 의 (b)).
+    const effect = entryEffect(workSource());
+    const call = effect.indexOf('pageListScroll(');
+    expect(call).toBeGreaterThan(-1);
+
+    // 호출보다 **앞에서** 이미 처리한 값과 비교해 걸러야 한다.
+    expect(effect.slice(0, call)).toMatch(/entryScrollRef\.current !==/);
   });
 
   it('[F18-09] 선택 변경 핸들러에서는 목록을 스크롤하지 않는다', () => {
