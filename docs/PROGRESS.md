@@ -141,7 +141,7 @@
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | — | 🟡 **코드·테스트 완료**(케이스 20/20 · 프론트 358 · `/review` 3회차 결함 전부 닫음). **dev 육안 남음** — 파일 선택 창은 자동화 불가 |
-| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1 완료**(Cloudflare — R2 토큰·CORS·WAF 경로 제한·터널, 케이스 6/6). Phase 2(AWS 백엔드)부터 남음 |
+| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1·2 완료**(Cloudflare 케이스 6/6 · AWS 백엔드 9/9 — prod API `/health` 200, 이미지 `prod-2cc43de`). Phase 3(배포 스크립트)부터 남음 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -275,6 +275,17 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 - wrangler OAuth는 zone 권한이 `read`뿐이라 **WAF 규칙은 대시보드에서만** 만들 수 있다(R2 CORS·터널 조회는 가능)
 - 작업 트리를 F16 세션과 공유하고 있어(그쪽이 브랜치를 바꿈) E02는 **worktree `../pdf-extractor-e02` · 브랜치 `feat/E02-prod-environment`**로 분리했다. `backend/.env.prod`(gitignore)는 원래 디렉토리에 있다
 - 리뷰 생략 — 코드 커밋 없음(Phase 1은 외부 설정만)
+
+### REQ-E02 — Phase 2(AWS 백엔드) 완료 — prod API 가동 (🟡)
+
+- prod 백엔드가 떴다: 서비스 `pdf-extractor-backend-prod-svc`(desired 1) · 태스크 정의 `prod:1`(dev rev 8 복제, 이미지·시크릿 ARN·로그 그룹만 교체 + CORS 시크릿 추가) · 시크릿 `pdf-extractor/prod`(JWT 새로 발급) · 로그 `/ecs/pdf-extractor-prod`. **지금부터 상시 ~$85/월**
+- **이미지는 `backend-build.sh`로 안 만들었다** — 스크립트가 `:latest`도 덮어써 dev가 다음 재시작 때 그 이미지를 받는다. `prod-2cc43de` 태그만 `docker buildx`로 직접 푸시. 또 작업 worktree HEAD가 문서 커밋이라 스크립트로는 태그가 `prod-3fdf38a-dirty`가 됐을 것 → `2cc43de` 분리 worktree에서 빌드. `25ee3d2..2cc43de` 사이 backend 변경 0건이라 dev 실행 이미지와 내용이 같다
+- **cloudflared는 dev처럼 `:latest`**(사용자 결정) — 완료 기준 "`:latest` 없음"은 backend 이미지 한정으로 계획서에 명시. 착수 중 dev 태스크 정의를 보고서야 cloudflared도 `:latest`인 걸 알았다(실체 2026.9.3)
+- **CORS 시크릿은 dev에 없던 키**다 — dev는 코드 기본값(dev 프론트 + localhost)에 기대고 있었다. prod는 `CORS_ALLOWED_ORIGINS`를 JSON 배열로 넣어 기동 성공(형식이 틀리면 `/health`부터 안 뜬다)
+- 실측: `/health` 200 · 실행 digest = `prod-2cc43de`(`ca24e394…`) · CORS preflight prod 프론트만 허용(dev 프론트·localhost는 400) · 터널 healthy · dev는 착수 전 기준선과 같음(rev 8 · 같은 태스크 · 같은 digest)
+- 실행 역할은 dev·prod 공용 — 인라인 정책 Resource에 `prod*` 추가
+- dev 백엔드는 여전히 켜져 있다(10/03부터 desired 1) — 내릴지 사용자 결정 대기
+- 리뷰 생략 — 코드 커밋 없음(Phase 2도 외부 설정만)
 
 ## 2026-10-03
 

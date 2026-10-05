@@ -1,6 +1,6 @@
 # PLAN-E02 · 운영(prod) 환경 구성
 
-> 출처: 2026-10-05 세션 「운영환경구성」 · 작성: 2026-10-05 · 상태: 🟡 진행 (Phase 1 완료 2026-10-05)
+> 출처: 2026-10-05 세션 「운영환경구성」 · 작성: 2026-10-05 · 상태: 🟡 진행 (Phase 1·2 완료 2026-10-05)
 
 ## 배경
 
@@ -37,6 +37,8 @@
 | CI/CD | 이번 범위 제외 | 2026-10-05 사용자 결정 | 함께 구성 |
 | ECS | 같은 클러스터에 prod 서비스 추가, **2 vCPU / 4GB 상시**(~$85/월) | perf-infra-capacity § 5 권장 사양 | 1 vCPU / 2GB(분석 중 CPU 포화) · 클러스터 분리(이득 없음) |
 | 이미지 | **prod는 버전 태그 고정, `:latest` 금지** | `:latest`면 dev 배포 뒤 prod 태스크가 재시작될 때 미검증 이미지로 바뀐다 | dev와 같은 `:latest` |
+| cloudflared 이미지 | **dev처럼 `cloudflare/cloudflared:latest`** — `:latest` 금지는 backend 이미지에만 | 2026-10-05 사용자 결정(Phase 2 착수 중). 착수 시점 실체는 2026.9.3(dev 실행 digest `072c067d…`와 같음) | `2026.9.3` 고정(재시작 때 몰래 안 바뀌지만 보안 패치를 손으로 올려야 함) |
+| prod 이미지 빌드 | **`prod-2cc43de` 태그 하나만 푸시** — `backend-build.sh`를 안 쓰고 `docker buildx` 직접. `2cc43de` 분리 worktree(clean)에서 빌드 | `backend-build.sh`는 `:latest`도 덮어써 dev 재시작에 닿는다. 작업 worktree의 HEAD는 문서 커밋(`3fdf38a`)이라 스크립트로는 태그가 `prod-3fdf38a-dirty`가 된다 | `backend-build.sh prod` 그대로(dev `latest` 갱신) — prod 전용 경로는 Phase 3 스크립트 몫 |
 | 시크릿 | `pdf-extractor/prod` 신설 — **JWT 키 새로 발급**, `CORS_ALLOWED_ORIGINS`는 prod 프론트만 | dev 키 재사용 시 dev 토큰이 prod에서 통한다 | dev 시크릿 복제 |
 
 ## 미결 질문
@@ -48,9 +50,9 @@
 - [x] **Phase 1 — Cloudflare 리소스** — 2026-10-05, 케이스 6/6 (토큰·터널·WAF는 사용자 대시보드, CORS는 wrangler) (일부 사람 손: 토큰·터널은 대시보드)
       기존 객체 4개 확인 · 버킷 전용 R2 토큰 발급 · 버킷 CORS(dev와 같은 규칙, 오리진만 prod 프론트) · 공개 도메인 경로 제한 규칙 · 터널 생성 + public hostname `dailystudy-workbook-api…` → `http://localhost:8000`
       완료 기준: 새 토큰으로 `dailystudy` 목록 조회 성공 · **dev 버킷은 그 토큰으로 접근 거부** · 공개 도메인에서 `pdf-extractor/users/…` 요청은 차단, `uploads/`·`results/`는 통과 · 터널 토큰 확보
-- [ ] **Phase 2 — AWS 백엔드**
+- [x] **Phase 2 — AWS 백엔드** — 2026-10-05, 케이스 9/9 (태스크 정의 `prod:1` · 이미지 `prod-2cc43de` · 터널 healthy)
       시크릿 · 로그 그룹 · 실행 역할의 새 시크릿 읽기 권한 · 태스크 정의 rev 1(2 vCPU/4GB, 버전 태그) · 서비스 desired 1
-      완료 기준: `https://dailystudy-workbook-api.yejicraft-cf.com/health` 200 · 실행 digest = 지정 태그 digest · prod 태스크 정의에 `:latest` 없음 · dev 서비스 변화 없음
+      완료 기준: `https://dailystudy-workbook-api.yejicraft-cf.com/health` 200 · 실행 digest = 지정 태그 digest · prod 태스크 정의에 `:latest` 없음(**backend 이미지 한정** — cloudflared는 결정 표대로 `:latest`) · dev 서비스 변화 없음
 - [ ] **Phase 3 — 배포 스크립트**
       `frontend-deploy.sh dev|prod`(API URL·Worker 이름 분기, 인자 없으면 실패) · 백엔드 prod 배포 스크립트(태그 인자 필수, `latest` 거부)
       완료 기준: dev 배포 결과 불변(라이브 번들 해시 확인) · prod 스크립트가 태그 없이·`latest`로 실행하면 거부
@@ -67,6 +69,7 @@
 
 > 작성: 2026-10-05 · 스펙: 이 계획서(스펙 문서 없음) · 검증: `/testrun E02`
 > Phase 1은 외부 리소스만 다뤄 코드가 없다 — 전부 실측(수동) 행. Phase 3(스크립트) 케이스는 착수 직전 `/testgen`에서 추가한다.
+> Phase 2도 외부 리소스만 — 실측 행. E02-07이 `CORS_ALLOWED_ORIGINS` JSON 형식 함정도 덮는다(형식이 틀리면 기동 실패라 200이 불가). E02-10 기준선은 `/implement` 착수 직전에 찍는다. 이미지 태그는 `prod-2cc43de`(2026-10-05 사용자 결정).
 > E02-04의 확인용 객체는 판정 직후 지운다(빈 상태 시작 결정). E02-05는 dev의 `localhost:5173`을 prod에 넣지 않는 것으로 판정한다.
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
@@ -77,6 +80,15 @@
 | E02-04 | 공개 도메인 | `pdf-extractor/uploads/`·`pdf-extractor/results/` 아래 확인용 객체가 200(규칙에 막히지 않음) | 회귀 | PLAN § 작업 단계 — "`uploads/`·`results/`는 통과" | 1 | ✅ |
 | E02-05 | `dailystudy` 버킷 CORS | 허용 메서드·헤더·노출 헤더·max-age가 dev와 같고, 오리진만 prod 프론트(`https://dailystudy-workbook.yejicraft-cf.com`) | 실측 | PLAN § 작업 단계 — "버킷 CORS(dev와 같은 규칙, 오리진만 prod 프론트)" | 1 | ✅ |
 | E02-06 | 터널 `pdf-extractor-prod` | 터널이 있고 public hostname `dailystudy-workbook-api.yejicraft-cf.com` → `http://localhost:8000`, 토큰 확보 | 실측 | PLAN § 작업 단계 — "터널 토큰 확보" | 1 | ✅ |
+| E02-07 | prod API | 터널 경유 `https://dailystudy-workbook-api.yejicraft-cf.com/health`가 200 | 실측 | PLAN § 작업 단계 — "`https://dailystudy-workbook-api.yejicraft-cf.com/health` 200" | 2 | ✅ |
+| E02-08 | prod 실행 태스크 | backend 컨테이너 실행 이미지 digest = ECR `prod-2cc43de` 태그 digest | 실측 | PLAN § 작업 단계 — "실행 digest = 지정 태그 digest" | 2 | ✅ |
+| E02-09 | prod 태스크 정의 | backend 이미지 참조가 버전 태그이고 `:latest`가 아님 | 불변식 | PLAN § 작업 단계 — "prod 태스크 정의에 `:latest` 없음" | 2 | ✅ |
+| E02-10 | dev 서비스 | 착수 직전 dev 상태(태스크 정의 rev 8 · desired · 실행 digest)와 끝난 뒤 상태가 같음 | 불변식 | PLAN § 작업 단계 — "dev 서비스 변화 없음" | 2 | ✅ |
+| E02-11 | prod 태스크 정의·서비스 | cpu 2048 / memory 4096, 서비스 desired 1 · running 1 | 정상 | PLAN § 결정 — "2 vCPU / 4GB 상시" | 2 | ✅ |
+| E02-12 | prod 시크릿 | `JWT_SECRET_KEY`가 dev 값·코드 기본값과 다름(값은 출력하지 않고 비교만) | 정상 | PLAN § 결정 — "JWT 키 새로 발급" | 2 | ✅ |
+| E02-13 | prod API CORS | prod 프론트 오리진 preflight엔 허용 헤더, dev 프론트·`localhost:5173` 오리진엔 없음 | 정상 | PLAN § 결정 — "`CORS_ALLOWED_ORIGINS`는 prod 프론트만" | 2 | ✅ |
+| E02-14 | 로그 | backend·cloudflared 로그가 `/ecs/pdf-extractor-prod`에 쌓임 | 정상 | PLAN § 범위 — "로그 그룹 `/ecs/pdf-extractor-prod`" | 2 | ✅ |
+| E02-15 | prod 태스크 정의 family | ACTIVE 리비전이 서비스가 쓰는 것 하나뿐(실험 리비전 없음) | 회귀 | PLAN § 제약·함정 — "prod 실험 리비전은 반드시 deregister" | 2 | ✅ |
 
 ## 제약·함정
 
@@ -84,6 +96,7 @@
 - **access 쿠키는 `SameSite=Lax` · domain 미지정(API 호스트 전용)** — 프론트·API가 같은 사이트(`yejicraft-cf.com`)라서 `<img>` 요청에 쿠키가 실린다. 도메인을 다른 사이트로 바꾸면 썸네일이 전부 401(계약 #31, REQ-B15)
 - **콘솔 "서비스 업데이트"는 최신 활성 리비전을 고른다** — prod 실험 리비전은 반드시 deregister(CLAUDE.md 배포 상태, 2026-09-28)
 - **프론트 빌드는 셸 env로 API URL을 덮는다** — `.env.local`이 localhost라 안 덮으면 prod에 localhost가 박힌다
+- **실행 역할 `pdf-extractor-ecs-execution-role`은 dev·prod 공용** — 인라인 정책 `secrets-manager-read`의 Resource에 `pdf-extractor/dev*`·`pdf-extractor/prod*` 둘이 있다. 정책을 고칠 때 한쪽만 남기면 그 환경 태스크가 시크릿을 못 읽어 기동 실패
 - **`wrangler deploy --temporary` 금지** — 임시 계정의 다른 Worker로 배포된다
 - **prod env 파일은 `backend/.env.prod`** — `.env.*` 무시 규칙에 걸리는지 커밋 전 `git check-ignore`로 확인(계약 #24 — `.env.dev` 공개 노출 이력)
 - **`dailystudy` 버킷은 다른 용도와 공유한다**(환불 정책 공개) — 버킷 단위 설정(CORS·수명 주기·공개 도메인)을 바꾸면 `docs/` 공개에도 닿는다. 앱 쪽 규칙은 `/pdf-extractor/` 안으로만 건다

@@ -363,6 +363,8 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ### 배포 상태 (세션마다 필요한 사실)
 
+⚠️ **prod 백엔드가 2026-10-05부터 상시 가동 중이다**(REQ-E02 진행 중) — 서비스 `pdf-extractor-backend-prod-svc` · 태스크 정의 `pdf-extractor-backend-prod:1` · 이미지 **`prod-2cc43de`(버전 태그 고정, `:latest` 금지)** · 시크릿 `pdf-extractor/prod` · 로그 `/ecs/pdf-extractor-prod` · API `https://dailystudy-workbook-api.yejicraft-cf.com` · R2 `dailystudy`(prefix `pdf-extractor`). **dev처럼 desired 0으로 내리지 말 것.** prod 프론트는 아직 없다. 상세는 [PLAN-E02](docs/plans/PLAN-E02-prod-environment.md).
+
 ⚠️ **dev 백엔드는 2026-10-03 main `25ee3d2`(F17까지, 이미지 태그 `f17-25ee3d2` = `:latest`)로 배포됐고 지금 `desired 1`로 켜져 있다**(내릴지 사용자 결정 대기).
 (F17은 `pdf_service`가 바뀌어 **백엔드 배포가 따라왔다** — B25처럼 프론트 전용이 아니었다. 실행 digest `04af8fb8…`가 ECR `f17-25ee3d2`와 일치함을 확인했다.)
 (**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
