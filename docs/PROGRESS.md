@@ -141,7 +141,7 @@
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | — | 🟡 **코드·테스트 완료**(케이스 20/20 · 프론트 358 · `/review` 3회차 결함 전부 닫음). **dev 육안 남음** — 파일 선택 창은 자동화 불가 |
-| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1~5 완료**(Cloudflare 6/6 · AWS 백엔드 9/9 — prod API `/health` 200, 이미지 `prod-2cc43de` · 배포 스크립트 16/16 `1ee1d8b` · prod 프론트 5/5 — `https://dailystudy-workbook.yejicraft-cf.com`). end-to-end 8/8). 리뷰 회차 0 — (b) 문서 2건 수정 뒤 재리뷰 대기 |
+| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -336,6 +336,29 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
     - 결정: TODO
 - 리뷰 (b) 문서 2건(CLAUDE.md:316·376)은 이 커밋에서 고쳤다. TODO 4건은 루트 `TODO.md`로(파일 신설). **CLAUDE.md는 `docs/` 밖이라 이 커밋이 E02의 새 "마지막 코드 커밋"이 되어 리뷰 sha(5c4ac04)가 낡는다 → 🟡 유지, `/review E02` 재실행으로 (b) 2건 닫힘 확인 후 ✅**
 - 리뷰 범위 메모: `/code-review`가 짚은 circuit breaker 롤백 시나리오는 prod 서비스 breaker가 꺼져 있어(`enable: false`) 해당 없음 · `workers.dev` 노출은 계정에 서브도메인이 없어 재현 안 됨
+
+### REQ-E02 — 재리뷰 회차 1 → ✅
+
+- 리뷰: E02 @ 2e75c3d — (b) 1 · (c) 4 · nit 1
+  - (b): [scripts/deploy/backend-deploy-prod.sh:70] 안정화 대기 실패·시간 초과 시 이전 리비전이 ACTIVE로 남고 재실행하면 영영 정리 안 됨 · PRIMARY 배포가 NEW인지 확인 안 함 · 가설
+    - 방안: A deregister 전 PRIMARY 배포 = NEW 확인 + 실패 시 남은 상태 안내 (+6줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/backend-deploy-prod.sh:73] 안정화 직후 이전 리비전 deregister → 즉시 롤백 대상 소실(INACTIVE로는 update-service 불가). 계획서 결정의 부작용 · 가설
+    - 방안: A N-1 유지·N-2 정리로 계획 변경 (/workplan → +5줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/frontend-deploy.sh:18] prod 배포에 미커밋 변경 거부·커밋 기록 없음 — 계획서는 백엔드만 정함 · 가설
+    - 방안: A prod일 때 미커밋 변경 거부 (/workplan → +3줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [scripts/deploy/backend-deploy-prod.sh:27] HEAD가 origin/main 조상인지 확인 안 함(막으면 브랜치 핫픽스도 막힘) · 가설
+    - 방안: A origin/main 조상일 때만 허용 (/workplan → +3줄) · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (c): [CLAUDE.md:100·349] 루트 `TODO.md` 신설로 TODO 파일이 둘인데 CLAUDE.md는 `docs/TODO.md`만 가리킴 — 다음 세션이 리뷰 TODO를 놓칠 수 있음 · 실측
+    - 방안: A CLAUDE.md에 두 파일 역할 1줄 (/checkpoint, 재리뷰 1회 추가) · TODO · 감수 — 추천 A
+    - 결정: 감수
+- 직전 (b) CLAUDE.md:316·376 → 닫힘(2e75c3d). 재리뷰는 delta(`5c4ac04..2e75c3d`)만 독립 에이전트로
+- ⚠️ **"마지막 코드 커밋"에 문서 커밋이 잡혔다** — 게이트 명령이 `docs/` 밖 변경을 코드로 보는데 이 REQ는 `CLAUDE.md`(계약·배포 상태)를 `docs:` 커밋에서 여러 번 고쳤다. 그래서 리뷰 (b)를 문서로 고친 커밋이 sha를 밀어 재리뷰가 한 번 더 필요했다. CLAUDE.md를 바꾸는 REQ는 리뷰 전에 CLAUDE.md 수정을 끝내 둘 것
+- ✅ 조건: 리뷰 sha `2e75c3d` = 마지막 코드 커밋 · 수정 결정 2건 닫힘 · 나머지 TODO 4·감수 1(빈 결정 없음). TODO 4건은 이미 루트 `TODO.md`에 있다(중복 추가 안 함)
+- ⚠️ CLAUDE.md 배포 상태 줄의 "REQ-E02 진행 중"은 이 커밋에서 고치지 않았다 — 고치면 그 커밋이 다시 마지막 코드 커밋이 된다. 머지 뒤 E02를 메시지에 안 넣은 커밋으로 정리
 
 ## 2026-10-03
 
