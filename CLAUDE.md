@@ -99,7 +99,9 @@ pdf-extractor/
 │   ├── infra/                              # 인프라 명세 및 배포 가이드
 │   └── TODO.md                             # 남은 작업 순서표 (미착수·후속·신규 항목)
 │
-├── scripts/deploy/backend-build.sh         # 백엔드 빌드·ECR 푸시 (scripts/ops/ = 운영 스크립트)
+├── scripts/deploy/backend-build.sh         # dev 백엔드 빌드·ECR 푸시(:latest 갱신) (scripts/ops/ = 운영 스크립트)
+├── scripts/deploy/backend-deploy-prod.sh   # prod 백엔드 빌드·배포 한 번에 — `prod-<HEAD>` 태그만 (계약 #37)
+├── scripts/deploy/frontend-deploy.sh       # 프론트 빌드·배포 `dev|prod` (인자 필수)
 ├── QUICKSTART.md                           # 로컬 개발 셋업 가이드
 └── README.md                               # 프로젝트 개요
 ```
@@ -311,7 +313,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 | `B` | 버그 수정 (Bug) | REQ-B01~B27 |
 | `C` | 보완 기능 (Complement) | REQ-C01~C11 |
 | `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D11 |
-| `E` | 실험·인프라성 기능 (Enhancement) | REQ-E01 |
+| `E` | 실험·인프라성 기능 (Enhancement) | REQ-E01~E02 |
 | `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F17 |
 | `P` | 성능 (Performance) | REQ-P01~P06 |
 
@@ -335,7 +337,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-10-02 기준 각 prefix 다음 번호: `B28`(B25·B26·F16·F17은 2026-10-02 계획서만, B27 ✅), `C12`, `D12`, `F18`, `P07`, 숫자 `31`.
+2026-10-02 기준 각 prefix 다음 번호: `B28`(B25·B26·F16·F17은 2026-10-02 계획서만, B27 ✅), `C12`, `D12`, `F18`, `P07`, `E03`(E02 2026-10-05 prod 환경), 숫자 `31`.
 (2026-09-30에 착수 대기 13건을 **B21·B22·F14·F15·C10·C11·P06**으로 예약했다 — 전부 미착수이고 REQ-28은 ⏸.
 예약분은 PROGRESS "미착수 — 번호만 부여된 것" 표가 단일 출처다. 번호는 완료돼도 재사용하지 않는다)
 
@@ -363,6 +365,8 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ### 배포 상태 (세션마다 필요한 사실)
 
+⚠️ **prod 백엔드가 2026-10-05부터 상시 가동 중이다**(REQ-E02 ✅ 2026-10-05) — 서비스 `pdf-extractor-backend-prod-svc` · 태스크 정의 `pdf-extractor-backend-prod:1` · 이미지 **`prod-2cc43de`(버전 태그 고정, `:latest` 금지)** · 시크릿 `pdf-extractor/prod` · 로그 `/ecs/pdf-extractor-prod` · API `https://dailystudy-workbook-api.yejicraft-cf.com` · R2 `dailystudy`(prefix `pdf-extractor`). **dev처럼 desired 0으로 내리지 말 것.** prod 프론트는 2026-10-05 Worker **`dailystudy-workbook-prod`**(`wrangler.jsonc` `env.prod`, 커스텀 도메인 `https://dailystudy-workbook.yejicraft-cf.com`, Version `e46e4d4e`, 앱 코드 = `2cc43de`)로 배포됐다 — `frontend-deploy.sh prod`. 상세는 [PLAN-E02](docs/plans/PLAN-E02-prod-environment.md).
+
 ⚠️ **dev 백엔드는 2026-10-03 main `25ee3d2`(F17까지, 이미지 태그 `f17-25ee3d2` = `:latest`)로 배포됐고 지금 `desired 1`로 켜져 있다**(내릴지 사용자 결정 대기).
 (F17은 `pdf_service`가 바뀌어 **백엔드 배포가 따라왔다** — B25처럼 프론트 전용이 아니었다. 실행 digest `04af8fb8…`가 ECR `f17-25ee3d2`와 일치함을 확인했다.)
 (**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
@@ -371,7 +375,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
 ⚠️ **dev 프론트는 2026-10-05 main `c686346` 빌드(F16 Phase 2까지, Worker Version `4bc82b1b`)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
-"배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh`)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
+"배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh dev` — 2026-10-05부터 `dev|prod` 인자 필수)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**
 ⚠️ **그러나 이 줄을 믿고 배포 여부를 판정하지 말 것 — 수동 배포라 기록이 뒤처지기도 앞서기도 한다.**
 2026-10-03에 B26을 배포하려 했더니 전날 머지와 같은 분에 이미 떠 있었고(이 줄은 "B27까지", PROGRESS는 "배포 전"이었다) 재배포가 `No updated asset
@@ -670,6 +674,20 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     자격을 전부 붙이면 R2 버킷 CORS 에 `AllowCredentials` 가 없어 브라우저가 응답을 통째로 막고,
     presigned 에 `Authorization` 을 붙이면 400 이다(실측 — F16 리뷰 회차 1에서 주 경로가 깨졌다).
     **`client.js` 밖에 raw fetch 를 만들면 그 파일에 맞는 가드를 직접 둘 것** — B23-03 은 거기까지 안 본다.
+
+### 배포 (prod)
+
+37. **prod 태스크 정의의 backend 이미지는 버전 태그로 고정한다 — `:latest` 금지** — dev는 `:latest`라 `backend-build.sh`가
+    `latest`를 덮어쓰면 다음 재시작 때 따라간다. prod가 같은 태그를 쓰면 **dev에 올린 미검증 이미지가 prod 태스크 재시작
+    (장애 복구·스케일)에 조용히 실린다** — 배포한 적 없는데 바뀐다. 그래서 prod 이미지는 `prod-<커밋>` 태그만 푸시하고
+    `latest`는 건드리지 않는다. cloudflared는 예외로 `:latest`(2026-10-05 사용자 결정 — 보안 패치 자동 수용).
+    ⚠️ 콘솔 "서비스 업데이트"는 최신 활성 리비전을 고르므로 실험 리비전은 deregister(배포 상태 절, 2026-09-28). (REQ-E02)
+38. **R2 공개 URL을 만드는 경로를 새로 추가하면 prod WAF 허용 경로도 함께 고친다** — prod 공개 도메인
+    `dailystudy.yejicraft-cf.com`은 WAF 규칙 `dailystudy-prod-r2-public-paths`가 `/pdf-extractor/` 안에서
+    **`uploads/`·`results/`만** 통과시킨다(`users/{id}.json` 등 버킷 전체가 무인증·무만료로 열리는 걸 막으려고).
+    지금 공개 URL을 만드는 코드는 `generate_download_presigned_url` 호출부(원본·결과) 둘뿐이다. 썸네일 등을 공개 URL로
+    바꾸면 **dev엔 규칙이 없어 dev·테스트 모두 녹색인데 prod에서만 403**이 난다. `R2_ROOT_PREFIX`를 바꿔도 같다.
+    규칙은 대시보드에서만 고친다(wrangler OAuth는 zone `read`뿐). 같은 버킷의 `docs/`(환불 정책 공개)는 규칙 밖이다. (REQ-E02)
 
 ## 상시 이슈
 
