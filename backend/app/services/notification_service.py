@@ -122,21 +122,41 @@ def emit_status(job: JobStatusFile) -> None:
         logger.warning("[notification] 상태 푸시 실패(무시) | job_id=%s error=%s", job.job_id, e)
 
 
-def emit_export(job: JobStatusFile, workbook_name: Optional[str] = None) -> None:
+def emit_export(
+    job: JobStatusFile,
+    workbook_name: Optional[str] = None,
+    meta_failed: bool = False,
+) -> None:
     """
     문제집 생성 완료/실패 알림.
 
     ⚠️ **`workbook_name` 유무로 가르지 않는다.** 그 분기(계약 #23)는 *메타 저장 주체*를
     정한 것이지 알림과는 목적이 다르다 — 안쪽에 넣으면 구 프론트로 만든 문제집은
     영원히 알림이 안 온다.
+
+    `meta_failed` 는 **PDF 는 만들어졌는데 문제집 메타만 못 쓴** 경우다 (REQ-B29).
+    상태는 `DONE` 이지만 **결과 화면 목록이 문제집 행 기준**이라 그 PDF 가 안 뜨고,
+    REQ-F18 이 생성 화면 다운로드를 걷어내 받을 길이 없다 — 그래서 성공이라 하면 안 된다.
+    ⚠️ 호출부가 이 값을 **따로 넘겨야 한다.** `job.error` 로는 못 가른다 — 그 필드는
+    생성 실패 경로에서도 채워져서, 신호로 쓰면 **문구가 뒤바뀐다.**
     """
     failed = job.status == JobStatus.FAILED
+    if failed:
+        message = "문제집 생성에 실패했습니다."
+    elif meta_failed:
+        message = "PDF는 만들어졌지만 생성 이력에 등록하지 못했습니다. 다시 만들어 주세요."
+    else:
+        message = "문제집 생성이 완료되었습니다."
     emit(
         job_id=job.job_id,
         kind=NotificationKind.EXPORT,
-        severity=NotificationSeverity.ERROR if failed else NotificationSeverity.SUCCESS,
+        severity=(
+            NotificationSeverity.ERROR
+            if failed or meta_failed
+            else NotificationSeverity.SUCCESS
+        ),
         title=workbook_name or job.filename,
-        message="문제집 생성에 실패했습니다." if failed else "문제집 생성이 완료되었습니다.",
+        message=message,
     )
 
 
