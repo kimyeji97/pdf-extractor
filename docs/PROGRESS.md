@@ -141,7 +141,7 @@
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | 2026-10-05 | ✅ Phase 1·2 (케이스 31/31 · 각 `/review` 3회차 · **dev 육안 4건 확인** — 한 번 클릭·창 전환·재다운로드·취소) |
-| REQ-F18 | 생성/결과 업무 분리 — 생성 화면 다운로드 제거 · 진입 시 페이지 목록 스크롤 | [plan](plans/PLAN-F18-split-download-and-list-scroll.md) | — | 🟡 코드·테스트 완료(케이스 10/10 · 프론트 368 · `/review` 2회차). **dev 육안 남음** |
+| REQ-F18 | 생성/결과 업무 분리 — 생성 화면 다운로드 제거 · 진입 시 페이지 목록 스크롤 | [plan](plans/PLAN-F18-split-download-and-list-scroll.md) | 2026-10-05 | ✅ 케이스 10/10 · `/review` 2회차 · **dev 육안 3건 확인** |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 
@@ -278,6 +278,8 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 - 리뷰: F18 @ 1a3a8a3 — (b) 0 · (c) 0 · nit 3 · 이연 2
   - 이연: [frontend/src/pages/analysis/work.jsx:248] 재감지 완료 시 뷰어가 `?page=` 로 튄다 — `handlePageClick` 이 1회 가드 밖(원인 REQ-F12, F18 이전과 동일 동작)
   - 이연: [frontend/src/pages/editor/index.jsx:530] `[결과로 이동]` 이 basket·filename·layout·템플릿 선택을 전부 날린다
+- **dev 육안 3건 확인 완료 (사용자, 2026-10-05)** — ①생성 시 **저장 위치 창이 뜨지 않고** 완료 Alert 이 `[결과로 이동]` 으로 바뀜 ②현황판에서 깊은 쪽 진입 시 목록이 **가운데**로 옴 ③**뷰어를 스크롤해도 목록이 안 끌려감**(가장 위험했던 자리). **REQ-F18 ✅**
+- **prod 육안 확인 (사용자, 2026-10-05)** — prod 에서도 PDF 라벨 한글이 온전함(B28)
 - 프론트 **83 파일 · 368 케이스 통과** · `npm run build` 통과(렌더 무대 없는 화면이라 필수)
 
 ### REQ-B28 — 생성 PDF 의 한글이 조용히 사라진다 (🟡 코드·테스트 완료 · dev 육안 남음)
