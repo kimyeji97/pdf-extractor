@@ -26,12 +26,18 @@ const workSource = () => {
   return code;
 };
 
-/** 이름 있는 선언의 본문 — 다음 최상위 선언(`\n  const `) 전까지. */
+/**
+ * 이름 있는 선언의 본문 — **들여쓰기 2칸으로 시작하는 다음 최상위 구문** 전까지.
+ *
+ * ⚠️ `\n  const ` 로만 끊으면 안 된다 — `handlePageClick` 다음이 `useEffect` 라
+ *    **진입 effect 까지 삼켜** 부정 단언이 거짓 실패한다(/testrun 에서 실측).
+ *    `const`·`useEffect`·`function` 중 먼저 오는 것으로 끊는다.
+ */
 const blockOf = (code, decl) => {
   const start = code.indexOf(decl);
   expect(start).toBeGreaterThan(-1);
   const rest = code.slice(start + decl.length);
-  const end = rest.indexOf('\n  const ');
+  const end = rest.search(/\n {2}(const |useEffect\(|function )/);
   // 끝을 못 찾으면 파일 전체를 훑어 부정 단언이 의미를 잃는다 (계약 #25 "0건은 초록색").
   expect(end).toBeGreaterThan(0);
   return rest.slice(0, end);
