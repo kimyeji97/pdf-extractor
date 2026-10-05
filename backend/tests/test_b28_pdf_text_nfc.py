@@ -17,6 +17,7 @@ REQ-B28 Phase 1 — PDF 에 그리는 사용자 문자열을 NFC 로 정규화�
 ⚠️ **미리보기로는 영원히 검증되지 않는다.** 브라우저는 NFD 를 폰트 폴백으로
    조합해 정상 렌더한다 — dev 에서 실제로 미리보기는 멀쩡한데 PDF 만 깨져 있었다.
 """
+import ast
 import unicodedata as ud
 
 import fitz
@@ -172,19 +173,98 @@ def test_B28_06_every_draw_site_normalizes():
     이 프로젝트의 반복된 실패가 **"절반만 고쳤다"** 다(F16·F17 리뷰 회차마다 나왔다).
     그리는 자리가 둘이라 라벨만 고치고 각주를 빼먹기 쉽고, **세 번째 자리가
     생기면** 동작 케이스(B28-01·02)는 그걸 못 본다.
+
+    ⚠️ **문자열 검색으로 하지 않는다**(`/review` 회차 0 의 (b)). `"tw.append("` 를
+       `startswith` 로 찾으면 **docstring 의 산문까지 draw site 로 센다** — 실제로
+       `_nfc` 의 주석이 세 번째 "자리"로 잡혀 분모 가드를 부풀렸고, 창을 `fontsize`
+       로 끊은 탓에 **`fontsize=` 없는 새 draw site 가 녹색으로 통과**했다(변형 실측).
+       `ast` 로 **실제 호출만** 고른다.
     """
     source = (
         __import__("pathlib").Path(__file__).resolve().parents[1]
         / "app" / "services" / "pdf_service.py"
     ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
 
-    sites = [i for i in range(len(source)) if source.startswith("tw.append(", i)]
+    # `tw = fitz.TextWriter(...)` 로 묶인 이름들 — 변수명을 `tw` 로 가정하지 않는다.
+    writers = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+        and isinstance(node.value, ast.Call)
+        and ast.unparse(node.value.func).endswith("TextWriter")
+    }
+    assert writers, "TextWriter 를 만드는 자리를 못 찾았다 — 무대가 틀렸다"
+
+    sites = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "append"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id in writers
+    ]
 
     # 0건이면 어떤 구현도 통과한다 — 분모부터 고정한다 (계약 #25 "0건은 초록색").
     assert len(sites) >= 2, f"그리는 자리를 못 찾았다 (찾은 수: {len(sites)})"
 
-    for start in sites:
-        end = source.index(")", source.index("fontsize", start))
-        assert "_nfc(" in source[start:end], (
-            f"정규화를 거치지 않는 tw.append( 가 있다:\n{source[start:end]}"
+    for call in sites:
+        drawn = [
+            arg for arg in call.args
+            if isinstance(arg, ast.Call) and ast.unparse(arg.func) == "_nfc"
+        ]
+        assert drawn, (
+            f"정규화를 거치지 않는 draw site 가 있다 "
+            f"({call.lineno}줄): {ast.unparse(call)}"
         )
+
+
+def test_B28_07_nfd_renders_at_same_font_size_as_nfc(tmp_path):
+    """[B28-07] NFD 입력이 NFC 와 **같은 폰트 크기**로 그려진다.
+
+    폭 계산(`text_length`)까지 정규화 후 문자열로 맞춰야 한다 — NFD 는 자모가
+    낱자로 세어져 **79% 넓게 측정되고**(실측 570 vs 318pt) REQ-B09 자동 축소가
+    과하게 걸려 라벨이 쓸데없이 작아진다. 글자가 맞는지만 보는 B28-01 로는
+    못 잡는다(되돌려도 녹색이다).
+
+    근거: PLAN § 결정 — "재는 문자열과 그리는 문자열이 달라지면 새 불일치가 생긴다"
+
+    ⚠️ **레이아웃은 `4단`이어야 한다.** `가로 2단`은 셀이 한 칸이라 폭이 ~571pt 고,
+       이 라벨은 NFD 로 재도 570.3pt 라 **축소가 아예 안 걸려 양쪽 다 14.0** 이 된다
+       — 그 무대에서는 폭 계산을 되돌려도 통과했다(실측). 4단은 셀이 좁아
+       **11.92 vs 7.80** 으로 갈린다.
+    """
+    def label_size(name: str) -> float:
+        out = str(tmp_path / f"size_{len(name)}.pdf")
+        _build_grid_pdf(
+            [
+                SourcedCropRegion(
+                    src_path=_source_pdf(tmp_path),
+                    page_index=0,
+                    x0=0, y0=0, x1=595, y1=400,
+                    source_label=build_source_label(
+                        index=1, workbook_name=name, filename="",
+                        page_num=3, question_name="문항 4",
+                    ),
+                    scale=1.0,
+                )
+            ],
+            out,
+            "4단",
+        )
+        doc = fitz.open(out)
+        sizes = [
+            span["size"]
+            for block in doc[0].get_text("dict")["blocks"]
+            for line in block.get("lines", [])
+            for span in line["spans"]
+            if "번)" in span["text"]
+        ]
+        doc.close()
+        assert sizes, "라벨 span 을 못 찾았다 — 무대가 틀렸다"
+        return round(sizes[0], 3)
+
+    assert label_size(NAME_NFD) == label_size(NAME_NFC)
