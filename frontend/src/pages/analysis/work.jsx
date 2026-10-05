@@ -42,6 +42,7 @@ import { isRefreshBlocked } from "utils/jobStatus";
 import { columnsForWidth } from "utils/questionGrid";
 import { resolveDocumentName, resolveFileSubtitle } from "utils/documentName";
 import { resolveTargetPage } from "utils/targetPage";
+import { pageListScroll } from "utils/pageListScroll";
 import { detectionNotice } from "utils/detectionNotice";
 import { INFO_CHIP, MARK_COLOR, RESULT_COLOR } from "utils/badges";
 import { tintBg } from "theme/tint";
@@ -93,6 +94,8 @@ export default function AnalysisWorkPage() {
   const [addingManual, setAddingManual]         = useState(false);
   const dragStateRef = useRef(null);                            // {pageIdx, el, startX, startY, scale}
   const viewerRef    = useRef(null);
+  // 페이지 목록 스크롤 컨테이너 — 진입 시 선택된 쪽을 보이게 한다 (REQ-F18)
+  const pageListRef  = useRef(null);
 
   // ── 페이지 로드 ───────────────────────────────────────
   const fetchPages = useCallback(async (jid) => {
@@ -238,7 +241,14 @@ export default function AnalysisWorkPage() {
     if (pages.length === 0) return;
 
     const target = resolveTargetPage(pages, searchParams.get("page"));
-    if (target) handlePageClick(target);
+    if (target) {
+      handlePageClick(target);
+      // REQ-F18: 왼쪽 목록도 그 쪽이 보이게 한다 — 뷰어만 가면 "지금 몇 쪽인지"가
+      // 목록에서 안 보인다(212쪽 문서에서 깊은 쪽으로 진입할 때 특히).
+      // ⚠️ **여기서만 부른다.** 선택 변경을 트리거로 삼으면 뷰어를 스크롤할 때마다
+      //    목록이 끌려간다 (계획서 § 제약·함정, F18-09 가 지킨다).
+      pageListScroll(pageListRef.current, target.page_num);
+    }
   }, [pages, pdfUrl, pdfUrlLoading, searchParams, handlePageClick]);
 
   // ── 뷰어 스크롤 → 페이지·문항 목록 동기화 (250ms 디바운스) ──
@@ -491,7 +501,7 @@ export default function AnalysisWorkPage() {
             </Alert>
           )}
 
-          <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 0.75 }}>
+          <Box ref={pageListRef} sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 0.75 }}>
             {pagesLoading && (
               <Box sx={{ p: 2, display: "flex", justifyContent: "center" }}>
                 <CircularProgress size={20} />
@@ -511,6 +521,7 @@ export default function AnalysisWorkPage() {
               return (
                 <Box
                   key={page.page_num}
+                  data-page-num={page.page_num}
                   onClick={() => handlePageClick(page)}
                   sx={{
                     px: 1.25, py: 0.875, mb: 0.25, borderRadius: 1,
