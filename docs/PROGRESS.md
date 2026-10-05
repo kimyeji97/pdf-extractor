@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-03
+> 최종 갱신: 2026-10-05
 
 ## 요구사항 인덱스
 
@@ -141,6 +141,7 @@
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | — | 🟡 **코드·테스트 완료**(케이스 20/20 · 프론트 358 · `/review` 3회차 결함 전부 닫음). **dev 육안 남음** — 파일 선택 창은 자동화 불가 |
+| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1 완료**(Cloudflare — R2 토큰·CORS·WAF 경로 제한·터널, 케이스 6/6). Phase 2(AWS 백엔드)부터 남음 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -259,6 +260,21 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-10-05
+
+### REQ-E02 — 운영(prod) 환경 구성 착수, Phase 1(Cloudflare) 완료 (🟡)
+
+- 오픈(10/6) 전날 prod 환경이 없었다. dev를 복제하되 이름만 `prod`로 — 도메인 `-dev` 제거 · 데이터 빈 상태 시작 · CI/CD는 오픈 후 별도 REQ(사용자 결정)
+- **prod 이미지는 버전 태그 고정** — `:latest`면 dev에 배포한 미검증 이미지가 prod 태스크 재시작 때 딸려 올라간다
+- **버킷을 새로 만들지 않았다** — `dailystudy`(04-19 생성, 공개 도메인 `dailystudy.yejicraft-cf.com`)가 이미 있었고 dev(`dailystudy-dev`)와 이름 짝이 맞는다. 계획서 첫 결정 `dailystudy-prod`를 교체
+- ⚠️ **그 버킷은 이미 환불 정책(`docs/refund_policy_combined.html`)을 공개 서비스 중이었다** — 계획대로 "uploads·results 말고 전부 차단"을 걸었으면 그 페이지가 403이 됐다. WAF 규칙을 `/pdf-extractor/` 안으로 좁혔다. 객체 4개는 그대로 둔다
+- **공개 도메인 경로 제한은 dev에 없는 prod만의 차이** — 공개 도메인은 버킷 전체를 무인증·무만료로 연다. `users/{user_id}.json`(이메일·비밀번호 해시)이 user_id만 알면 읽혔다. **dev는 지금도 그 상태다**(규칙 없음)
+- 실측: prod 토큰으로 dev 버킷 `AccessDenied` 403 · 공개 도메인 `users/`·`status/` 403(객체 유무 무관 — 규칙 차단이지 404가 아니다) · `uploads/`·`results/` 200 · 환불 정책 200
+- ⚠️ **R2 시크릿이 대화 기록에 노출돼 재발급했다** — `.env.prod`에 `KEY=` 없이 값이 붙은 줄이 있었고, `=` 기준 sed 마스킹이 그 줄을 통과시켰다. env 파일은 키 이름만 뽑아 본다
+- wrangler OAuth는 zone 권한이 `read`뿐이라 **WAF 규칙은 대시보드에서만** 만들 수 있다(R2 CORS·터널 조회는 가능)
+- 작업 트리를 F16 세션과 공유하고 있어(그쪽이 브랜치를 바꿈) E02는 **worktree `../pdf-extractor-e02` · 브랜치 `feat/E02-prod-environment`**로 분리했다. `backend/.env.prod`(gitignore)는 원래 디렉토리에 있다
+- 리뷰 생략 — 코드 커밋 없음(Phase 1은 외부 설정만)
 
 ## 2026-10-03
 
