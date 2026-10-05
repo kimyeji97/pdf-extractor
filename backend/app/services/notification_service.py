@@ -139,6 +139,11 @@ def emit_export(
     REQ-F18 이 생성 화면 다운로드를 걷어내 받을 길이 없다 — 그래서 성공이라 하면 안 된다.
     ⚠️ 호출부가 이 값을 **따로 넘겨야 한다.** `job.error` 로는 못 가른다 — 그 필드는
     생성 실패 경로에서도 채워져서, 신호로 쓰면 **문구가 뒤바뀐다.**
+
+    ⚠️ **힌트는 `title` 에 섞는다 — `message` 는 사용자에게 안 닿는다.**
+       `NotificationSnackbar`·`NotificationBell` 둘 다 `title` 만 그린다(`message` 참조 0건,
+       `/review` 회차 0 실측). 생성 화면을 떠난 사용자 — 이 REQ 가 상정한 바로 그 사용자 —
+       에게 `message` 는 영영 안 보이고, 그러면 **진짜 생성 실패와 구별이 안 된다.**
     """
     failed = job.status == JobStatus.FAILED
     if failed:
@@ -155,7 +160,11 @@ def emit_export(
             if failed or meta_failed
             else NotificationSeverity.SUCCESS
         ),
-        title=workbook_name or job.filename,
+        title=(
+            f"{workbook_name or job.filename} — 이력 등록 실패"
+            if meta_failed and not failed
+            else (workbook_name or job.filename)
+        ),
         message=message,
     )
 

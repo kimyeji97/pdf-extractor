@@ -38,6 +38,10 @@ def run_export(make_job, inline_extract_pool, monkeypatch):
         from app.routers import extract as extract_router
         from app.services import storage
 
+        # 재시도 간격을 0 으로 — 안 그러면 스위트가 실제로 잔다(실측 ~4.6초, `/review` 회차 0).
+        # 계획서 § 제약·함정이 "주입 가능하게 하거나 아주 짧게 둘 것" 이라 적어 둔 자리다.
+        monkeypatch.setattr(extract_router, "_META_SAVE_WAIT_SEC", 0)
+
         make_job(job_id, job_type=JobType.EXPORT)
 
         if generate_ok:
@@ -158,3 +162,66 @@ def test_B29_08_메타_저장_실패는_다른_문구를_쓴다(run_export, noti
     run_export(fail_times=99)
 
     assert _only_notification(notif_files)["message"] != "문제집 생성에 실패했습니다."
+
+
+# ── /review 회차 0 반영 ───────────────────────────────────
+
+def test_B29_09_재시도는_같은_workbook_id_로_덮어쓴다(
+    make_job, inline_extract_pool, notif_files, monkeypatch
+):
+    """[B29-09] 재시도가 **멱등**이다 — 같은 `workbook_id` 로 덮어쓴다.
+
+    근거: PLAN § 제약·함정 — "재시도가 **같은 키를 덮어쓴다**"
+
+    `_save_workbook_meta` 가 id 를 **안에서** 만들면 재시도마다 다른 키가 돼서,
+    PUT 은 올라갔는데 응답에서 터지는 경우(read timeout·connection reset) 같은 PDF 의
+    문제집이 이력에 **2건** 뜬다 — 계약 #23 이 "중복으로도 안 잡힌다" 고 경고한 모양이다.
+    """
+    from app.routers import extract as extract_router
+
+    monkeypatch.setattr(extract_router, "_META_SAVE_WAIT_SEC", 0)
+    make_job("job-export", job_type=JobType.EXPORT)
+    monkeypatch.setattr(
+        extract_router.pdf_service, "extract_questions_v2", lambda *a, **kw: 5
+    )
+
+    seen: list[str | None] = []
+
+    def _meta(*args, **kwargs):
+        # 호출부가 positional 로 넘기든 keyword 로 넘기든 잡는다.
+        seen.append(kwargs.get("workbook_id") or (args[6] if len(args) > 6 else None))
+        if len(seen) < 2:
+            raise RuntimeError("R2 일시 오류")
+
+    monkeypatch.setattr(extract_router, "_save_workbook_meta", _meta)
+
+    extract_router._process_extraction_v2(
+        selections=[], export_job_id="job-export", layout="2단", workbook_name="테스트 문제집",
+    )
+
+    assert len(seen) == 2
+    assert seen[0] is not None, "호출부가 workbook_id 를 넘겨야 한다 — 안 넘기면 함수가 매번 새로 만든다"
+    assert seen[0] == seen[1], f"재시도가 다른 키를 썼다: {seen}"
+
+
+def test_B29_10_메타_실패는_제목으로도_드러난다(run_export, notif_files):
+    """[B29-10] 힌트가 **`title` 에** 있다 — `message` 는 사용자에게 안 닿는다.
+
+    근거: PLAN § 결정 — "힌트는 `title` 에 섞는다"
+
+    `NotificationSnackbar`·`NotificationBell` 둘 다 `title` 만 그린다 — 생성 화면을 떠난
+    사용자(이 REQ 가 상정한 그 사용자)에게 `message` 는 영영 안 보인다.
+    """
+    run_export(fail_times=99)
+
+    assert "이력 등록 실패" in _only_notification(notif_files)["title"]
+
+
+def test_B29_11_생성_실패_제목에는_이력_힌트가_없다(run_export, notif_files):
+    """[B29-11] 생성 실패는 제목이 그대로다 — 두 실패가 섞이면 안 된다.
+
+    근거: PLAN § 제약·함정 — "같은 알림이 된다"
+    """
+    run_export(generate_ok=False)
+
+    assert "이력 등록 실패" not in _only_notification(notif_files)["title"]
