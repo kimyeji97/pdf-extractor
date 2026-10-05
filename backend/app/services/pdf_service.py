@@ -11,6 +11,7 @@ PDF 처리 서비스 v2
   - 부분 영역   → show_pdf_page() : 벡터 기반 클리핑, 래스터화 없이 선명도 유지
 """
 
+import unicodedata
 import fitz         # pymupdf
 import pdfplumber
 from dataclasses import dataclass
@@ -646,7 +647,7 @@ def _apply_footnote(pdf_path: str, text: str) -> None:
         tw = fitz.TextWriter(page.rect)
         tw.append(
             fitz.Point(_FOOTNOTE_MARGIN, page.rect.height - _FOOTNOTE_MARGIN),
-            text,
+            _nfc(text),
             font=font,
             fontsize=_FOOTNOTE_FONT_SIZE,
         )
@@ -704,6 +705,27 @@ def _apply_watermark(pdf_path: str, image_bytes: bytes) -> None:
     doc.save(tmp_path, garbage=4, deflate=True)
     doc.close()
     Path(tmp_path).replace(pdf_path)
+
+
+def _nfc(text: str) -> str:
+    """
+    PDF 에 그리기 직전의 NFC 정규화 (REQ-B28, 계약 #38).
+
+    **macOS 가 올린 파일명은 NFD(자모 분해)** 다 — `학` = `ᄒ`+`ᅡ`+`ᆨ`.
+    `_get_label_font()` 가 돌려주는 'korea' 는 실제로는 `Droid Sans Fallback Regular`
+    라서 **한글 자모 블록(U+1100~U+11FF)에 글리프가 거의 없고**, `TextWriter.append()`
+    는 글리프 없는 문자를 **에러 없이 notdef 로 치환한다**(계약 #37). 그래서 정규화하지
+    않으면 글자가 통째로 사라진다 — 2026-10-05 dev 에서 문제집 이름이 그렇게 깨졌다.
+
+    ⚠️ **NFKC 가 아니라 NFC 다.** NFKC 는 호환 문자까지 바꿔(`①`→`1`, `㈜`→`(주)`)
+       사용자가 쓴 글자를 말없이 고친다.
+
+    ⚠️ **정규화는 `build_source_label()` 이 아니라 여기(그리는 자리)에 있다.**
+       그 함수는 프론트 `utils/sourceLabel.js` 와 **글자 그대로** 같아야 하는 짝이고
+       (계약 #12), 거기에 넣으면 각주가 안 덮인다. 새 `tw.append()` 자리를 만들면
+       여기를 거칠 것 — B28-06 이 전수 검사한다.
+    """
+    return unicodedata.normalize("NFC", text)
 
 
 def _get_label_font() -> "fitz.Font":
@@ -829,7 +851,10 @@ def _build_grid_pdf(
         )
 
         # 출처 레이블 렌더링 (이미지 위에 덮어쓰기)
-        label_text = getattr(region, "source_label", "")
+        # ⚠️ 폭 계산 전에 정규화한다 — 재는 문자열과 그리는 문자열이 같아야 한다 (REQ-B28).
+        #    NFD 는 자모가 낱자로 세어져 **같은 글자가 79% 넓게 측정된다**(실측 570 vs 318pt).
+        #    그대로 두면 아래 B09 축소가 과하게 걸려 라벨이 쓸데없이 작아진다.
+        label_text = _nfc(getattr(region, "source_label", ""))
         if label_text and current_page is not None:
             label_rect = fitz.Rect(cell_x, cell_y, cell_x + cell_w, cell_y + label_h)
             current_page.draw_rect(label_rect, color=None, fill=(0.96, 0.96, 0.98), width=0)
@@ -845,7 +870,9 @@ def _build_grid_pdf(
             tw = fitz.TextWriter(current_page.rect)
             tw.append(
                 fitz.Point(cell_x + pad, cell_y + label_h - 4),
-                label_text,
+                # 위에서 이미 정규화됐다 — 멱등이라 비용이 없고, **그리는 자리에서
+                # NFC 임이 눈에 보이는 것**이 계약 #38 의 요지다(B28-06 이 전수 검사).
+                _nfc(label_text),
                 font=label_font,
                 fontsize=fontsize,
             )
