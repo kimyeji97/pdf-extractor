@@ -1,6 +1,6 @@
 # PLAN-E02 · 운영(prod) 환경 구성
 
-> 출처: 2026-10-05 세션 「운영환경구성」 · 작성: 2026-10-05 · 상태: 🟡 진행 (Phase 1~3 완료 2026-10-05)
+> 출처: 2026-10-05 세션 「운영환경구성」 · 작성: 2026-10-05 · 상태: 🟡 진행 (Phase 1~4 완료 2026-10-05)
 
 ## 배경
 
@@ -58,7 +58,7 @@
 - [x] **Phase 3 — 배포 스크립트** — 2026-10-05 `1ee1d8b`, 케이스 16/16(자동 15 + 실측 E02-24 dev 번들 파일 단위 동일)
       `frontend-deploy.sh dev|prod`(API URL·Worker 이름 분기, 인자 없으면 실패) · 백엔드 prod 배포 스크립트(태그 인자 필수, `latest` 거부)
       완료 기준: dev 배포 결과 불변(라이브 번들 해시 확인) · prod 스크립트가 태그 없이·`latest`로 실행하면 거부
-- [ ] **Phase 4 — 프론트 prod 배포**
+- [x] **Phase 4 — 프론트 prod 배포** — 2026-10-05, 케이스 5/5 (Worker `dailystudy-workbook-prod` Version `e46e4d4e` · 진입 청크 `index-5GZJJjxu.js` · 로그인 화면은 사용자 육안). E02-34·36은 `/testrun` 뒤 기준 교체(표 참조)
       새 Worker + 커스텀 도메인
       완료 기준: 프론트 접속 시 로그인 화면 · 라이브 청크에 prod API URL 있고 `-dev`·`localhost` 없음
 - [ ] **Phase 5 — end-to-end + admin**
@@ -73,6 +73,7 @@
 > Phase 1은 외부 리소스만 다뤄 코드가 없다 — 전부 실측(수동) 행. Phase 3(스크립트) 케이스는 착수 직전 `/testgen`에서 추가한다.
 > Phase 2도 외부 리소스만 — 실측 행. E02-07이 `CORS_ALLOWED_ORIGINS` JSON 형식 함정도 덮는다(형식이 틀리면 기동 실패라 200이 불가). E02-10 기준선은 `/implement` 착수 직전에 찍는다. 이미지 태그는 `prod-2cc43de`(2026-10-05 사용자 결정).
 > Phase 3: `backend/tests/test_deploy_scripts.py`(pytest) — 스크립트를 임시 git 저장소에 복사해 돌리고 `npm`·`npx`·`docker`·`aws`는 PATH 앞의 가짜 실행 파일(호출 기록). 가짜 `aws`는 실제 응답 형태를 돌려주고 `--query`·`--output text`를 jmespath로 흉내 낸다 — 스크립트의 AWS 호출 방식을 테스트가 정하지 않기 위해. E02-24는 라이브 배포 대신 로컬 번들 비교(지금 dev 배포 = 작업 중 F16 노출). worktree엔 venv가 없어 `../pdf-extractor/backend/venv`로 실행.
+> Phase 4: 외부 배포만 — 실측 행. E02 브랜치의 앱 코드는 `2cc43de`와 같다(`frontend/`는 `wrangler.jsonc`만 다름)라 "첫 배포 커밋 2cc43de"가 지켜진다. E02-34의 `-dev`는 dev 도메인 둘로 좁혀 판정(라이브러리 문자열 오탐 방지). E02-32는 브라우저로 본다(SPA).
 > E02-04의 확인용 객체는 판정 직후 지운다(빈 상태 시작 결정). E02-05는 dev의 `localhost:5173`을 prod에 넣지 않는 것으로 판정한다.
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
@@ -108,6 +109,11 @@
 | E02-29 | `backend-deploy-prod.sh`(정상 실행) | `docker`·`aws` 호출 인자 어디에도 `pdf-extractor-backend:latest`가 없음(cloudflared `:latest`는 결정대로 예외) | 회귀 | CLAUDE.md § 계약 #37 — "`latest`는 건드리지 않는다" | 3 | ✅ |
 | E02-30 | `backend-deploy-prod.sh`(정상 실행) | 새 리비전의 backend 이미지는 `…:<태그>`이고, 나머지(cloudflared 이미지·시크릿·cpu/memory 등)는 현재 리비전과 같음 | 정상 | PLAN § 결정 — "현재 리비전을 복제해 이미지만 바꾼 새 리비전 등록" | 3 | ✅ |
 | E02-31 | `backend-deploy-prod.sh`(정상 실행) | 서비스를 새 리비전으로 갱신 → 안정화 대기 → 그 뒤에 이전 리비전 deregister(순서) | 정상 | PLAN § 결정 — "안정화 대기 → 이전 리비전 deregister" | 3 | ✅ |
+| E02-32 | `https://dailystudy-workbook.yejicraft-cf.com` | 브라우저로 접속하면 로그인 화면이 뜸 | 실측 | PLAN § 작업 단계 — "프론트 접속 시 로그인 화면" | 4 | ✅ |
+| E02-33 | prod 라이브 번들 | 라이브 `index.html`이 참조하는 JS 청크에 `https://dailystudy-workbook-api.yejicraft-cf.com/api`가 있음 | 실측 | PLAN § 작업 단계 — "라이브 청크에 prod API URL 있고" | 4 | ✅ |
+| E02-34 | prod 라이브 번들 | 같은 청크에 dev 도메인(`dailystudy-workbook-api-dev`·`dailystudy-workbook-dev`)과 `localhost:8000`(로컬 API)이 없음 — 맨 `localhost`는 react-router 내부 기본값(`let i="http://localhost"`)이라 기준에서 뺀다(2026-10-05 사용자 승인) | 회귀 | PLAN § 제약·함정 — "안 덮으면 prod에 localhost가 박힌다" | 4 | ✅ |
+| E02-35 | prod 라이브 ↔ 로컬 | 라이브 `index.html`의 `assets/*.js` 참조가 `frontend-deploy.sh prod`로 만든 로컬 `dist/index.html`과 같음 | 실측 | CLAUDE.md § 배포 상태 — "라이브 `index.html`의 `assets/*.js` 참조 ↔ 로컬 `dist/index.html`" | 4 | ✅ |
+| E02-36 | dev 프론트 | prod 배포가 dev Worker에 새 배포를 만들지 않고(dev 배포 기록에 prod 배포 시각 건 없음), dev 번들은 계속 dev API를 가리킴 — 진입 청크 비교는 같은 시각 사용자의 dev 직접 배포로 기준선이 무효가 돼 교체(2026-10-05 사용자 승인) | 회귀 | PLAN § 결정 — "dev는 지금 설정(`twilight-base-302d`) 그대로" | 4 | ✅ |
 
 ## 제약·함정
 
@@ -116,6 +122,8 @@
 - **콘솔 "서비스 업데이트"는 최신 활성 리비전을 고른다** — prod 실험 리비전은 반드시 deregister(CLAUDE.md 배포 상태, 2026-09-28)
 - **프론트 빌드는 셸 env로 API URL을 덮는다** — `.env.local`이 localhost라 안 덮으면 prod에 localhost가 박힌다
 - **실행 역할 `pdf-extractor-ecs-execution-role`은 dev·prod 공용** — 인라인 정책 `secrets-manager-read`의 Resource에 `pdf-extractor/dev*`·`pdf-extractor/prod*` 둘이 있다. 정책을 고칠 때 한쪽만 남기면 그 환경 태스크가 시크릿을 못 읽어 기동 실패
+- **배포 직전에 조회한 새 도메인은 이 머신에서 한동안 안 열린다** — macOS 리졸버가 "없음" 응답을 캐시한다(2026-10-05: `dig`는 IP를 주는데 `curl`은 `Could not resolve host`). 확인은 `curl --resolve <host>:443:<IP>`, 브라우저는 `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`
+- **라이브 번들의 맨 `localhost`는 오탐이다** — react-router 내부 기본값 `let i="http://localhost"`가 모든 번들에 있다. API가 로컬로 박혔는지는 `localhost:8000`으로 본다
 - **`wrangler deploy --temporary` 금지** — 임시 계정의 다른 Worker로 배포된다
 - **prod env 파일은 `backend/.env.prod`** — `.env.*` 무시 규칙에 걸리는지 커밋 전 `git check-ignore`로 확인(계약 #24 — `.env.dev` 공개 노출 이력)
 - **`dailystudy` 버킷은 다른 용도와 공유한다**(환불 정책 공개) — 버킷 단위 설정(CORS·수명 주기·공개 도메인)을 바꾸면 `docs/` 공개에도 닿는다. 앱 쪽 규칙은 `/pdf-extractor/` 안으로만 건다

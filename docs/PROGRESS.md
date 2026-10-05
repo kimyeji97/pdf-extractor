@@ -141,7 +141,7 @@
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
 | REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | — | 🟡 **코드·테스트 완료**(케이스 20/20 · 프론트 358 · `/review` 3회차 결함 전부 닫음). **dev 육안 남음** — 파일 선택 창은 자동화 불가 |
-| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1~3 완료**(Cloudflare 6/6 · AWS 백엔드 9/9 — prod API `/health` 200, 이미지 `prod-2cc43de` · 배포 스크립트 16/16 `1ee1d8b`). Phase 4(프론트 prod 배포)·5(end-to-end) 남음 |
+| REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | — | 🟡 **Phase 1~4 완료**(Cloudflare 6/6 · AWS 백엔드 9/9 — prod API `/health` 200, 이미지 `prod-2cc43de` · 배포 스크립트 16/16 `1ee1d8b` · prod 프론트 5/5 — `https://dailystudy-workbook.yejicraft-cf.com`). Phase 5(end-to-end + admin) 남음 |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -298,6 +298,16 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 - worktree엔 `backend/venv`가 없어 원래 디렉토리 venv로 pytest를 돈다(`../pdf-extractor/backend/venv/bin/python -m pytest -k E02`)
 - 계약 승격: **#37** prod backend 이미지 `:latest` 금지 · **#38** R2 공개 URL 경로를 늘리면 prod WAF 허용 경로도 — 둘 다 dev·테스트에선 안 드러나고 prod에서만 터진다
 - 리뷰: 아직 — REQ 마지막 Phase 뒤 `/review E02`
+
+### REQ-E02 — Phase 4(프론트 prod 배포) 완료 (🟡)
+
+- `frontend-deploy.sh prod`로 첫 배포 — Worker `dailystudy-workbook-prod`가 새로 생기고 커스텀 도메인 `dailystudy-workbook.yejicraft-cf.com`이 붙었다(Version `e46e4d4e`). E02 브랜치의 `frontend/`는 `2cc43de`와 `wrangler.jsonc`만 달라 **"첫 배포 커밋 2cc43de" 결정이 그대로 지켜진다**
+- 실측: 라이브 진입 청크 `index-5GZJJjxu.js` = 로컬 `dist`(청크 20개 내용까지 동일) · prod API URL 6개 청크 · dev 도메인·`localhost:8000` 0건 · 로그인 화면은 사용자 육안(브라우저 확장 미연결)
+- ⚠️ **검증 기준 2건을 `/testrun` 뒤 바꿨다(사용자 승인)** — 계획을 조용히 맞춘 게 아니라 기준이 틀렸던 것:
+  - E02-34 "`localhost` 없음" → **"`localhost:8000` 없음"**: 걸린 건 react-router 내부 `let i="http://localhost"`(브라우저에선 `location.origin`으로 덮임). 함정이 막으려던 건 API 주소가 로컬로 박히는 것이다. dev 번들에도 같은 문자열이 있다
+  - E02-36 "dev 진입 청크 그대로" → **"prod 배포가 dev Worker에 새 배포를 안 만듦 + dev 번들은 dev API"**: 내 prod 배포(14:14:20) 80초 뒤 **사용자가 dev를 직접 배포**해 기준선(`Bhyi37oW` → `DbJFrFSC`)이 무효가 됐다. 배포 기록상 겹치는 dev 배포 없음
+- ⚠️ **배포 직후 이 머신에서 prod 도메인이 안 열렸다** — 배포 전 조회한 "없음" 응답을 macOS 리졸버가 캐시(`dig`는 IP, `curl`은 resolve 실패). `curl --resolve`로 확인했다. 서비스 문제가 아니다
+- 리뷰: 아직 — 코드 변경 없는 Phase. REQ 마지막 Phase 뒤 `/review E02`
 
 ## 2026-10-03
 
