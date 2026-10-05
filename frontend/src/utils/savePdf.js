@@ -53,33 +53,37 @@ export function toDownloadUrl(url) {
 }
 
 /**
- * @param {string} url      결과 PDF URL
- * @param {string} filename 저장 창에 채울 기본 파일명
+ * 저장 위치만 먼저 받아 둔다 (REQ-F16 Phase 2).
+ *
+ * `showSaveFilePicker` 는 **transient user activation** 을 요구한다 — 생성 폴링(수 초) 뒤에
+ * 열면 브라우저가 거부한다. 그래서 [PDF 생성] 클릭 **안에서** 이걸 먼저 부르고, 생성이 끝나면
+ * 받아 둔 핸들에 `writePdfToHandle()` 로 쓴다. 사용자가 누르는 건 한 번이다.
+ *
+ * @returns {Promise<FileSystemFileHandle|null>} 취소하면 `null` — 호출부는 생성도 하지 않는다
  */
-export async function savePdfToPicker(url, filename) {
-  if (typeof globalThis.showSaveFilePicker !== "function") {
-    await downloadViaBlob(url, filename);
-    return;
-  }
-
-  let handle;
+export async function pickSaveTarget(filename) {
+  if (typeof globalThis.showSaveFilePicker !== "function") return null;
   try {
-    // ① 먼저 창 — 사용자 제스처가 살아 있는 동안에.
-    handle = await globalThis.showSaveFilePicker({
+    return await globalThis.showSaveFilePicker({
       suggestedName: filename,
       types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
     });
   } catch (e) {
-    // 사용자가 창을 닫은 것은 실패가 아니다 — 조용히 끝낸다.
-    if (e?.name === "AbortError") return;
+    if (e?.name === "AbortError") return null;
     throw e;
   }
+}
 
-  // ② 그 다음 내용을 받는다. **쓰기 전에** 응답을 확인한다 —
-  //    안 보면 401/403/404 본문이 그대로 "PDF" 로 저장된다.
+/**
+ * 받아 둔 핸들에 PDF 를 쓴다 (REQ-F16 Phase 2).
+ *
+ * ⚠️ **성공했을 때만 쓴다** — 위치를 먼저 고르는 순서라, 받기가 실패했는데 `createWritable()`
+ *    을 부르면 고른 자리에 **빈 파일이 남는다**(그 호출이 파일을 비운다). 그래서 `fetchPdf` 가
+ *    끝난 **뒤에** 연다.
+ */
+export async function writePdfToHandle(handle, url) {
   const blob = await fetchPdf(url);
 
-  // ③ 쓴다. createWritable() 은 고른 파일을 **이미 비우므로**, 실패하면 abort 로 되돌린다.
   const writable = await handle.createWritable();
   try {
     await writable.write(blob);
@@ -88,6 +92,22 @@ export async function savePdfToPicker(url, filename) {
     await writable.abort?.().catch(() => {});
     throw e;
   }
+}
+
+/**
+ * 한 번에: 창을 열고 받아서 쓴다 (Phase 1 경로 — 결과 화면 재다운로드가 쓴다).
+ *
+ * @param {string} url      결과 PDF URL
+ * @param {string} filename 저장 창에 채울 기본 파일명
+ */
+export async function savePdfToPicker(url, filename) {
+  if (typeof globalThis.showSaveFilePicker !== "function") {
+    await downloadViaBlob(url, filename);
+    return;
+  }
+  const handle = await pickSaveTarget(filename);
+  if (!handle) return;          // 사용자가 창을 닫았다 — 실패가 아니다
+  await writePdfToHandle(handle, url);
 }
 
 /** 미지원 브라우저(Safari·Firefox) 폴백 — blob 으로 받아야 `download` 가 먹는다. */

@@ -365,7 +365,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ### 배포 상태 (세션마다 필요한 사실)
 
-⚠️ **prod 백엔드가 2026-10-05부터 상시 가동 중이다**(REQ-E02 진행 중) — 서비스 `pdf-extractor-backend-prod-svc` · 태스크 정의 `pdf-extractor-backend-prod:1` · 이미지 **`prod-2cc43de`(버전 태그 고정, `:latest` 금지)** · 시크릿 `pdf-extractor/prod` · 로그 `/ecs/pdf-extractor-prod` · API `https://dailystudy-workbook-api.yejicraft-cf.com` · R2 `dailystudy`(prefix `pdf-extractor`). **dev처럼 desired 0으로 내리지 말 것.** prod 프론트는 2026-10-05 Worker **`dailystudy-workbook-prod`**(`wrangler.jsonc` `env.prod`, 커스텀 도메인 `https://dailystudy-workbook.yejicraft-cf.com`, Version `e46e4d4e`, 앱 코드 = `2cc43de`)로 배포됐다 — `frontend-deploy.sh prod`. 상세는 [PLAN-E02](docs/plans/PLAN-E02-prod-environment.md).
+⚠️ **prod 백엔드가 2026-10-05부터 상시 가동 중이다**(REQ-E02 ✅ 2026-10-05) — 서비스 `pdf-extractor-backend-prod-svc` · 태스크 정의 `pdf-extractor-backend-prod:1` · 이미지 **`prod-2cc43de`(버전 태그 고정, `:latest` 금지)** · 시크릿 `pdf-extractor/prod` · 로그 `/ecs/pdf-extractor-prod` · API `https://dailystudy-workbook-api.yejicraft-cf.com` · R2 `dailystudy`(prefix `pdf-extractor`). **dev처럼 desired 0으로 내리지 말 것.** prod 프론트는 2026-10-05 Worker **`dailystudy-workbook-prod`**(`wrangler.jsonc` `env.prod`, 커스텀 도메인 `https://dailystudy-workbook.yejicraft-cf.com`, Version `e46e4d4e`, 앱 코드 = `2cc43de`)로 배포됐다 — `frontend-deploy.sh prod`. 상세는 [PLAN-E02](docs/plans/PLAN-E02-prod-environment.md).
 
 ⚠️ **dev 백엔드는 2026-10-03 main `25ee3d2`(F17까지, 이미지 태그 `f17-25ee3d2` = `:latest`)로 배포됐고 지금 `desired 1`로 켜져 있다**(내릴지 사용자 결정 대기).
 (F17은 `pdf_service`가 바뀌어 **백엔드 배포가 따라왔다** — B25처럼 프론트 전용이 아니었다. 실행 digest `04af8fb8…`가 ECR `f17-25ee3d2`와 일치함을 확인했다.)
@@ -373,7 +373,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
-⚠️ **dev 프론트는 2026-10-05 14:15 KST에 사용자가 다시 배포했다(진입 청크 `index-DbJFrFSC.js`, 빌드 커밋은 기록 안 됨 — 아래 ①~③으로 확인).** 그 전은 2026-10-03 main `25ee3d2` 빌드(F17까지, Worker Version `d3d884fc`)다 — 실체는 Pages가 아니라
+⚠️ **dev 프론트는 2026-10-05 main `c686346` 빌드(F16 Phase 2까지, Worker Version `4bc82b1b`)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
 "배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh dev` — 2026-10-05부터 `dev|prod` 인자 필수)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**

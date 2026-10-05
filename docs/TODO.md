@@ -181,5 +181,10 @@
 - [ ] B25 리뷰 이연: `queued.test.jsx`가 전체 스위트에서 간헐 Unhandled Error — `@iconify/react` 타이머가 teardown 뒤 발화. 단독 4/4·재실행 73/73 녹색이라 기존 flake (2026-10-03 추가)
 - [ ] B25 미결 이관: 첫 쪽 실측이 끝내 오지 않으면(1쪽 로드 실패) 보관한 이동 요청이 조용히 유실된다 — 알릴지·대체 적용할지. 2026-10-03 `pageSizes` 게이트 도입의 대가(`PdfPreviewPanel.jsx`, `onDocumentLoadError` 미초기화와 같은 자리) (2026-10-03 추가)
 - [ ] F17 리뷰 이연: `pdf_service.py`의 `source_label` 주석 예시가 아직 옛 형식 `"Q1 · 수학문제집 · p.3"` — 형식을 바꾼 커밋이 남긴 것 (2026-10-03 추가)
-- [ ] F16 리뷰 이연: 생성 이력(`history/index.jsx`)의 다운로드가 아직 **맨 URL `<a download>`** — 크로스오리진이라 `download`가 무시돼 dev 에서 **탭이 열리고**, Origin 없는 그 요청이 `toDownloadUrl` 이 피해 다니는 **캐시 오염원**이다. 없애야 근본 해결 (2026-10-03 추가)
+- [x] F16 리뷰 이연: 생성 이력(`history/index.jsx`)의 다운로드가 아직 **맨 URL `<a download>`** — 크로스오리진이라 `download`가 무시돼 dev 에서 **탭이 열리고**, Origin 없는 그 요청이 `toDownloadUrl` 이 피해 다니는 **캐시 오염원**이다. 없애야 근본 해결 (2026-10-03 추가) → **✅ 2026-10-05 F16 Phase 2 가 선택 창으로 교체 · F16-28 이 회귀를 막는다**
 - [ ] F16 리뷰 이연: `PdfPreviewPanel` 의 `file={pdfUrl}` 은 자격 없는 XHR 이라 **local 모드**의 결과 PDF 미리보기(`/api/files`, 쿠키 인증)가 크로스오리진 5173→8000 에서 못 읽는다 (2026-10-03 추가)
+- [ ] **F16 리뷰 이연 (잠금 공백 — 2026-10-05 사용자 결정으로 머지 선행)**: Phase 2 가 고친 프로덕션 코드 **4건을 되돌려도 프론트 369/369 가 녹색**이다(격리 worktree 변형 실측). 케이스 3건 신설 — ① `setSaveError("")` 가 `pickSaveTarget` **앞**이라는 **순서**(기존 F16-19 는 1800자 창 안의 *존재*만 본다 — 같은 자리가 이 REQ 에서 **3회** 재발한 구조적 원인) ② `leftoverNotice()` 가 네 실패 경로에 붙어 있다 ③ `history/index.test.jsx` 가 `showSaveFilePicker` 를 스텁해 **취소·미지원·실패 3분기**를 각각 돈다(현재 미지원 분기만 돈다) (2026-10-05 추가)
+- [ ] F16 리뷰 이연: 핸들 쓰기가 **성공하면** `editor/index.jsx:127` 이 `return` 만 하고 `downloadUrl` 을 안 세워, 완료 Alert 이 "PDF 생성 완료!" 한 줄뿐이다 — 어디에 저장됐는지도, 다시 받을 버튼도 없다 (2026-10-05 추가)
+- [ ] F16 리뷰 이연: `savePdf.js` 의 `toDownloadUrl` 이 `previewUrl.js` 의 사실상 복제(`SIGNED_MARKERS` 까지 동일) — `withCacheKey(url, key)` 하나로 합칠 만하다 (2026-10-03 회차 2 → 2026-10-05 재확인)
+- [ ] F16 nit 이연: `supported` 판정이 3중 복제 — `savePdf.js` 는 `globalThis.showSaveFilePicker`, 호출부(`history:153`·`editor:328`)는 `window.showSaveFilePicker`. 갈리면 취소/미지원 분류가 조용히 뒤집힌다. `pickSaveTarget` 이 지원 여부를 함께 돌려주는 쪽이 낫다 (2026-10-05 추가)
+- [ ] F16 nit 이연: `f16Phase2.test.js` F16-24·25 의 고정 900자 창이 `onError:` 분기까지 번진다(실측 `onError:` +790 · 창 끝 `setGenerateStatus("error")` +870) — `f16Download.test.js` 의 `completionBranch()` 처럼 `indexOf('onError:')` 로 끊을 것 (2026-10-05 추가)

@@ -34,6 +34,7 @@ import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { getWorkbooks, getStatus, deleteWorkbook } from "api/client";
 import { toPreviewUrl } from "utils/previewUrl";
+import { pickSaveTarget, savePdfToPicker, writePdfToHandle } from "utils/savePdf";
 import paths from "routes/paths";
 import { INFO_CHIP } from "utils/badges";
 
@@ -142,12 +143,31 @@ export default function HistoryPage() {
   const handleDownload = async (wb) => {
     if (!wb.result_job_id) return;
     setDownloadingId(wb.workbook_id);
+    // ⚠️ 창을 **getStatus 앞에서** 연다 — 뒤에 열면 그 await 동안 transient user activation
+    //    이 만료돼(Chrome 약 5초) 브라우저가 창을 거부한다. dev 는 터널+Fargate 라 콜드 스타트면
+    //    쉽게 넘긴다. Phase 2 가 생성 화면에서 피한 바로 그 함정이다(/review Phase 2 회차 0).
+    const name = `${wb.filename || wb.name || "workbook"}.pdf`;
+    // ⚠️ 취소·미지원·진짜 실패 셋을 **구분한다.** pickSaveTarget 은 앞 둘에 모두 null 을
+    //    돌려주는데, 섞으면 취소가 아래 savePdfToPicker 로 떨어지고 그건 getStatus 뒤에
+    //    창을 다시 열어 SecurityError → "다운로드 실패" 팝업이 된다(/review Phase 2 회차 1).
+    const supported = typeof window.showSaveFilePicker === "function";
+    let handle = null;
+    try {
+      handle = await pickSaveTarget(name);
+    } catch (e) {
+      setDownloadingId(null);
+      alert(`저장 위치를 열지 못했습니다 (${e?.name || "오류"}).`);
+      return;
+    }
+    if (!handle && supported) { setDownloadingId(null); return; }   // 취소 — 조용히 끝
     try {
       const data = await getStatus(wb.result_job_id);
       if (data.download_url) {
-        const a = document.createElement("a"); a.href = data.download_url;
-        a.download = `${wb.filename || wb.name || "workbook"}.pdf`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        // 맨 URL <a download> 는 크로스오리진에서 download 가 무시돼 **탭이 열렸고**,
+        // Origin 없는 그 요청이 toDownloadUrl 이 피해 다니는 캐시 오염원이기도 했다.
+        // 지원 브라우저면 받아 둔 핸들에 쓰고, 미지원이면 blob 폴백으로 간다.
+        if (handle) await writePdfToHandle(handle, data.download_url);
+        else await savePdfToPicker(data.download_url, name);
       } else { alert("다운로드 URL을 가져올 수 없습니다."); }
     } catch (e) { alert("다운로드 실패: " + e.message); }
     finally     { setDownloadingId(null); }

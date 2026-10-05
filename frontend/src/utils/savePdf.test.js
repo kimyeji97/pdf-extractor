@@ -1,7 +1,7 @@
 /**
  * REQ-F16 Phase 1 — 생성된 PDF를 브라우저 저장 위치 선택 창으로 저장
  *
- * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-01~05, F16-08~12, F16-14~15, F16-17, F16-20)
+ * 검증 계약: docs/plans/PLAN-F16-pdf-save-picker.md `## 검증 계약` (F16-01~05, F16-08~12, F16-14~15, F16-17, F16-20, F16-23)
  *
  * 저장 로직을 순수 함수로 뺐다 — `window.showSaveFilePicker`·`fetch`·DOM 을 인자로 받지 않고
  * 전역에서 읽되, 테스트가 그 전역을 갈아끼워 검증한다(브라우저 없이 돈다).
@@ -16,7 +16,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { savePdfToPicker, toDownloadUrl } from 'utils/savePdf';
+import { savePdfToPicker, toDownloadUrl, writePdfToHandle } from 'utils/savePdf';
 
 const PDF_URL = 'https://example.test/result.pdf';
 const FILENAME = '문제집_2026-10-03.pdf';
@@ -184,5 +184,18 @@ describe('toDownloadUrl — 캐시 키 가르기', () => {
     // 쿼리가 서명 대상이라 파라미터를 더하면 403 이 된다(previewUrl.js 와 같은 이유).
     const signed = 'https://cdn.test/a.pdf?X-Amz-Signature=abc';
     expect(toDownloadUrl(signed)).toBe(signed);
+  });
+});
+
+describe('writePdfToHandle — 성공했을 때만 쓴다 (Phase 2)', () => {
+  it('[F16-23] 받기가 실패하면 createWritable 을 부르지 않는다', async () => {
+    // 위치를 **먼저** 고르는 순서라, 생성·받기가 실패해도 고른 자리에 빈 파일이
+    // 생기면 안 된다(계획서 § 결정 "성공했을 때만 쓴다").
+    const handle = makeHandle();
+    global.fetch = vi.fn(async () => ({ ok: false, status: 500, blob: async () => 'ERR' }));
+
+    await writePdfToHandle(handle, PDF_URL).catch(() => {});
+
+    expect(handle.createWritable).not.toHaveBeenCalled();
   });
 });

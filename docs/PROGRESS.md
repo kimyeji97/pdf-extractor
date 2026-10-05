@@ -140,7 +140,7 @@
 | REQ-B26 | 문항 삭제 [되돌리기]가 복원하지 않음 → 삭제를 토스트 동안 미루고 되돌리면 그대로 | [plan](plans/PLAN-B26-delete-undo-restore.md) | 2026-10-02 | ✅ **Phase 1 완료**(케이스 22/22 · 프론트 312/312 · 리뷰 3회 후 `4c50d43` (b)·(c) 0). PR #32 main 머지 `7477a91` · **dev 프론트 배포 완료**(2026-10-02 18:57, 머지와 같은 분 — 2026-10-03 라이브 번들로 확인) |
 | REQ-B25 | 현황판 페이지 번호 클릭 → 항상 1쪽 (로딩 전 이동 요청이 버려짐) | [plan](plans/PLAN-B25-stats-page-jump.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 8/8 · `/review` 2회 — 회차 0의 (b) 2건을 회차 1에서 닫음 · 미결 2건 확정). dev 프론트 배포 후 212쪽 합성 PDF로 `?page=150·212·2` 육안 확인 |
 | REQ-F17 | 출처 문구 형식 "n번) 문제집. p쪽. 문항이름." + 이름 표시 확장자 제거 | [plan](plans/PLAN-F17-source-label-format.md) | 2026-10-03 | ✅ **Phase 1 완료**(케이스 23/23 · 프론트 338 · 백엔드 377 · `/review` 3회차 결함 전부 닫음 · 로컬 육안). PR·dev 배포 전 |
-| REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | — | 🟡 **코드·테스트 완료**(케이스 20/20 · 프론트 358 · `/review` 3회차 결함 전부 닫음). **dev 육안 남음** — 파일 선택 창은 자동화 불가 |
+| REQ-F16 | 생성된 PDF 저장 — 브라우저 저장 위치 선택 창 | [plan](plans/PLAN-F16-pdf-save-picker.md) | 2026-10-05 | ✅ Phase 1·2 (케이스 31/31 · 각 `/review` 3회차 · **dev 육안 4건 확인** — 한 번 클릭·창 전환·재다운로드·취소) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
@@ -359,6 +359,24 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 - ⚠️ **"마지막 코드 커밋"에 문서 커밋이 잡혔다** — 게이트 명령이 `docs/` 밖 변경을 코드로 보는데 이 REQ는 `CLAUDE.md`(계약·배포 상태)를 `docs:` 커밋에서 여러 번 고쳤다. 그래서 리뷰 (b)를 문서로 고친 커밋이 sha를 밀어 재리뷰가 한 번 더 필요했다. CLAUDE.md를 바꾸는 REQ는 리뷰 전에 CLAUDE.md 수정을 끝내 둘 것
 - ✅ 조건: 리뷰 sha `2e75c3d` = 마지막 코드 커밋 · 수정 결정 2건 닫힘 · 나머지 TODO 4·감수 1(빈 결정 없음). TODO 4건은 이미 루트 `TODO.md`에 있다(중복 추가 안 함)
 - ⚠️ CLAUDE.md 배포 상태 줄의 "REQ-E02 진행 중"은 이 커밋에서 고치지 않았다 — 고치면 그 커밋이 다시 마지막 코드 커밋이 된다. 머지 뒤 E02를 메시지에 안 넣은 커밋으로 정리
+
+### REQ-F16 Phase 2 — 클릭 한 번으로 저장 (🟡 리뷰 3회, dev 육안 남음)
+
+- Phase 1(버튼 → 선택 창)을 dev에서 확인한 사용자가 **다운로드 버튼 단계 자체를 없애라**고 요구했다 — 생성이 끝나면 **바로** 저장 위치 창이 떠야 한다. 요구 3건: ①클릭 한 번 ②생성 중 다른 창 갔다 와도 동작 ③결과 화면 재다운로드도 같은 동작
+- **설계가 뒤집혔다 — 창을 "완료 후"가 아니라 "생성 요청 전"에 연다.** `showSaveFilePicker`는 transient user activation(~5초)을 요구하는데 생성은 수 초~수십 초다. 완료 후엔 어떤 방법으로도 창을 못 띄운다. 그래서 [PDF 생성] 클릭 **안에서** 핸들만 먼저 받아 두고(`pickSaveTarget`), 완료되면 그 핸들에 쓴다(`writePdfToHandle`). 사용자가 누르는 건 한 번이다
+- 계획서 `범위 — 제외`의 "완료 시 자동 다운로드 — 버튼으로만 저장"이 **뒤집혔다**(취소선 + 사유 기록). Phase 1의 결정을 Phase 2가 덮은 것이라 조용히 지나가면 안 되는 자리다
+- **취소 = "안 만들겠다"로 읽는다**(사용자 결정) — 핸들이 없으면 생성 요청도 안 보낸다. 미지원 브라우저(Safari·Firefox)는 Phase 1 경로(버튼 다시 보여주기)로 폴백하고, 그 버튼을 `variant="contained" color="success"`로 키웠다(사용자 요구 "눈에 잘 띄게")
+- **위치를 먼저 고르면 빈 파일 위험이 생긴다** — 브라우저가 **창 확인 시점에** 파일을 만든다(`createWritable`이 아니다). 그래서 ①`writePdfToHandle`은 `fetchPdf` 성공 **뒤에만** `createWritable`을 부르고 ②생성·받기가 실패한 네 경로가 `leftoverNotice()`로 알린다. 안내 문구는 **"지워 주세요"가 아니라 "빈 파일이 생겼을 수 있습니다(새 이름으로 저장한 경우)"** — 덮어쓰기로 골랐으면 원본이 멀쩡한데 지우라고 하면 데이터를 잃게 만든다
+- **`setSaveError(...)`를 같은 동기 블록의 `setSaveError("")`가 지우는 결함이 이 REQ에서 세 번째로 났다.** 회차 1에서 또 걸려 `setSaveError("")`를 picker **앞**으로 옮겼다. 코드에 "세 번째"라고 주석을 박았다
+- 리뷰 회차 2(상한)에서 **격리 worktree 변형 실측**으로 드러난 사실 — **고친 프로덕션 코드 4건을 되돌려도 프론트 369/369가 녹색이다.** `leftoverNotice`는 테스트에 한 번도 안 나오고, `history/index.test.jsx`는 `showSaveFilePicker`를 스텁하지 않아 취소·실패 분기가 아예 안 돈다. F16-19는 `setSaveError("")`의 **존재**만 보고 순서를 안 본다 — 세 번 재발한 구조적 원인이 이것이다
+- **잠금 공백은 사용자 결정으로 이연했다**(2026-10-05 "그냥 바로 ㄴ으로 가자") — 케이스 3건 신설(순서·빈 파일 안내 배선·history 3분기)을 `TODO.md`로 넘기고 머지한다. 범위 안 (b)·(c)가 0건이라 게이트는 열려 있다
+- 리뷰: F16 @ fb9cf16 — (b) 0 · (c) 0 · nit 6 · 이연 4
+  - 이연: [frontend/src/pages/editor/index.jsx:127] 핸들 쓰기가 **성공하면** `downloadUrl`을 안 세워 완료 Alert에 저장 위치·재다운로드 버튼이 없다
+  - 이연: [frontend/src/pages/editor/f16Download.test.js:79] F16-19가 `setSaveError("")`의 존재만 봐 순서를 안 본다 — 3회 재발의 구조적 원인
+  - 이연: [frontend/src/components/PdfPreviewPanel.jsx:352] `file={pdfUrl}`이 자격 없는 XHR이라 local 모드 결과 PDF 미리보기가 크로스오리진에서 못 읽는다
+  - 이연: [frontend/src/utils/savePdf.js] `toDownloadUrl`이 `previewUrl.js`의 사실상 복제 — `withCacheKey(url, key)`로 합칠 만하다
+- **dev 육안 4건 확인 완료 (사용자, 2026-10-05)** — ①[PDF 생성] 한 번으로 창→생성→저장 ②**생성 중 다른 창에 갔다 와도 저장됨**(요구 ②, 자동화 불가 항목) ③생성 이력 재다운로드도 같은 창 ④취소하면 생성도 안 함. **REQ-F16 ✅**
+- **Phase 2 완료 기준은 전부 육안이다** — OS 네이티브 저장 창도, 요구 ②(다른 창 갔다 와도 저장)의 탭 포커스 전환도 자동화할 수 없다. 케이스 31/31 녹색이어도 ✅로 올리지 않았다
 
 ## 2026-10-03
 
