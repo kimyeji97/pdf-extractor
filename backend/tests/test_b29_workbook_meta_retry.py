@@ -87,7 +87,7 @@ def _only_notification(notif_files) -> dict:
 # ── 재시도 ────────────────────────────────────────────────
 
 def test_B29_01_한번_실패하고_두번째에_성공하면_성공_알림(run_export, notif_files):
-    """근거: PLAN § 작업 단계 — "**두 번째에 성공**하면 알림이 **SUCCESS**" """
+    """근거: PLAN § 작업 단계 — "**한 번 실패하고 두 번째에 성공**하면 알림이 **SUCCESS**" """
     calls, _ = run_export(fail_times=1)
 
     assert calls == 2                       # 재시도가 실제로 돌았다
@@ -107,9 +107,15 @@ def test_B29_02_세번_모두_실패하면_실패_알림(run_export, notif_files
     """근거: PLAN § 작업 단계 — "**3회 모두 실패**하면 알림이 **ERROR**"
 
     이것이 이 REQ 의 핵심이다 — 종전에는 여기서 **성공 알림**이 나갔다.
-    """
-    run_export(fail_times=99)
 
+    ⚠️ **횟수까지 본다.** `fail_times=99`(영원히 실패)라 `ATTEMPTS >= 2` 면 severity 는
+       어차피 ERROR 가 돼서, 상한을 10 으로 늘려도 통과했다(`/review` 회차 2 실측 — 총 대기
+       4.5초). 계획서 § 결정이 "**3회 · 짧은 고정 간격**" 을 못 박았고 § 제약·함정이
+       "상한을 짧게 유지할 것" 이라 했으므로 횟수를 여기서 고정한다.
+    """
+    calls, _ = run_export(fail_times=99)
+
+    assert calls == 3
     assert _only_notification(notif_files)["severity"] == "error"
 
 
@@ -162,16 +168,21 @@ def test_B29_08_메타_저장_실패는_다른_문구를_쓴다(run_export, noti
     """근거: PLAN § 제약·함정 — "같은 알림이 된다"
 
     PDF 는 만들어졌으므로 "생성에 실패했습니다" 는 **거짓**이다.
+
+    ⚠️ **긍정 단언이어야 한다.** `!= "…실패했습니다."` 만 보면 분기를 통째로 지워
+       **성공 문구**("생성이 완료되었습니다")가 나가도 통과한다(`/review` 회차 2 실측).
     """
     run_export(fail_times=99)
 
-    assert _only_notification(notif_files)["message"] != "문제집 생성에 실패했습니다."
+    message = _only_notification(notif_files)["message"]
+    assert "등록하지 못했습니다" in message
+    assert message != "문제집 생성에 실패했습니다."
 
 
 # ── /review 회차 0 반영 ───────────────────────────────────
 
 def test_B29_09_재시도는_같은_키로_덮어쓴다(
-    make_job, inline_extract_pool, notif_files, monkeypatch
+    make_job, inline_extract_pool, monkeypatch
 ):
     """[B29-09] 재시도가 **멱등**이다 — 같은 키를 덮어쓴다.
 
@@ -196,9 +207,11 @@ def test_B29_09_재시도는_같은_키로_덮어쓴다(
     )
 
     keys: list[str] = []
+    saved: list[dict] = []
 
     def _save(workbook_id, data):
         keys.append(workbook_id)
+        saved.append(data)
         if len(keys) < 2:
             raise RuntimeError("R2 일시 오류")
 
@@ -210,12 +223,18 @@ def test_B29_09_재시도는_같은_키로_덮어쓴다(
 
     assert len(keys) == 2, f"재시도가 돌지 않았다: {keys}"
     assert keys[0] == keys[1], f"재시도가 다른 키로 썼다: {keys}"
+    # ⚠️ **안정성만으로는 부족하다.** 키가 재시도 간 같아도 **행이 광고하는 id 와 다르면**
+    #    그 id 로 `GET /api/workbooks/{id}`·`DELETE`(REQ-C08) 가 404 다 — 저장 키를
+    #    `export_job_id` 로 바꾼 변형이 그대로 통과했다(`/review` 회차 2 실측).
+    assert keys[-1] == saved[-1]["workbook_id"], (
+        f"저장 키와 행의 workbook_id 가 다르다: {keys[-1]} != {saved[-1]['workbook_id']}"
+    )
 
 
 def test_B29_10_메타_실패는_제목으로도_드러난다(run_export, notif_files):
     """[B29-10] 힌트가 **`title` 에** 있다 — `message` 는 사용자에게 안 닿는다.
 
-    근거: PLAN § 결정 — "힌트는 `title` 에 섞는다"
+    근거: PLAN § 결정 — "**`title` 에 섞는다**"
 
     `NotificationSnackbar`·`NotificationBell` 둘 다 `title` 만 그린다 — 생성 화면을 떠난
     사용자(이 REQ 가 상정한 그 사용자)에게 `message` 는 영영 안 보인다.
