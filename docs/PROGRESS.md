@@ -257,7 +257,7 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 | 추출 서버 분리 (Lambda 검토) | [plan-infra-backend-extractor.md](infra/plan-infra-backend-extractor.md) | ❌ ADR-0001로 ECS 채택 |
 | Java 전환 + DynamoDB 마이그레이션 | [plan-infra-backend-migration.md](infra/plan-infra-backend-migration.md) | ❌ 향후 |
 | 성능 측정 · 운영 사양 산정 (REQ-P06) | [perf-infra-capacity.md](infra/perf-infra-capacity.md) | ✅ 2026-10-01 측정 — 최소 1 vCPU/2GB · 권장 2 vCPU/4GB, 현 dev 0.5/1GB는 피크에서 OOM |
-| prod 환경 | (추후 결정) | ❌ 미착수 |
+| prod 환경 | [PLAN-E02](plans/PLAN-E02-prod-environment.md) | ✅ 2026-10-05 REQ-E02 |
 | IaC / CI·CD 자동화 | — | ❌ 미착수 |
 
 ---
@@ -266,7 +266,7 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 
 ## 2026-10-06
 
-### REQ-B29 — 메타 저장이 실패하면 만들어진 PDF 가 조용히 사라진다 (🟡 배포·확인 남음)
+### REQ-B29 — 메타 저장이 실패하면 만들어진 PDF 가 조용히 사라진다 (✅ prod 정상 생성 확인)
 
 - **REQ-F18 `/review` 가 찾아낸 (c) 에서 나왔다.** PDF 는 만들어졌는데 **사용자가 닿을 길이 없고 에러도 없는** 경로가 있었다 — `extract.py` 가 메타 저장 실패를 의도적으로 삼키고(그 판단은 옳다. PDF 는 실제로 만들어졌다) `status = DONE` 을 유지하는데, `emit_export` 가 **`job.status` 만 보고** severity 를 정해 **성공 알림**이 나갔다. 결과 화면은 문제집 행 기준이라 그 PDF 가 안 뜨고, **F18 이 생성 화면 다운로드를 걷어내 유일한 탈출구마저 없앴다**
 - 범위는 **재시도 + 알림을 ERROR 로**(사용자 결정). 결과 화면을 job 기준으로 바꾸는 근본 해결은 오픈 전날이라 제외했다 — 재시도가 **발생 확률**을, 알림이 **무지(無知)** 를 줄인다
