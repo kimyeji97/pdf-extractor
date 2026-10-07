@@ -13,6 +13,22 @@ function _setLoading(delta) {
   _onLoadingChange?.(_activeCount > 0);
 }
 
+// ── 서버 다운 감지 (REQ-F19) ──────────────────────────────
+// 꺼진 백엔드는 상태 코드가 아니라 fetch reject 로 온다 — 터널 5xx 에도 CORS 헤더가 없어 같은 모양이다(계약 #8).
+// apiFetch 경로(_rawFetch)만 본다. 배경 raw fetch(계약 #26)는 일시 단절마다 화면이 튀므로 감지하지 않는다.
+let _onServerDown = null;
+
+export function setServerDownCallback(fn) {
+  _onServerDown = fn;
+}
+
+function _watchDown(promise) {
+  return promise.catch((e) => {
+    if (e?.name !== "AbortError") _onServerDown?.(); // 호출자가 끊은 요청은 서버 다운이 아니다
+    throw e;
+  });
+}
+
 // ── GET 요청 중복 방지 (REQ-P02-03) ────────────────────────
 // 리렌더·동시 마운트로 같은 GET이 겹치면 진행 중인 fetch Promise를 공유한다.
 // Response.clone()으로 반환해 여러 호출자가 각자 독립적으로 res.json()을 호출할 수 있게 한다.
@@ -23,7 +39,7 @@ async function _rawFetch(url, options) {
   if (method !== "GET") {
     _setLoading(+1);
     try {
-      return await fetch(url, options);
+      return await _watchDown(fetch(url, options));
     } finally {
       _setLoading(-1);
     }
@@ -35,7 +51,8 @@ async function _rawFetch(url, options) {
   }
 
   _setLoading(+1);
-  const promise = fetch(url, options).finally(() => _setLoading(-1));
+  // 감지는 공유 Promise 에 한 번만 건다 — 같은 GET 을 기다리는 호출자가 여럿이어도 알림은 1회
+  const promise = _watchDown(fetch(url, options)).finally(() => _setLoading(-1));
   _inflightGets.set(url, promise);
   try {
     const res = await promise;

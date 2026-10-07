@@ -4,6 +4,8 @@ import App from 'App';
 import DashboardLayout from 'layouts/dashboard';
 import PageLoader from 'components/loading/PageLoader';
 import RequireAuth from 'components/RequireAuth';
+// 서버 다운 안내는 lazy 로 두지 않는다 — 오프라인이면 그 청크부터 못 받는다 (REQ-F19)
+import UnavailablePage from 'pages/unavailable';
 import paths from './paths';
 
 const AnalysisPage     = lazy(() => import('pages/analysis'));
@@ -45,6 +47,8 @@ export const routes: RouteObject[] = [
           </Suspense>
         ),
       },
+      // 서버 다운 안내도 RequireAuth 밖이다 — 안에 두면 미인증 사용자가 /login 으로 튕긴다 (REQ-F19)
+      { path: paths.unavailable, element: <UnavailablePage /> },
       {
         path: '/',
         element: (
