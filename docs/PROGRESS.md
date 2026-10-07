@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-06
+> 최종 갱신: 2026-10-07
 
 ## 요구사항 인덱스
 
@@ -145,6 +145,7 @@
 | REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
+| REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -263,6 +264,26 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-10-07
+
+### REQ-D12 — 시스템 이름 변경 "오답 클립북 / ClipBook" (✅ — Phase 1로 종결)
+
+- **이름은 대화로 골랐다** — 후보 방향 4개(클립북·픽앤북·오답+오리기·오답+책)를 한글·영문 짝으로 좁혀 사용자가 **오답 클립북 / ClipBook**으로 결정. 기각 후보: 가위풀·엮음·문제공방·픽앤북·오려담기(SnipNote)·오답북(MissBook)·다시북(Rebook)·MissClipBook(길다)
+- **범위는 화면·문서 이름만** — 오픈(2026-10-06) 직후라 도메인·Worker·R2(`dailystudy-*`)·레포·ECS 이름은 그대로. 바꾸면 prod WAF(계약 #38)·R2 CORS·커스텀 도메인이 함께 움직인다
+- ⚠️ **워드마크 이미지 속 글자가 `깊은생각`이다**(`logo-wordmark.png`, alt 동일) — 시스템 이름인지 별개 운영 브랜드인지 확인 안 됨. 탭 제목만 바뀌어 **헤더 로고와 탭 이름이 지금 다르다** — 이 상태로 배포하면 두 이름이 함께 보인다
+- README·CLAUDE.md 제목은 `/checkpoint`에서 함께 바꿨다(문서라 `/implement` 범위 밖)
+- 브랜치는 `main`에서 새로 땄다 — F19 브랜치(미머지 7커밋) 위였다. F19 계획서 미커밋 수정은 `stash@{0}`에 보관(F19 브랜치에서 `git stash pop`)
+- ⚠️ **F19 브랜치도 `## 2026-10-07` 섹션과 인덱스 행을 갖고 있다** — 두 PR이 머지될 때 PROGRESS·CLAUDE.md(다음 번호 줄)가 충돌한다. 같은 날짜 섹션은 하나로 합칠 것
+- **계획 이탈 — Phase 2(워드마크·아이콘 교체) 보류, 별도 작업으로 분리**(사용자 결정). 미결 2건(`깊은생각` 교체 여부·아이콘)과 함께 **테마 컬러 변경**(남색 `#1B2B4B` · 빨강 `#F0503A`, 채점 펜 느낌)을 한 번에 요청 예정 — 루트 `TODO.md` "브랜드 리뉴얼". 번호는 그때 부여(다음 D13)
+  - ⚠️ 그 작업의 함정: 계약 #20 — `main`·`lighter`·`darker`는 라이트/다크 공유라 남색 primary는 **다크에서 배경에 묻힐 수 있다**
+- 리뷰: D12 @ e55654a — (b) 0 · (c) 1 · nit 2
+  - (c): [frontend/src/systemName.test.js:23] 검증 범위가 완료 기준보다 좁다 — 계획서는 "옛 이름 두 개 × `frontend/`·`backend/app/`" 0건인데, D12-03은 한글 이름 × frontend JS/TS만, D12-04는 영문 이름 × backend `.py`만 본다 · 가설 (현재 두 이름 모두 0건 실측)
+    - 방안: A 검증 계약 확장 (/workplan → /testgen, 테스트 2건 +6줄) · TODO · 감수 — 추천 감수
+    - 결정: 감수
+  - nit: CLAUDE.md "다음 번호"의 `F19`는 F19 브랜치 머지 때 `F20`으로 정리 · src 순회 헬퍼가 테스트 3곳에 복사
+- ⚠️ **`@ e55654a`는 문서 커밋이다** — 게이트 명령(`':/!docs'`)이 `docs/` 밖의 `README.md`·`CLAUDE.md`를 바꾼 커밋도 "코드 커밋"으로 잡는다. 이번엔 리뷰 범위가 그 커밋까지 포함해 맞았다
+- 케이스 **D12-01~04 (4/4)**
 
 ## 2026-10-06
 
