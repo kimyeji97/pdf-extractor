@@ -112,11 +112,14 @@ def compute_windows(actions: list[dict], now: datetime, days: int = 14) -> list[
             is_on = False
         else:
             continue
-        try:  # 미지원 토큰(L·W·#)·잘못된 Timezone 은 그 예약만 건너뛴다 — 정상 구간까지 비우지 않는다
+        try:
             tz = ZoneInfo(a.get("Timezone") or "UTC")
             events += [(t, is_on) for t in _occurrences(a.get("Schedule", ""), tz, now - margin, horizon + margin)]
         except Exception:
-            logger.warning("해석할 수 없는 예약 작업 건너뜀: %s", a.get("Schedule"), exc_info=True)
+            # 미지원 토큰(L·W·#)·잘못된 Timezone — 하나만 빼고 계산하면 빠진 off 양옆 구간이 이어 붙어
+            # "며칠째 켜져 있음" 같은 틀린 구간이 나온다. 틀린 구간보다 모름(빈 목록)이 낫다(리뷰 F19 회차 5)
+            logger.warning("해석할 수 없는 예약 작업 — 운영 구간을 비운다: %s", a.get("Schedule"), exc_info=True)
+            return []
     events.sort(key=lambda e: e[0:2])  # 같은 시각이면 off(False) 먼저 — 길이 0 구간 방지
 
     windows, opened = [], None
