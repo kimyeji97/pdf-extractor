@@ -34,7 +34,11 @@ export default function UnavailablePage() {
     try {
       const res = await fetch(HEALTH_URL, { cache: "no-store" });
       if (res.ok) {
-        navigate(location.state?.from || paths.analysis, { replace: true });
+        const from = location.state?.from;
+        navigate(from ? { pathname: from.pathname, search: from.search, hash: from.hash } : paths.analysis, {
+          replace: true,
+          state: from?.state,
+        });
         return;
       }
     } catch {

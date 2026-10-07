@@ -34,9 +34,11 @@ const App = () => {
 
   useEffect(() => {
     setServerDownCallback(() => {
-      const { pathname, search } = locationRef.current;
+      const { pathname, search, hash, state } = locationRef.current;
       if (pathname === paths.unavailable) return;
-      navigate(paths.unavailable, { state: { from: pathname + search } });
+      // state 까지 넘긴다 — 편집 화면은 state.initialWorkbookId 로 복원한다(리뷰 F19 회차 0).
+      // replace — push 면 뒤로 가기가 실패한 화면을 다시 띄워 안내로 튕기고, 동시 실패마다 기록이 쌓인다
+      navigate(paths.unavailable, { replace: true, state: { from: { pathname, search, hash, state } } });
     });
     return () => setServerDownCallback(null);
   }, [navigate]);
