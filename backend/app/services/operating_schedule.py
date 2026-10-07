@@ -13,6 +13,7 @@ Timezone Asia/Seoul). 시각은 사용자가 수시로 바꾸므로 코드·환�
 """
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -25,15 +26,28 @@ _MON = {m: i for i, m in enumerate(
     ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"], start=1)}
 
 
+# 무인증 엔드포인트라 요청마다 AWS 를 부르면 반복 호출로 스로틀될 수 있다 — 성공 결과만 5분 캐시한다(리뷰 F19 회차 4).
+# ponytail: 프로세스 단위 캐시, 워커가 늘면 워커마다 5분에 1회 호출
+_CACHE_TTL = 300
+_cache: tuple[float, list[dict]] | None = None
+_client = None
+
+
 def fetch_scheduled_actions() -> list[dict]:
     """대상 서비스의 예약 작업 원본(`ScheduledActions` 항목). 설정이 없으면 빈 목록."""
+    global _cache, _client
     if not settings.SCHEDULE_RESOURCE_ID:
         return []
-    import boto3
+    if _cache and time.monotonic() - _cache[0] < _CACHE_TTL:
+        return _cache[1]
+    if _client is None:
+        import boto3
 
-    client = boto3.client("application-autoscaling", region_name=settings.SCHEDULE_AWS_REGION)
-    res = client.describe_scheduled_actions(ServiceNamespace="ecs", ResourceId=settings.SCHEDULE_RESOURCE_ID)
-    return res.get("ScheduledActions", [])
+        _client = boto3.client("application-autoscaling", region_name=settings.SCHEDULE_AWS_REGION)
+    res = _client.describe_scheduled_actions(ServiceNamespace="ecs", ResourceId=settings.SCHEDULE_RESOURCE_ID)
+    actions = res.get("ScheduledActions", [])
+    _cache = (time.monotonic(), actions)
+    return actions
 
 
 def _field(expr: str, lo: int, hi: int, names: dict | None = None) -> set[int] | None:
@@ -52,6 +66,8 @@ def _field(expr: str, lo: int, hi: int, names: dict | None = None) -> set[int] |
             a, b = (int(x) for x in part.split("-"))
         else:
             a = b = int(part)
+            if step:  # `5/10` = 5부터 끝까지 10 간격 (AWS cron)
+                b = hi
         out.update(range(a, b + 1, int(step) if step else 1))
     return out
 
@@ -84,7 +100,9 @@ def _occurrences(schedule: str, tz: ZoneInfo, start: datetime, end: datetime) ->
 def compute_windows(actions: list[dict], now: datetime, days: int = 14) -> list[dict]:
     """앞으로 `days` 일 안의 운영 구간 `[{start, end}]`. 지금이 들어 있는 구간도 포함한다(배너가 그 end 를 본다)."""
     horizon = now + timedelta(days=days)
-    lookback = now - timedelta(days=days)  # 진행 중 구간의 시작을 찾으려고 과거도 본다
+    # 진행 중 구간의 시작(과거)과 horizon 직전에 시작한 구간의 끝(미래)을 찾으려고 앞뒤로 더 본다.
+    # ponytail: 35일 — 월 단위 스케줄까지. 그보다 긴 구간은 빠진다
+    margin = timedelta(days=35)
     events: list[tuple[datetime, bool]] = []
     for a in actions:
         cap = a.get("ScalableTargetAction") or {}
@@ -94,16 +112,19 @@ def compute_windows(actions: list[dict], now: datetime, days: int = 14) -> list[
             is_on = False
         else:
             continue
-        tz = ZoneInfo(a.get("Timezone") or "UTC")
-        events += [(t, is_on) for t in _occurrences(a.get("Schedule", ""), tz, lookback, horizon)]
-    events.sort(key=lambda e: e[0])
+        try:  # 미지원 토큰(L·W·#)·잘못된 Timezone 은 그 예약만 건너뛴다 — 정상 구간까지 비우지 않는다
+            tz = ZoneInfo(a.get("Timezone") or "UTC")
+            events += [(t, is_on) for t in _occurrences(a.get("Schedule", ""), tz, now - margin, horizon + margin)]
+        except Exception:
+            logger.warning("해석할 수 없는 예약 작업 건너뜀: %s", a.get("Schedule"), exc_info=True)
+    events.sort(key=lambda e: e[0:2])  # 같은 시각이면 off(False) 먼저 — 길이 0 구간 방지
 
     windows, opened = [], None
     for t, is_on in events:
         if is_on and opened is None:
             opened = t
         elif not is_on and opened is not None:
-            if t > now and opened < horizon:
+            if t > now and opened < horizon:  # 지금 이후에 끝나고 2주 안에 시작하는 구간
                 windows.append({"start": opened.isoformat(), "end": t.isoformat()})
             opened = None
     return windows
