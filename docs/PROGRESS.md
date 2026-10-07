@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-06
+> 최종 갱신: 2026-10-07
 
 ## 요구사항 인덱스
 
@@ -145,6 +145,7 @@
 | REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
+| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 1/4 — 케이스 12/12 · 리뷰 회차 1 @ `c543422` (TODO 2 · 감수 1) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -263,6 +264,30 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-10-07
+
+### REQ-F19 — 서버가 꺼져 있거나 꺼질 예정이면 알린다 (🟡 Phase 1/4)
+
+- **발단: "ErrorBoundary로 되나?"** — 안 된다. 렌더 중 throw만 잡고, API 호출은 effect·핸들러·Promise 안이라 닿지 않는다. 감지는 `apiFetch`가 모두 지나는 `_rawFetch` 한 곳에서 한다(`setLoadingCallback` 짝인 `setServerDownCallback`). ErrorBoundary(`errorElement`)는 **흰 화면 방지용으로 따로** Phase 2에 둔다
+- **판정은 fetch reject만** — 꺼진 백엔드·터널 530/502는 CORS 헤더가 없어 브라우저에 상태 코드가 아니라 `TypeError`로 온다(계약 #8). CORS가 붙은 5xx는 사용자 결정으로 제외("꺼짐"과 "느림"을 섞지 않는다)
+- 사용자 결정: 안내는 **별도 경로**(덮개 기각) · 복구는 **버튼만**(자동 폴링 기각) · 오프라인은 `navigator.onLine === false`일 때만 구분 · 배너 **로그인 화면 포함**(→ 운영 구간 API 무인증) · 다운 화면엔 **다음 운영 구간**(요일·시간 요약은 일반 cron을 문장화하기 어려워 기각)
+- **prod 자동 켜짐/꺼짐의 실체(2026-10-07 실측)** — ECS Application Auto Scaling 예약 작업 `on` `cron(0 15 ? * MON-FRI *)` · `off` `cron(0 23 ? * MON-FRI *)`, Timezone Asia/Seoul. **주말은 종일 꺼짐.** 시각은 사용자가 수시로 바꾸므로 프론트·환경변수에 박지 않고 **백엔드가 `DescribeScheduledActions`로 읽는다**(Phase 3 — 태스크 역할 IAM 읽기 권한 필요)
+- ⚠️ **안내 화면은 lazy로 두지 않는다** — 오프라인이면 그 청크부터 못 받는다. 그리고 `RequireAuth` 밖이다(안이면 미인증 사용자가 `/login`으로 튕긴다)
+- ⚠️ **`/health`는 `/api` 아래가 아니다** — `BASE_URL`에 붙이면 404. 재시도는 raw fetch(apiFetch면 딤이 켜지고 실패 시 감지가 재발)
+- **`/review` 회차 0 → 1** — 회차 0 (b) 2건을 수정(`c543422`): ① 복귀 대상이 `pathname+search`뿐이라 **`location.state`가 사라져** 편집 화면(`initialWorkbookId`)이 빈 편집기로 열렸다 ② push 이동이라 **뒤로 가기 → 원래 화면 재실패 → 다시 안내**로 튕기고, 동시 reject가 stale ref 가드를 지나 기록이 중복됐다 → `replace`. 회차 1에서 둘 다 닫힘 · 새 결함 0
+- 리뷰: F19 @ c543422 — (b) 0 · (c) 0 · nit 3 · 이월 3
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch에 타임아웃이 없다 — 응답이 매달리면 [다시 시도]가 비활성으로 남는다(Cloudflare 524까지 ~100s) · 가설 (회차 0)
+    - 방안: A `signal: AbortSignal.timeout(…)` (+1줄) · TODO · 감수
+    - 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 Cloudflare 504/524(느린 정상 서버)도 "서버 다운"으로 판정 — 앱 `TimeoutMiddleware`(30s) 504는 CORS가 붙어 먼저 오므로 드문 경로 · 가설 (회차 0)
+    - 방안: A 계획서 미결로 · TODO · 감수
+    - 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자가 누른 raw fetch(`uploadPdf` local · `uploadCover` · `uploadWatermark` · `getJobInfo`)는 감지되지 않는다 — 계획서 범위가 `apiFetch` 경로 · 가설 (회차 0)
+    - 방안: A 범위 확대를 계획서 미결로 · TODO · 감수
+    - 결정: TODO
+- 테스트 공백(nit): 회차 0 수정 두 가지(state 복원 · replace)를 단언하는 케이스가 없다 — F19-08은 경로만 본다
+- 케이스 **F19-01~12 (12/12)** · 프론트 전체 378/380 — 실패 2건(F17-17·20)은 **Node 20에 `fs.globSync`가 없어서**(Node 22+) 생긴 기존 환경 문제, main에서도 같다
 
 ## 2026-10-06
 
