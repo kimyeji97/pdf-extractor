@@ -1,6 +1,6 @@
 # PLAN-F19 · 백엔드가 꺼져 있거나 꺼질 예정이면 사용자에게 알린다
 
-> 출처: 2026-10-07 세션 대화 · 작성: 2026-10-07 · 상태: 🟡 진행 (Phase 1/4)
+> 출처: 2026-10-07 세션 대화 · 작성: 2026-10-07 · 상태: 🟡 진행 (Phase 2/4)
 
 ## 배경
 
@@ -71,7 +71,7 @@ prod는 ECS Auto Scaling 예약 작업으로 켜지고 꺼진다(2026-10-07 실�
       ④ 5xx 응답이면 이동하지 않는다
       ⑤ `onLine=false`면 오프라인 문구를 보여 준다
       + 로컬에서 uvicorn을 끄고 목록 화면·로그인 화면 육안 확인
-- [ ] **Phase 2** — 최상위 `errorElement`
+- [x] **Phase 2** — 최상위 `errorElement`
       완료 기준: 렌더 중 throw하는 자식 아래에서 안내와 새로고침 버튼이 렌더되는 케이스가 녹색
 - [ ] **Phase 3** — 백엔드 운영 구간 API(무인증, AWS 예약 작업 조회) + prod 태스크 역할에 IAM 읽기 권한
       완료 기준:
@@ -90,7 +90,7 @@ prod는 ECS Auto Scaling 예약 작업으로 켜지고 꺼진다(2026-10-07 실�
 
 ## 검증 계약
 
-> 작성: 2026-10-07 · 스펙: 없음(계획서가 근거) · 검증: `/testrun F19` · Phase 1분만 — Phase 2~4는 각 Phase 착수 직전에 추가
+> 작성: 2026-10-07 · 스펙: 없음(계획서가 근거) · 검증: `/testrun F19` · Phase 1·2 — Phase 3·4는 각 Phase 착수 직전에 추가
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
 |----|------|--------|:----:|------|:----:|:----:|
@@ -106,8 +106,11 @@ prod는 ECS Auto Scaling 예약 작업으로 켜지고 꺼진다(2026-10-07 실�
 | F19-10 | 안내 화면 | 재시도 URL은 `<오리진>/health` (`…/api/health` 아님) | 회귀 | PLAN § 제약 — "`/api` 아래가 아니다" | 1 | ✅ |
 | F19-11 | 안내 화면 | 재시도 대기 중 `GlobalDim` 안 켜짐 | 회귀 | PLAN § 제약 — "`apiFetch`를 거치지 않는다" | 1 | ✅ |
 | F19-12 | 안내 화면 | `onLine=false` 와 `true` 의 안내 문구가 다르다 | 정상 | PLAN § 범위 — "오프라인과 서버 다운을 구분할 수 있으면 구분한다" | 1 | ✅ |
+| F19-13 | `routes` | 하위 라우트가 렌더 중 throw → [새로고침] 버튼이 있는 안내 렌더(흰 화면 아님) | 정상 | PLAN § 작업 단계 — "렌더 중 throw하는 자식 아래에서 안내와 새로고침 버튼이 렌더되는" | 2 | ✅ |
+| F19-14 | `routes` | `lazy` 청크 로드 실패(import reject) → 같은 안내 렌더 | 회귀 | PLAN § 범위 — "청크 로드 실패로 흰 화면이 뜨는 것을 막는다" | 2 | ✅ |
 
 > 테스트가 정하는 인터페이스: `api/client` 의 **`setServerDownCallback(fn)`**(`setLoadingCallback` 짝) · `routes/paths` 의 **`paths.unavailable`** ·
+> Phase 2: `errorElement`는 **최상위 라우트**에 둔다 — 테스트가 실제 `routes[0]`을 복제해 children에 throw 라우트를 덧붙인다. [새로고침]의 `window.location.reload()` 호출은 jsdom에서 `location`을 재정의할 수 없어 케이스로 쓰지 않았다(리뷰에서 코드로 본다).
 > 버튼 이름 **"다시 시도"**(2026-10-07 선택한 미리보기). 이동은 **라우터 컨텍스트(`useNavigate`)로** 해야 한다 — 테스트가 `createMemoryRouter` 로 그리므로 모듈 싱글턴 `router` 로 이동하면 F19-06 이 실패한다.
 
 ## 제약·함정

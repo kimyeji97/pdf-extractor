@@ -145,7 +145,7 @@
 | REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
-| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 1/4 — 케이스 12/12 · 리뷰 회차 1 @ `c543422` (TODO 2 · 감수 1) |
+| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 2/4 — 케이스 14/14 · 리뷰 회차 3 @ `a511df1` (TODO 2 · 감수 1) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -288,6 +288,23 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
     - 결정: TODO
 - 테스트 공백(nit): 회차 0 수정 두 가지(state 복원 · replace)를 단언하는 케이스가 없다 — F19-08은 경로만 본다
 - 케이스 **F19-01~12 (12/12)** · 프론트 전체 378/380 — 실패 2건(F17-17·20)은 **Node 20에 `fs.globSync`가 없어서**(Node 22+) 생긴 기존 환경 문제, main에서도 같다
+- **Phase 2 — 최상위 `errorElement`(흰 화면 방지)** — 렌더 크래시·`lazy` 청크 로드 실패에 [새로고침] 안내. `<App/>` 자리를 대신하므로 컨텍스트(인증·알림)에 기대지 않는다. 테스트는 **실제 `routes[0]`을 복제해 children에 터지는 라우트를 덧붙인다** — 그래야 "최상위에 달렸는가"가 검증된다
+- ⚠️ **catch-all 라우트가 없어서 없는 URL(404)도 최상위 `errorElement`로 온다** — 회차 2가 실측으로 찾았다. "새 버전 배포 · 새로고침" 문구가 404에도 떠 **새로고침해도 영원히 안 풀리는 막다른 화면**이 됐다(이전엔 react-router 기본 "404 Not Found"). 결정 A — `isRouteErrorResponse` 404면 "없는 페이지" + [홈으로](`a511df1`). catch-all `/` 리다이렉트(B)는 기각 — 안내 없이 조용히 튕긴다
+- 404 아닌 ErrorResponse(405 등)도 [새로고침]으로 가지만 **앱에 loader·action·`<Form>`·`useFetcher`가 0건**이라 발생 경로가 없다 — 데이터 라우터 API를 쓰기 시작하면 다시 볼 것
+- [새로고침]의 `window.location.reload()` 호출은 **jsdom이 `location` 재정의를 막아** 케이스로 못 쓴다 — 코드로만 본다
+- 리뷰: F19 @ 0384dfd — (b) 1 · (c) 0 · nit 3 · 이월 3 (회차 2)
+  - (b): [frontend/src/routes/router.tsx:33] catch-all 없어 404도 "새로고침" 막다른 안내 · 실측
+    - 방안: A 404 분기 + 홈 링크 (RouteError.jsx) · B catch-all → `/` 리다이렉트 · TODO · 감수 — 추천 A
+    - 결정: A → `a511df1` 회차 3에서 닫힘
+- 리뷰: F19 @ a511df1 — (b) 0 · (c) 0 · nit 2 · 이월 3 (회차 3)
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch에 타임아웃이 없다 · 가설 (회차 0)
+    - 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 Cloudflare 504/524도 "서버 다운"으로 판정 · 가설 (회차 0)
+    - 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자가 누른 raw fetch는 서버 다운 감지 안 됨 · 가설 (회차 0)
+    - 결정: TODO
+  - nit: 404 분기를 단언하는 케이스가 없다(F19-13·14는 [새로고침] 경로만) · 404 화면에 대시보드 내비 없음
+- 케이스 **F19-13·14 (2/2)** · F19 누계 14/14 · 프론트 380/382(실패 2건은 위 Node 20 환경 문제)
 
 ## 2026-10-06
 
