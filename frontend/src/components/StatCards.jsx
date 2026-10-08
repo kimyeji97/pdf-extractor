@@ -33,28 +33,32 @@ import { Icon } from "@iconify/react";
 
 import { getStats, getStatsDetail } from "api/client";
 import { tintSx } from "theme/tint";
-import { MARK_COLOR, detectionBadge } from "utils/badges";
+import { MARK_COLOR, RESULT_COLOR, detectionBadge } from "utils/badges";
 
 // 타일 색은 `utils/badges` 단일 정의를 따른다 (REQ-F14) — 목록 뱃지와 같은 상태가 같은 색이어야 한다.
 // "대기"(default)는 팔레트 키가 아니라 tintSx 에 넣으면 죽는다 — 모드별로 갈리는 action·text 토큰으로 회색을 칠한다(계약 #20)
-const tileSx = (color) => (theme) => (color === "default"
-  ? { bgcolor: theme.vars.palette.action.selected, color: theme.vars.palette.text.secondary }
-  : tintSx(color)(theme));
+const tileSx = (color) => (theme) =>
+  color === "default"
+    ? {
+        bgcolor: theme.vars.palette.action.selected,
+        color: theme.vars.palette.text.secondary,
+      }
+    : tintSx(color)(theme);
 
 const TILES = [
-  {
-    field: "processing_count",
-    label: "분석중 파일수",
-    icon: "material-symbols:autorenew-rounded",
-    color: detectionBadge("PROCESSING").color,
-    clickable: true,
-  },
   {
     // 분석 슬롯 대기 (REQ-B17) — "분석중 파일수"(PROCESSING)와 따로 센다
     field: "queued_count",
     label: "대기 중 파일수",
     icon: "material-symbols:hourglass-empty-rounded",
     color: detectionBadge("QUEUED").color,
+    clickable: true,
+  },
+  {
+    field: "processing_count",
+    label: "분석중 파일수",
+    icon: "material-symbols:autorenew-rounded",
+    color: detectionBadge("PROCESSING").color,
     clickable: true,
   },
   {
@@ -82,7 +86,7 @@ const TILES = [
     field: "detection_rate",
     label: "문항 탐지율",
     icon: "material-symbols:target-rounded",
-    color: "success",
+    color: RESULT_COLOR,
     clickable: false,
   },
 ];
@@ -105,7 +109,12 @@ function formatValue(field, stats) {
  *   번호 클릭이면 그 페이지(1-based)가 온다(REQ-F12 Phase 3 — "페이지 클릭 → 작업 화면
  *   진입 + 해당 페이지로 스크롤·포커스").
  */
-export default function StatsBoard({ refreshTrigger = 0, backgroundRefreshTrigger = 0, detailContainer = null, onSelectFile }) {
+export default function StatsBoard({
+  refreshTrigger = 0,
+  backgroundRefreshTrigger = 0,
+  detailContainer = null,
+  onSelectFile,
+}) {
   const [stats, setStats] = useState(null);
   const [failed, setFailed] = useState(false);
 
@@ -129,7 +138,7 @@ export default function StatsBoard({ refreshTrigger = 0, backgroundRefreshTrigge
     let alive = true;
     getStats({ background: true })
       .then((d) => alive && setStats(d))
-      .catch(() => {});   // 배경 재조회 실패로 이미 보이는 현황판을 지우지 않는다
+      .catch(() => {}); // 배경 재조회 실패로 이미 보이는 현황판을 지우지 않는다
     return () => {
       alive = false;
     };
@@ -166,92 +175,122 @@ export default function StatsBoard({ refreshTrigger = 0, backgroundRefreshTrigge
   // 목록 영역 우측(detailContainer)에 포털로 붙는다 (REQ-F14 Phase 3). 제목 + 닫기 — 다시 눌러 닫는 토글은 보이지 않아
   // "닫을 수 없다"로 읽혔다. 폭 320, 자기 안에서 스크롤. 좁은 화면(목록 위)에선 전체 폭·높이 제한
   const detailPanel = openField && (
-        <Paper
-          data-testid="stat-detail-panel"
-          elevation={0}
-          sx={(theme) => ({
-            width: { xs: "100%", md: 320 },
-            maxHeight: { xs: "40%", md: "none" },
-            flexShrink: 0,
-            minHeight: 0,
-            borderRadius: 2,
-            p: 1.5,
-            boxShadow: theme.customShadows?.card,
-            display: "flex",
-            flexDirection: "column",
-            gap: 0.5,
-            overflowY: "auto",
-          })}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1, flexShrink: 0 }}>
-            <Typography variant="subtitle2" sx={{ flex: 1, minWidth: 0 }} noWrap>
-              {openTile?.label}
-            </Typography>
-            <IconButton size="small" aria-label="닫기" onClick={closeDetail}>
-              <Icon icon="material-symbols:close-rounded" style={{ fontSize: 18 }} />
-            </IconButton>
-          </Box>
-          {detailLoading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-              <CircularProgress size={20} />
-            </Box>
-          ) : (
-            <>
-              {(detail?.items || []).map((item) => (
-                <Box
-                  key={item.job_id}
-                  data-testid="stat-detail-file"
-                  onClick={() => onSelectFile?.(item.job_id)}
-                  sx={{
-                    px: 1,
-                    py: 0.75,
-                    borderRadius: 1,
-                    cursor: "pointer",
-                    "&:hover": { bgcolor: "action.hover" },
-                  }}
+    <Paper
+      data-testid="stat-detail-panel"
+      elevation={0}
+      sx={(theme) => ({
+        width: { xs: "100%", md: 320 },
+        maxHeight: { xs: "40%", md: "none" },
+        flexShrink: 0,
+        minHeight: 0,
+        borderRadius: 2,
+        p: 1.5,
+        boxShadow: theme.customShadows?.card,
+        display: "flex",
+        flexDirection: "column",
+        gap: 0.5,
+        overflowY: "auto",
+      })}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          px: 1,
+          flexShrink: 0,
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ flex: 1, minWidth: 0 }} noWrap>
+          {openTile?.label}
+        </Typography>
+        <IconButton size="small" aria-label="닫기" onClick={closeDetail}>
+          <Icon
+            icon="material-symbols:close-rounded"
+            style={{ fontSize: 18 }}
+          />
+        </IconButton>
+      </Box>
+      {detailLoading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+          <CircularProgress size={20} />
+        </Box>
+      ) : (
+        <>
+          {(detail?.items || []).map((item) => (
+            <Box
+              key={item.job_id}
+              data-testid="stat-detail-file"
+              onClick={() => onSelectFile?.(item.job_id)}
+              sx={{
+                px: 1,
+                py: 0.75,
+                borderRadius: 1,
+                cursor: "pointer",
+                "&:hover": { bgcolor: "action.hover" },
+              }}
+            >
+              <Typography variant="body2" noWrap>
+                {resolveDocumentName(item)}
+              </Typography>
+              {item.pages != null && (
+                <Typography
+                  variant="caption"
+                  color="text.disabled"
+                  component="div"
                 >
-                  <Typography variant="body2" noWrap>
-                    {resolveDocumentName(item)}
-                  </Typography>
-                  {item.pages != null && (
-                    <Typography variant="caption" color="text.disabled" component="div">
-                      {item.count}건 · 페이지{" "}
-                      {item.pages.map((p, i) => (
-                        <Box
-                          key={p}
-                          component="span"
-                          data-testid="stat-detail-page"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectFile?.(item.job_id, p + 1);
-                          }}
-                          sx={{
-                            cursor: "pointer",
-                            textDecoration: "underline",
-                            "&:hover": { color: "text.primary" },
-                          }}
-                        >
-                          {p + 1}
-                          {i < item.pages.length - 1 ? ", " : ""}
-                        </Box>
-                      ))}
-                    </Typography>
-                  )}
-                </Box>
-              ))}
-              {(detail?.items || []).length === 0 && (
-                <Typography variant="caption" color="text.disabled" sx={{ px: 1, py: 1 }}>
-                  해당하는 파일이 없습니다.
+                  {item.count}건 · 페이지{" "}
+                  {item.pages.map((p, i) => (
+                    <Box
+                      key={p}
+                      component="span"
+                      data-testid="stat-detail-page"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectFile?.(item.job_id, p + 1);
+                      }}
+                      sx={{
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        "&:hover": { color: "text.primary" },
+                      }}
+                    >
+                      {p + 1}
+                      {i < item.pages.length - 1 ? ", " : ""}
+                    </Box>
+                  ))}
                 </Typography>
               )}
-            </>
+            </Box>
+          ))}
+          {(detail?.items || []).length === 0 && (
+            <Typography
+              variant="caption"
+              color="text.disabled"
+              sx={{ px: 1, py: 1 }}
+            >
+              해당하는 파일이 없습니다.
+            </Typography>
           )}
-        </Paper>
+        </>
+      )}
+    </Paper>
   );
 
   return (
-    <Box data-testid="stats-board" sx={{ display: "flex", gap: 2, flexShrink: 0, minHeight: 0 }}>
-      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", flex: 1, alignContent: "flex-start" }}>
+    <Box
+      data-testid="stats-board"
+      sx={{ display: "flex", gap: 2, flexShrink: 0, minHeight: 0 }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          gap: 2,
+          flexWrap: "wrap",
+          flex: 1,
+          alignContent: "flex-start",
+        }}
+      >
         {TILES.map((t) => (
           <Paper
             key={t.field}
@@ -274,16 +313,29 @@ export default function StatsBoard({ refreshTrigger = 0, backgroundRefreshTrigge
               boxShadow: theme.customShadows?.card,
               cursor: t.clickable ? "pointer" : "default",
               ...tileSx(t.color)(theme),
-              ...(openField === t.field && { outline: "2px solid currentColor", outlineOffset: -2 }),
+              ...(openField === t.field && {
+                outline: "2px solid currentColor",
+                outlineOffset: -2,
+              }),
             })}
           >
-            <Icon icon={t.icon} style={{ fontSize: 26, flexShrink: 0, opacity: 0.85 }} />
+            <Icon
+              icon={t.icon}
+              style={{ fontSize: 26, flexShrink: 0, opacity: 0.85 }}
+            />
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" sx={{ display: "block", opacity: 0.9 }} noWrap>
+              <Typography
+                variant="caption"
+                sx={{ display: "block", opacity: 0.9 }}
+                noWrap
+              >
                 {t.label}
               </Typography>
               {stats ? (
-                <Typography variant="h6" sx={{ lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>
+                <Typography
+                  variant="h6"
+                  sx={{ lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}
+                >
                   {formatValue(t.field, stats)}
                 </Typography>
               ) : (
@@ -293,7 +345,9 @@ export default function StatsBoard({ refreshTrigger = 0, backgroundRefreshTrigge
           </Paper>
         ))}
       </Box>
-      {detailContainer ? detailPanel && createPortal(detailPanel, detailContainer) : detailPanel}
+      {detailContainer
+        ? detailPanel && createPortal(detailPanel, detailContainer)
+        : detailPanel}
     </Box>
   );
 }

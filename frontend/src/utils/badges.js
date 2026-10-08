@@ -17,12 +17,12 @@ const WAITING = { label: "대기 중", color: "default" };
 const DETECTION = {
   PENDING: WAITING,
   QUEUED: WAITING,
-  PROCESSING: { label: "분석 중", color: "info" },
+  PROCESSING: { label: "분석 중", color: "secondary" },
   FAILED: { label: "분석 실패", color: "error" },
 };
 
 /** 분석 결과(완료) 색 — 완료 뱃지와 작업 화면 페이지별 문항 수 칩이 같이 쓴다 */
-export const RESULT_COLOR = "success";
+export const RESULT_COLOR = "primary";
 
 /**
  * 감지 상태 뱃지.
@@ -31,12 +31,18 @@ export const RESULT_COLOR = "success";
  * @returns {{ label: string, color: string }|null}
  */
 export function detectionBadge(status, questionCount) {
-  if (status === "DONE") return { label: `${questionCount ?? 0}문항`, color: RESULT_COLOR };
+  if (status === "DONE")
+    return { label: `${questionCount ?? 0}문항`, color: RESULT_COLOR };
   return DETECTION[status] ?? null;
 }
 
 // 수동은 primary(남색) — secondary 가 브랜드 빨강이 되며 "분석 실패"(error) 칩과 헷갈리지 않게 (REQ-D13)
-export const MARK_COLOR = { falsePositive: "warning", manual: "primary" };
+export const MARK_COLOR = {
+  missPage: "warning",
+  falsePositive: "error",
+  manual: "info",
+};
 
 /** 상태를 말하지 않는 정보성 칩 — 채움형 상태 뱃지와 모양으로도 갈린다 */
-export const INFO_CHIP = { color: "primary", variant: "outlined" };
+export const INFO_CHIP = { color: "secondary", variant: "outlined" };
+export const HIGH_INFO_CHIP = { color: "secondary", variant: "filled" };

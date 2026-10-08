@@ -41,7 +41,9 @@ function destinationOf(n) {
 
 const formatTime = (iso) => {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
 };
 
 export default function NotificationBell() {
@@ -73,8 +75,12 @@ export default function NotificationBell() {
   return (
     <>
       <Tooltip title="알림">
-        <IconButton aria-label="알림" onClick={handleOpen} sx={{ color: "text.secondary" }}>
-          <Badge badgeContent={unreadCount} color="error">
+        <IconButton
+          aria-label="알림"
+          onClick={handleOpen}
+          sx={{ color: "text.secondary" }}
+        >
+          <Badge badgeContent={unreadCount} color="secondary">
             <Icon icon="solar:bell-bing-bold-duotone" width={22} />
           </Badge>
         </IconButton>
@@ -101,54 +107,62 @@ export default function NotificationBell() {
         <Divider />
 
         {notifications.length === 0 ? (
-          <Typography variant="body2" sx={{ px: 2, py: 3, color: "text.disabled", textAlign: "center" }}>
+          <Typography
+            variant="body2"
+            sx={{ px: 2, py: 3, color: "text.disabled", textAlign: "center" }}
+          >
             아직 알림이 없습니다
           </Typography>
         ) : (
           notifications.map((n) => {
             const read = isRead(n);
-            const tone = n.severity === "error" ? "error" : "success";
+            const tone = n.severity === "error" ? "error" : "primary";
             return (
-            <ListItemButton
-              key={keyOf(n)}
-              onClick={() => handleItemClick(n)}
-              sx={{ alignItems: "flex-start", gap: 1.5, py: 1.25 }}
-            >
-              {/* 확인/미확인은 왼쪽 아이콘으로 구분한다(2026-10-02 결정): 미확인 = 색 채운 아이콘, 확인 = 회색 테두리형 */}
-              <Box
-                aria-label={read ? "확인" : "미확인"}
-                sx={(theme) => ({
-                  mt: 0.25,
-                  width: 32,
-                  height: 32,
-                  flexShrink: 0,
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  bgcolor: read ? "transparent" : tintBg(tone)(theme),
-                  color: read ? "text.disabled" : `${tone}.main`,
-                })}
+              <ListItemButton
+                key={keyOf(n)}
+                onClick={() => handleItemClick(n)}
+                sx={{ alignItems: "flex-start", gap: 1.5, py: 1.25 }}
               >
-                <Icon
-                  icon={
-                    n.severity === "error"
-                      ? read ? "solar:danger-triangle-linear" : "solar:danger-triangle-bold"
-                      : read ? "solar:check-read-linear" : "solar:check-circle-bold"
-                  }
-                  width={18}
-                />
-              </Box>
+                {/* 확인/미확인은 왼쪽 아이콘으로 구분한다(2026-10-02 결정): 미확인 = 색 채운 아이콘, 확인 = 회색 테두리형 */}
+                <Box
+                  aria-label={read ? "확인" : "미확인"}
+                  sx={(theme) => ({
+                    mt: 0.25,
+                    width: 32,
+                    height: 32,
+                    flexShrink: 0,
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    bgcolor: read ? "transparent" : tintBg(tone)(theme),
+                    color: read ? "text.disabled" : `${tone}.main`,
+                  })}
+                >
+                  <Icon
+                    icon={
+                      n.severity === "error"
+                        ? read
+                          ? "solar:danger-triangle-linear"
+                          : "solar:danger-triangle-bold"
+                        : read
+                          ? "solar:check-read-linear"
+                          : "solar:check-circle-bold"
+                    }
+                    width={18}
+                  />
+                </Box>
 
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="body2" noWrap>
-                  {n.title || (n.severity === "error" ? "작업 실패" : "작업 완료")}
-                </Typography>
-                <Typography variant="caption" sx={{ color: "text.disabled" }}>
-                  {formatTime(n.created_at)}
-                </Typography>
-              </Box>
-            </ListItemButton>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" noWrap>
+                    {n.title ||
+                      (n.severity === "error" ? "작업 실패" : "작업 완료")}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "text.disabled" }}>
+                    {formatTime(n.created_at)}
+                  </Typography>
+                </Box>
+              </ListItemButton>
             );
           })
         )}

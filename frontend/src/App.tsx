@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router';
-import GlobalDim from 'components/GlobalDim';
-import { AuthProvider } from 'contexts/AuthContext';
-import { NotificationProvider } from 'contexts/NotificationContext';
-import NotificationSnackbar from 'components/NotificationSnackbar';
-import ShutdownBanner from 'components/ShutdownBanner';
-import { setLoadingCallback, setServerDownCallback } from 'api/client';
-import paths from 'routes/paths';
+import { useState, useEffect, useRef } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router";
+import GlobalDim from "components/GlobalDim";
+import { AuthProvider } from "contexts/AuthContext";
+import { NotificationProvider } from "contexts/NotificationContext";
+import NotificationSnackbar from "components/NotificationSnackbar";
+import ShutdownBanner from "components/ShutdownBanner";
+import { setLoadingCallback, setServerDownCallback } from "api/client";
+import paths from "routes/paths";
+import { Alert } from "@mui/material";
 
 /**
  * 루트 컴포넌트.
@@ -39,7 +40,10 @@ const App = () => {
       if (pathname === paths.unavailable) return;
       // state 까지 넘긴다 — 편집 화면은 state.initialWorkbookId 로 복원한다(리뷰 F19 회차 0).
       // replace — push 면 뒤로 가기가 실패한 화면을 다시 띄워 안내로 튕기고, 동시 실패마다 기록이 쌓인다
-      navigate(paths.unavailable, { replace: true, state: { from: { pathname, search, hash, state } } });
+      navigate(paths.unavailable, {
+        replace: true,
+        state: { from: { pathname, search, hash, state } },
+      });
     });
     return () => setServerDownCallback(null);
   }, [navigate]);

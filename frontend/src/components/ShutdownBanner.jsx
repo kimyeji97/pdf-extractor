@@ -46,9 +46,17 @@ export default function ShutdownBanner() {
     <Alert
       severity="warning"
       variant="filled"
-      sx={{ position: "fixed", top: 8, left: "50%", transform: "translateX(-50%)", zIndex: (t) => t.zIndex.snackbar, maxWidth: "calc(100% - 32px)" }}
+      sx={{
+        position: "fixed",
+        top: 8,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: (t) => t.zIndex.snackbar,
+        maxWidth: "calc(100% - 32px)",
+      }}
     >
-      서버가 약 {minutes}분 뒤 종료됩니다. 진행 중인 작업(분석·PDF 생성)은 끊길 수 있으니 미리 마무리해 주세요.
+      서버가 약 {minutes}분 뒤 종료됩니다. 진행 중인 작업(분석·PDF 생성)은 끊길
+      수 있으니 미리 마무리해 주세요.
     </Alert>
   );
 }
