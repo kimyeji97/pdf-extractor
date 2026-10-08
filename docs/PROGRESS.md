@@ -146,7 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 PR #43 머지(`dfcc485`) · dev·prod 배포 — Phase 3 prod 응답 대조(15:00 이후)·22시 배너 육안만 남음 · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
-| REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/PLAN-D13-brand-renewal.md) | — | 🟡 Phase 2/3 ✅(로고·파비콘 · 테마색) — 케이스 24/24 · 리뷰 회차 5 @ `62ed2ff` · dev 육안 확인 |
+| REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR·prod 배포 전 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
@@ -268,6 +268,16 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-08
+
+### REQ-D13 — 브랜드 리뉴얼 Phase 3 글꼴 (✅)
+
+- **본문·제목 모두 `Outfit Variable` → `Gothic A1` → OS 한글 고딕** — 계획서는 Gothic A1이 OS 고딕 "자리를 대체한다"였지만 OS 고딕은 **뒤에 남겼다**(글꼴 로드 전·실패 대비). Outfit은 가변 글꼴 1파일(등록 이름 `Outfit Variable` — `'Outfit'`이 아니다), Gothic A1은 굵기마다 별 파일이라 400~700만
+- Gothic A1 한글은 굵기당 `@font-face` 99개로 쪼개진 unicode-range라 빌드 `dist/assets`가 12MB(woff2 ~4.7MB)지만 브라우저는 쓰는 글자 조각만 받는다
+- ⚠️ **배포 직후 라이브 CSS가 옛 글꼴(Barlow·DM Sans)로 보였다** — `index.html` 캐시였다. 캐시 우회 재조회로 새 번들 확인. "배포했는데 안 바뀌었다"면 index부터 no-cache로 다시 볼 것
+- 생성 PDF 글꼴(`fitz.Font("korea")`)은 범위 밖 — 미리보기 라벨(테마 글꼴)과 PDF 글꼴은 DM Sans 때부터 달랐고 계약 #12·#14는 문자열·지면 색 짝이라 무관
+- 리뷰: D13 @ 122da1c — (b) 0 · (c) 0 · nit 4 (회차 6)
+  - nit: `typography.ts:73,80` h1·h2 `fontWeight: 800` 잔존(Gothic A1은 700까지, 사용처 0) · `typography.ts:52` 주석 "OS 기본 고딕" 잔존 · `brandFont.test.js` `/^Outfit/`이 `'Outfit'`도 통과 · 미리보기 vs PDF 글꼴 차이(범위 밖)
+- 케이스 **D13-25~30 (6/6)** · dev 배포(Worker `e2982dee`) 후 사용자 육안 확인 → **REQ-D13 ✅** — 남은 일: PR·main 머지·prod 프론트 배포(사용자 승인)
 
 ### REQ-D13 — 브랜드 리뉴얼 Phase 2 테마색 (🟡 Phase 2/3)
 

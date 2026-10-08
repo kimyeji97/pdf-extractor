@@ -1,6 +1,6 @@
 # PLAN-D13 · 브랜드 리뉴얼 — 로고·파비콘·테마색·글꼴
 
-> 출처: 2026-10-08 세션 대화 · 작성: 2026-10-08 · 상태: 🟡 진행 (Phase 2/3)
+> 출처: 2026-10-08 세션 대화 · 작성: 2026-10-08 · 상태: ✅ 완료 (2026-10-08)
 
 ## 배경
 
@@ -79,7 +79,7 @@
       - vitest 케이스가 녹색이다
       - `npm run build`가 통과한다
       - dev 육안(라이트·다크에서 버튼·선택 강조·칩)을 확인한다
-- [ ] **Phase 3** — 글꼴
+- [x] **Phase 3** — 글꼴
       완료 기준:
       - 본문·제목 글꼴 스택이 Outfit → Gothic A1 순서다
       - 굵기 400·500·600·700만 불러온다
@@ -118,6 +118,12 @@
 | D13-22 | `work.jsx` | 드래그 오버레이 테두리에 `primary.main`을 쓰지 않고 `#1B2B4B`를 쓴다 | 회귀 | PLAN § 작업 단계 — "드래그 오버레이 테두리가 모드 무관 `#1B2B4B`다" | 2 | ✅ |
 | D13-23 | `palette.dark` | primary·secondary·info·success·error `dark` = `#B6C5E6`·`#F8B498`·`#A6DFEB`·`#B0E4C5`·`#F8B7C6`(각 다크 `light`) | 정상 | PLAN § 작업 단계 — "다크 모드 채움 버튼 hover 배경이 main보다 밝다" | 2 | ✅ |
 | D13-24 | `palette.dark` | 위 5색 `contrastText` ↔ `dark` 대비 4.5:1 이상 | 불변식 | PLAN § 제약 — "다크 채움 버튼 hover 대비 4.5:1 이상" | 2 | ✅ |
+| D13-25 | `typography.fontFamily` | 본문 스택 1번째 Outfit · 2번째 `Gothic A1` | 정상 | PLAN § 작업 단계 — "본문·제목 글꼴 스택이 Outfit → Gothic A1 순서다" | 3 | ✅ |
+| D13-26 | `typography.fontSecondaryFamily` | 제목 스택도 같은 순서 | 정상 | PLAN § 작업 단계 — "본문·제목 글꼴 스택이 Outfit → Gothic A1 순서다" | 3 | ✅ |
+| D13-27 | `main.tsx` | `@fontsource/gothic-a1` import 굵기 = 400·500·600·700 정확히 | 경계 | PLAN § 작업 단계 — "굵기 400·500·600·700만 불러온다" | 3 | ✅ |
+| D13-28 | `main.tsx` | `@fontsource-variable/outfit` import | 정상 | PLAN § 결정 — "`@fontsource-variable/outfit` · `@fontsource/gothic-a1` 추가" | 3 | ✅ |
+| D13-29 | `package.json` | 두 패키지가 dependencies에 있다 | 정상 | PLAN § 결정 — "`@fontsource-variable/outfit` · `@fontsource/gothic-a1` 추가" | 3 | ✅ |
+| D13-30 | `package.json`·`src/` | dm-sans·barlow 의존성·import 없음 | 회귀 | PLAN § 작업 단계 — "DM Sans·Barlow 의존성과 import가 없다" | 3 | ✅ |
 
 > 테스트가 정하는 인터페이스: 다크 투명 로고 = **`public/logo-dark-transparent.svg`** · `Logo`는 라이트·다크 이미지를 **둘 다 DOM에 두고 CSS(색 체계 선택자)로 하나만 보인다**(JS로 모드를 읽어 바꾸면 첫 페인트에 잘못된 로고가 번쩍인다 — 계약 #21 계열) · 로고는 svg.
 
