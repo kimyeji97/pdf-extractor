@@ -24,7 +24,7 @@
       ⚠️ 아래 세 가지는 앱 쪽과 **짝**이다. 한쪽만 바꾸면 조용히 FOUC가 되살아난다:
         · `mui-mode`          ← MUI ThemeProvider의 modeStorageKey 기본값
         · `data-color-scheme` ← theme-config.ts의 cssVariables.colorSchemeSelector
-        · #141A21 / #F9FAFB   ← theme-config.ts의 grey[900] / grey[100]
+        · #151D2E / #F6F8FB   ← theme-config.ts의 grey[900] / grey[100] (REQ-D13 테마 셋)
                                 (= palette.ts의 background.dark/light.default)
     -->
     <script>
@@ -37,7 +37,7 @@
           var root = document.documentElement;
           root.setAttribute('data-color-scheme', dark ? 'dark' : 'light');
           root.style.colorScheme = dark ? 'dark' : 'light';
-          root.style.backgroundColor = dark ? '#141A21' : '#F9FAFB';
+          root.style.backgroundColor = dark ? '#151D2E' : '#F6F8FB';
         } catch (e) {
           /* localStorage 차단(시크릿·정책) 시엔 그냥 라이트로 시작한다 */
         }
