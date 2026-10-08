@@ -23,7 +23,9 @@ export default function ShutdownBanner() {
       .then((ws) => {
         if (!alive) return;
         setWindows(ws);
-        saveWindows(ws);
+        // 빈 목록은 저장하지 않는다 — 백엔드는 AWS 조회·해석 실패도 200 [] 로 준다. 덮어쓰면 서버가 불안정한
+        // 바로 그때 다운 화면의 운영 시간이 사라진다(리뷰 F19 회차 7). 지난 구간은 upcomingWindow 가 거른다
+        if (ws.length) saveWindows(ws);
       })
       .catch(() => {});
     return () => {
