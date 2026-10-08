@@ -7,7 +7,7 @@ Timezone Asia/Seoul). 시각은 사용자가 수시로 바꾸므로 코드·환�
 
 - 켜짐/꺼짐은 이름이 아니라 **용량**으로 식별한다 — `MinCapacity >= 1` 이 켜짐, `MaxCapacity == 0` 이 꺼짐.
 - AWS cron 은 6필드(분 시 일 월 요일 연도)이고 `?` 가 있으며 요일은 1=SUN … 7=SAT 다. 일반 cron(5필드)과 다르다.
-- `at(...)`·`rate(...)` 는 계산하지 않는다 — 일회성 예약을 구간에 어떻게 반영할지는 계획서 미결 질문이다.
+- `at(...)` 은 그 시각 한 번의 켜짐/꺼짐으로 반영하고, `rate(...)` 가 켜짐/꺼짐에 섞이면 빈 목록이다(2026-10-08 결정).
 - 조회 대상 서비스는 `SCHEDULE_RESOURCE_ID`(예: `service/pdf-extractor-cluster/pdf-extractor-backend-prod-svc`).
   비어 있으면(로컬·dev) 조회하지 않고 빈 목록이다.
 """
@@ -73,10 +73,19 @@ def _field(expr: str, lo: int, hi: int, names: dict | None = None) -> set[int] |
 
 
 def _occurrences(schedule: str, tz: ZoneInfo, start: datetime, end: datetime) -> list[datetime]:
-    """`cron(...)` 이 [start, end) 에서 발화하는 시각들. cron 이 아니면 빈 목록."""
+    """예약 표현식이 [start, end) 에서 발화하는 시각들.
+
+    - `at(yyyy-mm-ddThh:mm:ss)` — 그 시각 한 번. 시간대 없는 로컬 시각이라 예약의 Timezone 을 붙인다(2026-10-08 결정)
+    - `cron(...)` — AWS 6필드
+    - 그 밖(`rate(...)` 등) — ValueError. 해석 실패와 같이 운영 구간을 비운다(2026-10-08 결정 — 틀린 구간보다 모름)
+    """
+    at = re.fullmatch(r"at\((.+)\)", schedule.strip())
+    if at:
+        t = datetime.fromisoformat(at.group(1)).replace(tzinfo=tz)
+        return [t] if start <= t < end else []
     m = re.fullmatch(r"cron\((.+)\)", schedule.strip())
     if not m:
-        return []
+        raise ValueError(f"지원하지 않는 예약 표현식: {schedule}")
     minute, hour, dom, month, dow, year = m.group(1).split()
     minutes, hours = _field(minute, 0, 59), _field(hour, 0, 23)
     doms, months = _field(dom, 1, 31), _field(month, 1, 12, _MON)

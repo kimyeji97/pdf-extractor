@@ -105,3 +105,44 @@ def test_F19_24_no_auth_header_is_not_401(client, monkeypatch):
     monkeypatch.setattr(_svc(), "fetch_scheduled_actions", lambda: [ON, OFF])
     res = client.get("/api/operating-windows")
     assert res.status_code == 200
+
+
+# ── at(...) 일회성 · rate(...) 주기 (2026-10-08 결정) ─────────────
+
+def _at(when, is_on, tz="Asia/Seoul"):
+    cap = {"MinCapacity": 1, "MaxCapacity": 1} if is_on else {"MinCapacity": 0, "MaxCapacity": 0}
+    return {"ScheduledActionName": f"at-{when}", "Schedule": f"at({when})", "Timezone": tz, "ScalableTargetAction": cap}
+
+
+def test_F19_39_at_off_cuts_todays_window():
+    early_off = _at("2026-10-07T20:00:00", is_on=False)
+    _, end = _first(_svc().compute_windows([ON, OFF, early_off], WED_1000))
+    assert end == datetime(2026, 10, 7, 20, 0, tzinfo=KST)
+
+
+def test_F19_40_at_on_off_adds_weekend_window():
+    sat_on, sat_off = _at("2026-10-10T10:00:00", is_on=True), _at("2026-10-10T14:00:00", is_on=False)
+    windows = _svc().compute_windows([ON, OFF, sat_on, sat_off], WED_1000)
+    starts_ends = [(datetime.fromisoformat(w["start"]), datetime.fromisoformat(w["end"])) for w in windows]
+    assert (datetime(2026, 10, 10, 10, 0, tzinfo=KST), datetime(2026, 10, 10, 14, 0, tzinfo=KST)) in starts_ends
+
+
+def test_F19_41_at_uses_its_own_timezone():
+    utc_off = _at("2026-10-07T13:00:00", is_on=False, tz="UTC")  # 13:00 UTC = 22:00 KST
+    _, end = _first(_svc().compute_windows([ON, OFF, utc_off], WED_1000))
+    assert end == datetime(2026, 10, 7, 22, 0, tzinfo=KST)
+
+
+def test_F19_42_rate_in_on_off_returns_empty():
+    rate_off = {**OFF, "Schedule": "rate(1 day)"}
+    assert _svc().compute_windows([ON, rate_off], WED_1000) == []
+
+
+def test_F19_43_rate_in_non_on_off_action_is_ignored():
+    neither = {
+        "ScheduledActionName": "scale",
+        "Schedule": "rate(1 day)",
+        "Timezone": "Asia/Seoul",
+        "ScalableTargetAction": {"MinCapacity": 0, "MaxCapacity": 1},
+    }
+    assert _svc().compute_windows([ON, OFF, neither], WED_1000) == _svc().compute_windows([ON, OFF], WED_1000)
