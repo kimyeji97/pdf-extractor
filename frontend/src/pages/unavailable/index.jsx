@@ -7,6 +7,7 @@ import Button from "@mui/material/Button";
 import Alert from "@mui/material/Alert";
 
 import paths from "routes/paths";
+import { formatWindow, loadWindows, upcomingWindow } from "utils/operatingWindows";
 
 // `/health` 는 `/api` 아래가 아니다(backend main.py) — BASE_URL 에서 오리진만 쓴다.
 // client.js 의 BASE_URL 과 같은 규칙이다(NotificationContext 와 같은 이유로 거기서 export 하지 않는다).
@@ -27,6 +28,12 @@ export default function UnavailablePage() {
 
   // `onLine === false` 만 확실한 오프라인이다 — true 는 연결을 보장하지 않으므로 서버 다운으로 본다
   const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+
+  // 켜져 있을 때 받아 둔 운영 구간 — 서버가 꺼져 있으면 물을 수 없다(REQ-F19 Phase 4).
+  // 운영 중 장애면 지금 구간을 보여 준다(2026-10-08 결정). 없으면 줄을 생략한다
+  const now = new Date();
+  const win = upcomingWindow(loadWindows(), now);
+  const winLabel = win && new Date(win.start) <= now ? "운영 시간" : "다음 운영";
 
   const handleRetry = async () => {
     setChecking(true);
@@ -68,6 +75,12 @@ export default function UnavailablePage() {
             ? "네트워크 연결을 확인한 뒤 다시 시도해 주세요."
             : "서버가 꺼져 있거나 점검 중입니다. 잠시 후 다시 시도해 주세요."}
         </Typography>
+
+        {win && (
+          <Typography variant="body2" fontWeight={600} sx={{ mb: 3 }}>
+            {winLabel}: {formatWindow(win)}
+          </Typography>
+        )}
 
         {failed && (
           <Alert severity="warning" sx={{ mb: 2, textAlign: "left" }}>

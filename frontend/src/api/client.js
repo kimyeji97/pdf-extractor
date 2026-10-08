@@ -347,6 +347,19 @@ export async function getStatus(jobId) {
 }
 
 /**
+ * GET /api/operating-windows
+ * 앞으로 2주 치 운영 구간 `[{start, end}]` (REQ-F19 Phase 4 — 꺼짐 예고 배너·다운 화면 운영 시간)
+ *
+ * raw fetch 다 — 배경 조회라 딤을 켜지 않고, 실패해도 서버 다운 안내로 보내지 않는다(배너만 안 뜬다, 계약 #26).
+ * 무인증 엔드포인트라 헤더를 붙이지 않는다 — 로그인·회원가입 화면에서도 부른다(B23-03 예외 목록, 계약 #31).
+ */
+export async function getOperatingWindows() {
+  const res = await fetch(`${BASE_URL}/operating-windows`);
+  if (!res.ok) throw new Error("운영 구간 조회 실패");
+  return res.json();
+}
+
+/**
  * GET /api/notifications
  * 완료 알림 피드 (REQ-F09 Phase 2 전역 폴링의 유일한 대상)
  *

@@ -4,6 +4,7 @@ import GlobalDim from 'components/GlobalDim';
 import { AuthProvider } from 'contexts/AuthContext';
 import { NotificationProvider } from 'contexts/NotificationContext';
 import NotificationSnackbar from 'components/NotificationSnackbar';
+import ShutdownBanner from 'components/ShutdownBanner';
 import { setLoadingCallback, setServerDownCallback } from 'api/client';
 import paths from 'routes/paths';
 
@@ -51,6 +52,8 @@ const App = () => {
     <AuthProvider>
       <NotificationProvider>
         <GlobalDim visible={apiLoading} />
+        {/* 꺼짐 예고 배너도 라우트 밖이다 — 로그인 화면에서도 보여야 한다 (REQ-F19 Phase 4) */}
+        <ShutdownBanner />
         <Outlet />
         {/* 스낵바는 라우트 밖이다 — 완료가 어느 화면에서든 잡히므로 (REQ-F09 Phase 5) */}
         <NotificationSnackbar />
