@@ -146,7 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 PR #43 머지(`dfcc485`) · dev·prod 배포 — Phase 3 prod 응답 대조(15:00 이후)·22시 배너 육안만 남음 · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
-| REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/PLAN-D13-brand-renewal.md) | — | 🟡 Phase 1/3 ✅(로고·파비콘) — 케이스 8/8 · 리뷰 회차 1 @ `05784b9` · dev 육안 확인 |
+| REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/PLAN-D13-brand-renewal.md) | — | 🟡 Phase 2/3 ✅(로고·파비콘 · 테마색) — 케이스 24/24 · 리뷰 회차 5 @ `62ed2ff` · dev 육안 확인 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
@@ -268,6 +268,27 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-08
+
+### REQ-D13 — 브랜드 리뉴얼 Phase 2 테마색 (🟡 Phase 2/3)
+
+- **사용자가 최종 테마 셋(6색 × 6단계 + 남색 회색 grey)을 직접 줬다** — 처음 정한 빨강 `#F0503A` secondary·다크 primary `#8FA3D1`은 이 셋(주홍 `#CC4A12` · 다크 primary `#8EA4D6`)으로 대체. "수동" 칩은 셋을 받은 뒤에도 primary로 재확인 → F14-16 기대값 갱신(PLAN-F14 행에 대체 표시)
+- **테마 셋의 main은 라이트용 진한 색이라 다크에서 글자로 묻혔다**(회차 2, error 2.04:1) — primary만 다크용이 있었다. 5색(primary·secondary·info·success·error)을 **모드별 팔레트**로: 다크 main = 라이트 light. warning은 6.27:1이라 공유
+- ⚠️ **다크 `dark` 단계를 진하게 두면 채움 버튼 hover가 묻힌다**(회차 3) — MUI contained hover 배경이 `palette[color].dark`인데 글자는 다크 contrastText `#151D2E`라 error 2.68:1. 다크 `dark` = 다크 `light`(main보다 밝게)로 → 9.6~11.8:1. 같은 이유로 **다크 filled Alert(완료·실패 스낵바)는 파스텔 바탕 + 검정 글자**가 됐다 — 사용자 dev 육안 확인
+- 흰 PDF 지면 위 드래그 오버레이는 다크에서도 종이 위라 다크 primary면 2.49:1 → 모드 무관 `#1B2B4B` 고정(계약 #20 예외 그대로)
+- 계약 #20("main·lighter·darker 공유")의 전제가 깨져 문구 갱신(회차 4 (c) 결정 A) — 결론(tint를 쓴다)은 그대로, 이유를 "다크 lighter도 파스텔"로. #21 배경 hex·#36 수동 칩 색도 현행화
+- 리뷰: D13 @ 342019b — (b) 1 · (c) 0 · nit 1 (회차 3)
+  - (b): [frontend/src/theme/core/palette.ts:91-99] 다크 contained 버튼 hover 배경(*.dark) 위 contrastText #151D2E가 묻힘 — error 2.68:1 · success 3.36 · 실측
+    - 방안: A 다크 dark 단계를 main보다 밝게 · B contained hover 오버라이드 · TODO · 감수 — 추천 A
+    - 결정: A → `aed8739` 회차 4에서 닫힘
+- 리뷰: D13 @ aed8739 — (b) 0 · (c) 1 · nit 3 (회차 4)
+  - (c): [CLAUDE.md 계약 #20 · tint.js:3-8 · QuestionListPanel.jsx:59 · nav.tsx:121] "팔레트 공유" 문구가 실제(5색 모드별)와 다름 · 실측
+    - 방안: A 계약 #20(/checkpoint) + 주석 3곳(/implement) 갱신 · TODO · 감수 — 추천 A
+    - 결정: A → 주석 `62ed2ff` 회차 5에서 닫힘 · 계약 #20 이번 기록에서 갱신
+  - nit: 다크 filled Alert 파스텔 바탕(육안 확인) · 다크 책등 warning만 진함 · 다크 warning 배너 흰 글자 3.37:1(warning 공유 사각, delta 이전)
+- 리뷰: D13 @ 62ed2ff — (b) 0 · (c) 0 · nit 1 (회차 5)
+  - nit: 같은 옛 "공유" 이유 주석이 `UploadForm.jsx:55` · `work.jsx:552` · `NotificationBell.jsx:9-10`에 남음(결론은 맞음 · NotificationBell은 F09-46 스캔 대상)
+- 케이스 **D13-09~24 (16/16)** — `/testrun` @ `aed8739`. 그 뒤 `62ed2ff`는 주석만(회차 5 리뷰어가 비주석 변경 0 확인)이라 결과 유지
+- dev 배포(D13 브랜치 `62ed2ff`, Worker `eeec6b08`) 후 **사용자 육안 확인**(라이트·다크 버튼·칩·알림 바)
 
 ### REQ-D13 — 브랜드 리뉴얼 Phase 1 로고·파비콘 (🟡 Phase 1/3)
 
