@@ -43,13 +43,14 @@ function responsiveFontSizes(obj: ResponsiveFontSizesInput): ResponsiveFontSizes
 /**
  * 한글 폴백 (REQ-D07 §8-1)
  *
- * DM Sans / Barlow는 라틴 전용이라 한글 글리프가 없다. 이 앱은 UI가 전부 한글이므로
+ * 라틴 글꼴(Outfit)엔 한글 글리프가 없다. 이 앱은 UI가 전부 한글이므로
  * 폴백을 지정하지 않으면 관리자 PC마다 한글 모양이 달라진다.
+ * REQ-D13부터 그 자리에 자체 호스팅 Gothic A1을 둔다 — OS 고딕은 글꼴 로드 전·실패 시 대비로 뒤에 남긴다.
  * setFont()가 붙여 주는 시스템 스택(-apple-system, Segoe UI ...)은 한글을 보장하지
  * 않으므로, 라틴 폰트 **바로 뒤**에 한글 폰트를 끼워 넣는다.
  * → 라틴·숫자는 템플릿 폰트, 한글은 OS 기본 고딕으로 렌더된다.
  */
-const KOREAN_FALLBACK = `"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR"`;
+const KOREAN_FALLBACK = `"Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR"`;
 
 function setFontWithKorean(fontName: string): string {
   const [latin, ...systemStack] = setFont(fontName).split(', ');
