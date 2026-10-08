@@ -98,3 +98,30 @@ describe('REQ-D13 다크 모드 대비 (Phase 2)', () => {
     expect([/borderColor:\s*["']primary\.main["']/.test(src), /#1B2B4B/i.test(src)]).toEqual([false, true]);
   });
 });
+
+// ── 리뷰 회차 3 결정 — 다크 채움 버튼 hover (2026-10-08) ──────────
+// MUI contained 버튼 hover 배경은 palette[color].dark — 진하게 두면 어두운 글자(#151D2E)가 묻힌다
+describe('REQ-D13 다크 채움 버튼 hover (Phase 2)', () => {
+  const DARK_DARK = { primary: '#B6C5E6', secondary: '#F8B498', info: '#A6DFEB', success: '#B0E4C5', error: '#F8B7C6' };
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  it('[D13-23] 다크 5색의 dark가 각 다크 light 값이다', () => {
+    const actual = Object.fromEntries(Object.keys(DARK_DARK).map((k) => [k, up(palette.dark[k].dark)]));
+    expect(actual).toEqual(DARK_DARK);
+  });
+
+  it('[D13-24] 다크 5색의 contrastText ↔ dark 대비가 4.5:1 이상이다', () => {
+    const low = Object.keys(DARK_DARK)
+      .map((k) => [k, contrast(palette.dark[k].contrastText, palette.dark[k].dark)])
+      .filter(([, r]) => r < 4.5);
+    expect(low).toEqual([]);
+  });
+});

@@ -73,27 +73,29 @@ export const primaryDark = createPaletteChannel({
   lighter: '#E6ECF8',
   light: '#B6C5E6',
   main: '#8EA4D6',
-  dark: '#5E76AD',
+  dark: '#B6C5E6',
   darker: '#2E4272',
   contrastText: '#151D2E',
 });
 
 // 다크 모드 secondary·info·success·error — REQ-D13 리뷰 회차 2. 테마 셋의 main 은 라이트용 진한 색이라
 // 다크 배경 위 글자색(삭제 버튼·오류 문구 등)으로 쓰면 대비 2~2.8:1로 묻힌다. 각 색의 light 를 main 으로
-// 올린다(lighter=라이트 lighter · light=light·lighter 중간 · dark=라이트 main · darker=라이트 dark).
+// 올린다(lighter=라이트 lighter · light=light·lighter 중간 · dark=light · darker=라이트 dark).
 // warning 은 라이트 main 도 다크에서 6.27:1 이라 공유한다.
+// dark 를 light 와 같게 둔 건 회차 3 — MUI contained 버튼 hover 배경이 *.dark 라, 진하게 두면 어두운 글자가
+// 묻힌다(error 2.68:1). primaryDark 도 같은 이유로 dark=light.
 const DARK_TEXT = '#151D2E';
 export const secondaryDark = createPaletteChannel({
-  lighter: '#FFEEE6', light: '#F8B498', main: '#F27A4A', dark: '#CC4A12', darker: '#A33A0E', contrastText: DARK_TEXT,
+  lighter: '#FFEEE6', light: '#F8B498', main: '#F27A4A', dark: '#F8B498', darker: '#A33A0E', contrastText: DARK_TEXT,
 });
 export const infoDark = createPaletteChannel({
-  lighter: '#E0F5F9', light: '#A6DFEB', main: '#6CC9DD', dark: '#0B7F99', darker: '#08657A', contrastText: DARK_TEXT,
+  lighter: '#E0F5F9', light: '#A6DFEB', main: '#6CC9DD', dark: '#A6DFEB', darker: '#08657A', contrastText: DARK_TEXT,
 });
 export const successDark = createPaletteChannel({
-  lighter: '#E3F6EA', light: '#B0E4C5', main: '#7DD3A0', dark: '#15803D', darker: '#116632', contrastText: DARK_TEXT,
+  lighter: '#E3F6EA', light: '#B0E4C5', main: '#7DD3A0', dark: '#B0E4C5', darker: '#116632', contrastText: DARK_TEXT,
 });
 export const errorDark = createPaletteChannel({
-  lighter: '#FDE7EC', light: '#F8B7C6', main: '#F2879F', dark: '#BE123C', darker: '#990E30', contrastText: DARK_TEXT,
+  lighter: '#FDE7EC', light: '#F8B7C6', main: '#F2879F', dark: '#F8B7C6', darker: '#990E30', contrastText: DARK_TEXT,
 });
 
 // Secondary color
