@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # 이미지·파일 GET용 access 쿠키의 Secure 속성 (REQ-B15). 로컬 http 개발에서만 False로 끈다.
     AUTH_COOKIE_SECURE: bool = True
 
+    # ── 운영 구간 (REQ-F19 Phase 3) ─────────────────────────
+    # 예약 작업(켜짐/꺼짐)을 읽을 ECS 서비스 — 예: service/pdf-extractor-cluster/pdf-extractor-backend-prod-svc.
+    # 비우면(로컬·dev) 조회하지 않고 운영 구간은 빈 목록이다. 태스크 역할에 DescribeScheduledActions 권한이 필요하다
+    SCHEDULE_RESOURCE_ID: str = ""
+    SCHEDULE_AWS_REGION: str = "ap-northeast-2"
+
     # ── CORS (REQ-27 Phase 3) ───────────────────────────────
     # 허용 origin 목록. PLAN-27 § 결정 — "CORS 허용 도메인 | dev 프론트 도메인 +
     # 로컬 개발(localhost:5173) 포함". 그 외 origin은 CORSMiddleware가 차단한다.

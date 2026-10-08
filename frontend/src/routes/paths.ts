@@ -10,6 +10,7 @@ const paths = {
   templates: '/templates',
   login: '/login',
   signup: '/signup',
+  unavailable: '/unavailable',
 };
 
 export default paths;

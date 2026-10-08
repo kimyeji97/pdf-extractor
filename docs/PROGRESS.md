@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-07
+> 최종 갱신: 2026-10-08
 
 ## 요구사항 인덱스
 
@@ -145,6 +145,7 @@
 | REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
+| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 1·2·4 ✅ · Phase 3 구현·케이스 완료(prod 반영·응답 대조만 남음) — 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
@@ -265,7 +266,134 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 
 # 로그
 
+## 2026-10-08
+
+### REQ-F19 — Phase 3 운영 구간 API (🟡 구현 완료 · prod 반영 전)
+
+- **`GET /api/operating-windows`(무인증)** — 백엔드가 ECS Application Auto Scaling 예약 작업을 `DescribeScheduledActions`로 읽어 앞으로 2주 치 `{start, end}`(ISO, 시간대 포함)를 준다. 켜짐/꺼짐은 이름이 아니라 **용량**(Min≥1 / Max=0)으로 식별. 로컬 AWS 자격증명으로 실제 prod 예약을 읽어 `10-07 15:00+09:00~23:00` 부터 10구간 — 실제 스케줄과 일치(읽기 전용 조회)
+- **AWS cron은 직접 해석했다(의존성 추가 없음)** — 6필드 · `?` · 요일 1=SUN…7=SAT · 연도 필드라 일반 cron 라이브러리 관례와 다르다. `python:3.11-slim`에서도 `zoneinfo`가 `Asia/Seoul`을 읽는 것을 확인(tzdata 별도 설치 불필요)
+- `SCHEDULE_RESOURCE_ID`가 비면(로컬·dev) 조회하지 않고 빈 목록. **prod 반영은 아직** — 태스크 역할 IAM `application-autoscaling:DescribeScheduledActions` + 태스크 정의 env + 배포가 필요하고, prod 인프라라 사용자 승인 대기
+- ⚠️ **`/review`가 회차 4·5·6을 돌며 한 겹씩 내려갔다** — 회차 4 실측 4건(`5/10` step 1회 발화 · 미지원 토큰 하나가 전체를 비움 · 14일 lookback 밖 진행 중 구간 소실 · 같은 시각 on/off 길이 0 구간) + 가설 ⑥(요청마다 AWS 호출 → 5분 캐시)을 고쳤더니, 회차 5가 **②의 "그 예약만 건너뛰기"가 off를 빼면 앞뒤 구간이 이어 붙어 "며칠째 켜짐"을 만든다**(N1, 실측)는 걸 찾았다. 결정 A — **해석 실패가 하나라도 있으면 `[]`. 틀린 구간보다 모름이 낫다.** 회차 6은 같은 증상이 `at(...)`·`rate(...)`(예외 없이 건너뜀)로도 난다는 걸 찾았고 TODO(계획서 미결 `at(...)`과 함께)
+- ⚠️ **작업 트리 공유 사고** — 2026-10-07 다른 세션이 공유 체크아웃을 `feat/D12-system-rename`으로 바꾸며 F19 계획서 미커밋 수정을 `stash@{0}`에 보관했다. F19는 **별도 worktree `../pdf-extractor-f19`** 로 옮겨 stash를 거기 적용하고 이어 갔다(D12 세션 무간섭). 동시에 두 REQ를 돌리면 체크아웃을 공유하지 말 것
+- 리뷰: F19 @ 5a0f22d — (b) 3 · (c) 0 · nit 5 · 이월 6 (회차 5)
+  - (b): [backend/app/services/operating_schedule.py:115-119] 건너뛴 예약이 off면 앞뒤 구간이 이어 붙어 "켜져 있음"이 며칠로 늘어난다 · 실측
+    - 방안: A 해석 실패가 하나라도 있으면 `[]` · TODO · 감수 — 추천 A
+    - 결정: A → `63d999b` 회차 6에서 닫힘
+  - (b): [operating_schedule.py:41-49] 실패는 캐시하지 않아 장애 동안 요청마다 AWS 호출 · 가설
+    - 결정: TODO
+  - (b): [operating_schedule.py:41] 캐시 만료 순간 동시 요청이 각자 AWS 호출 · 가설
+    - 결정: 감수
+- 리뷰: F19 @ b171aa2 — (b) 7 · (c) 0 · nit 3 · 이월 3 (회차 4)
+  - (b): ① `5/10` step 한 번만 발화 · ② 미지원 토큰 하나가 전체를 비움 · ③ lookback 14일 · ④ 같은 시각 on/off 길이 0 — 모두 실측 · 결정: A → `5a0f22d` 회차 5에서 닫힘
+  - (b): ⑤ 예약 작업 `StartTime`/`EndTime` 무시 · 가설 · 결정: TODO
+  - (b): ⑥ 요청마다 AWS 호출 · 가설 · 결정: A → `5a0f22d` 닫힘(성공 경로만)
+  - (b): ⑦ `NextToken` 페이지네이션 없음 · 가설 · 결정: 감수
+- 리뷰: F19 @ 63d999b — (b) 1 · (c) 0 · nit 2 · 이월 8 (회차 6)
+  - (b): [backend/app/services/operating_schedule.py:78-79] `at(...)`·`rate(...)` 예약은 예외 없이 건너뛰어 N1 가드를 안 탄다 — off 가 그렇게 빠지면 며칠짜리 켜짐 구간. 원인은 delta 이전(b171aa2) · 실측
+    - 방안: A cron 아닌 on/off 예약도 해석 실패로 `[]` · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (b): [operating_schedule.py:41-49] 실패 캐시 없음 · 가설 (회차 5) — 결정: TODO
+  - (b): [operating_schedule.py:41] 캐시 만료 동시 호출 · 가설 (회차 5) — 결정: 감수
+  - (b): [operating_schedule.py] `StartTime`/`EndTime` 무시 · 가설 (회차 4) — 결정: TODO
+  - (b): [operating_schedule.py:fetch_scheduled_actions] `NextToken` 없음 · 가설 (회차 4) — 결정: 감수
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch 타임아웃 없음 · 가설 (회차 0) — 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 504/524도 "서버 다운" · 가설 (회차 0) — 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자 raw fetch 미감지 · 가설 (회차 0) — 결정: TODO
+  - nit: 해석 실패 로그에 Schedule만(Timezone 원인 안 보임) · 잘못된 예약이 남은 동안 요청마다 경고
+- 테스트 공백: 회차 4·5 수정(step · 격리 → 전체 비움 · 탐색 범위 · 동시각 정렬 · 캐시)은 검증 계약 케이스가 없고 일회성 스크립트로만 확인
+- 케이스 **F19-15~24 (10/10)** · F19 누계 24/24 · 백엔드 420/420
+- **Phase 3 체크하지 않음** — 완료 기준 "prod에서 API 응답이 실제 `on`·`off` 스케줄과 일치한다"가 남았고(prod 반영 승인 대기), 계획서 미결 `at(...)`이 열려 있다
+
+### REQ-F19 — Phase 4 꺼짐 예고 배너 · 운영 구간 저장 · 다운 화면 운영 시간 (✅ Phase 4)
+
+- **배너는 `App`의 Outlet 밖 · `position: fixed`** — 로그인 화면에서도 보이고(사용자 결정), 100dvh 높이 체인(계약 #1)에 블록을 끼우지 않는다. filled warning Alert라 `*.lighter` 계열을 안 쓴다(계약 #20). 10초 틱 · 분 올림(최소 1분) · `now < end`라 끝 시각에 사라진다
+- **운영 구간 조회는 무인증 raw fetch** — apiFetch면 실패 시 서버 다운 안내로 튀고 딤이 켜진다(계약 #26). B23-03 무인증 예외 목록에 이유와 함께 올렸다(계약 #31). 테스트 파일이라 `/testgen`이 올렸다(`/implement`는 테스트를 못 고친다)
+- **다운 화면 운영 시간은 브라우저 저장값** — 서버가 꺼져 있으면 물을 수 없어서. 운영 중 장애면 **지금 구간을 표시**(2026-10-08 사용자 결정, `/testgen` 미결에서) — 라벨은 "운영 시간"/"다음 운영"으로 가른다. 시각 표기는 Asia/Seoul 고정
+- ⚠️ **API가 `[]`를 주면 저장하지 않는다**(회차 7, 실측) — 백엔드는 AWS 조회·해석 실패도 200 `[]`라서, 덮어쓰면 **서버가 불안정한 바로 그때** 다운 화면 운영 시간이 사라졌다. 대가: 스케줄을 정말 지워도 옛 구간이 최대 14일 남는다 — 백엔드가 실패를 `[]`와 구분해 주기 전까진 못 고친다
+- ⚠️ **F19-37 테스트 무대 결함**(`/testrun` (a)) — 저장소 읽기 실패를 흉내 내며 `token|mode` 키만 통과시켰더니 `AuthProvider`가 마운트 때 읽는 `user_email`이 막혀 **앱 셸이 먼저 죽었다**. `/token|mode|email/`로 넓혔지만 취약하다(nit) — 앱 셸이 새 키를 읽기 시작하면 무관하게 깨진다
+- ⚠️ **리뷰 에이전트가 worktree에서 `git stash`를 실수로 실행**했다가 즉시 pop — 미커밋 계획서·리뷰 결과 파일이 잠깐 빠졌고, 손실 없음을 재확인했다. 리뷰 에이전트에 "작업 트리를 바꾸는 git 명령 금지"를 함께 넘길 것
+- 리뷰: F19 @ 467c3f3 — (b) 2 · (c) 0 · nit 5 · 이월 9 (회차 7)
+  - (b): [frontend/src/components/ShutdownBanner.jsx:26] API `[]`가 저장된 운영 구간을 덮어 지운다 · 실측
+    - 방안: A 빈 배열은 저장 안 함 (1줄) · TODO · 감수 — 추천 A
+    - 결정: A → `5710a3d` 회차 8에서 닫힘
+  - (b): [frontend/src/components/ShutdownBanner.jsx:47] 좁은 화면에서 fixed 배너가 헤더 조작부·다이얼로그를 최대 1시간 가린다 · 가설
+    - 방안: A 위치·폭 조정 · TODO · 감수 — 추천 TODO(육안 확인 필요)
+    - 결정: TODO
+  - nit: 구간을 마운트 때 한 번만 받음(14일 넘은 탭은 배너 안 뜸) · 다운 화면 `now` 렌더 때 한 번 · F19-31은 문구 변화만 · F19-37 키 필터 취약 · 맞닿은 구간이면 배너 오탐(백엔드 소관)
+- 리뷰: F19 @ 5710a3d — (b) 0 · (c) 0 · nit 2 · 이월 9 (회차 8)
+  - (b): [frontend/src/components/ShutdownBanner.jsx:47] 배너 가림 · 가설 (회차 7) — 결정: TODO
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch 타임아웃 없음 · 가설 (회차 0) — 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 504/524도 "서버 다운" · 가설 (회차 0) — 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자 raw fetch 미감지 · 가설 (회차 0) — 결정: TODO
+  - (b): [backend/app/services/operating_schedule.py] `StartTime`/`EndTime` 무시 · 가설 (회차 4) — 결정: TODO
+  - (b): [operating_schedule.py:fetch_scheduled_actions] `NextToken` 없음 · 가설 (회차 4) — 결정: 감수
+  - (b): [operating_schedule.py:41-49] 실패 캐시 없음 · 가설 (회차 5) — 결정: TODO
+  - (b): [operating_schedule.py:41] 캐시 만료 동시 호출 · 가설 (회차 5) — 결정: 감수
+  - (b): [operating_schedule.py:78-79] `at(...)`·`rate(...)` 건너뛰기로 구간 병합 · 실측 (회차 6) — 결정: TODO
+  - nit: 스케줄 삭제 시 옛 구간이 최대 14일 캐시에 남음(결정 A의 대가) · 응답이 배열이 아니면 렌더 throw(이전부터, 실해 낮음)
+- 테스트 공백: 회차 7 수정("빈 목록은 저장 안 함")을 단언하는 케이스 없음 — 리뷰 에이전트 일회용 테스트로만 확인(수정 전 커밋에선 실패)
+- 케이스 **F19-25~38 (14/14)** · F19 누계 38/38 · B23-03 3/3
+- **REQ-F19는 ✅ 아님** — Phase 3 완료 기준(prod 응답 대조)과 미결 `at(...)`이 남았다
+
+### REQ-F19 — Phase 3 미결 `at(...)` 결정 · 구현 (리뷰 회차 9)
+
+- **사용자 결정(2026-10-08)** — `at(yyyy-mm-ddThh:mm:ss)`는 그 예약의 Timezone을 붙인 **한 번의 켜짐/꺼짐**으로 반영("오늘만 일찍 끄기"가 실제 운영 시나리오). `rate(...)`가 켜짐/꺼짐에 섞이면 **`[]`**(기준점이 `StartTime`이라 계산이 까다롭고 ECS on/off에 쓸 일이 드묾 — 회차 5 N1과 같은 "틀린 구간보다 모름"). 기각: at 무시(앞뒤 구간이 붙는 오답) · at도 `[]` · rate를 StartTime 기준 계산
+- 구현은 `_occurrences`에서 cron·at이 아닌 표현식을 `ValueError`로 올려 기존 해석 실패 가드(`[]`)에 태웠다 — 새 분기를 만들지 않았다. 회차 6 TODO(at/rate 건너뛰기 병합)가 이걸로 닫혔다
+- ⚠️ **F19-42는 수정 전 코드로도 통과한다** — `[ON, rate_off]`는 원래 off가 없어 구간이 안 생긴다. 회차 9가 지적(nit). `[ON, OFF, rate_off]` + on 쪽 rate로 강화해야 결정을 실제로 지킨다
+- 리뷰: F19 @ 340ddea — (b) 0 · (c) 0 · nit 4 · 이월 8 (회차 9)
+  - (b): [frontend/src/components/ShutdownBanner.jsx:47] 배너 가림 · 가설 (회차 7) — 결정: TODO
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch 타임아웃 없음 · 가설 (회차 0) — 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 504/524도 "서버 다운" · 가설 (회차 0) — 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자 raw fetch 미감지 · 가설 (회차 0) — 결정: TODO
+  - (b): [backend/app/services/operating_schedule.py] `StartTime`/`EndTime` 무시 · 가설 (회차 4) — 결정: TODO
+  - (b): [operating_schedule.py:fetch_scheduled_actions] `NextToken` 없음 · 가설 (회차 4) — 결정: 감수
+  - (b): [operating_schedule.py:41-49] 실패 캐시 없음 · 가설 (회차 5) — 결정: TODO
+  - (b): [operating_schedule.py:41] 캐시 만료 동시 호출 · 가설 (회차 5) — 결정: 감수
+  - 닫힘: 회차 6 TODO `at(...)`·`rate(...)` 건너뛰기로 구간 병합 → `340ddea`
+  - nit: F19-42 약함 · at 해석이 오프셋을 조용히 덮음(`strptime`이 더 엄격) · 같은 시각 at-on/cron-off면 구간이 쪼개짐(가설) · at-on 뒤 off 없으면 "모름"
+- 케이스 **F19-39~43 (5/5)** · F19 누계 43/43 · 백엔드 425/425
+- **남은 것: Phase 3 완료 기준 "prod에서 API 응답이 실제 `on`·`off` 스케줄과 일치한다"** — IAM `application-autoscaling:DescribeScheduledActions` + 태스크 정의 env `SCHEDULE_RESOURCE_ID` + prod 배포(사용자 승인 대기)
+
 ## 2026-10-07
+
+### REQ-F19 — 서버가 꺼져 있거나 꺼질 예정이면 알린다 (🟡 Phase 1/4)
+
+- **발단: "ErrorBoundary로 되나?"** — 안 된다. 렌더 중 throw만 잡고, API 호출은 effect·핸들러·Promise 안이라 닿지 않는다. 감지는 `apiFetch`가 모두 지나는 `_rawFetch` 한 곳에서 한다(`setLoadingCallback` 짝인 `setServerDownCallback`). ErrorBoundary(`errorElement`)는 **흰 화면 방지용으로 따로** Phase 2에 둔다
+- **판정은 fetch reject만** — 꺼진 백엔드·터널 530/502는 CORS 헤더가 없어 브라우저에 상태 코드가 아니라 `TypeError`로 온다(계약 #8). CORS가 붙은 5xx는 사용자 결정으로 제외("꺼짐"과 "느림"을 섞지 않는다)
+- 사용자 결정: 안내는 **별도 경로**(덮개 기각) · 복구는 **버튼만**(자동 폴링 기각) · 오프라인은 `navigator.onLine === false`일 때만 구분 · 배너 **로그인 화면 포함**(→ 운영 구간 API 무인증) · 다운 화면엔 **다음 운영 구간**(요일·시간 요약은 일반 cron을 문장화하기 어려워 기각)
+- **prod 자동 켜짐/꺼짐의 실체(2026-10-07 실측)** — ECS Application Auto Scaling 예약 작업 `on` `cron(0 15 ? * MON-FRI *)` · `off` `cron(0 23 ? * MON-FRI *)`, Timezone Asia/Seoul. **주말은 종일 꺼짐.** 시각은 사용자가 수시로 바꾸므로 프론트·환경변수에 박지 않고 **백엔드가 `DescribeScheduledActions`로 읽는다**(Phase 3 — 태스크 역할 IAM 읽기 권한 필요)
+- ⚠️ **안내 화면은 lazy로 두지 않는다** — 오프라인이면 그 청크부터 못 받는다. 그리고 `RequireAuth` 밖이다(안이면 미인증 사용자가 `/login`으로 튕긴다)
+- ⚠️ **`/health`는 `/api` 아래가 아니다** — `BASE_URL`에 붙이면 404. 재시도는 raw fetch(apiFetch면 딤이 켜지고 실패 시 감지가 재발)
+- **`/review` 회차 0 → 1** — 회차 0 (b) 2건을 수정(`c543422`): ① 복귀 대상이 `pathname+search`뿐이라 **`location.state`가 사라져** 편집 화면(`initialWorkbookId`)이 빈 편집기로 열렸다 ② push 이동이라 **뒤로 가기 → 원래 화면 재실패 → 다시 안내**로 튕기고, 동시 reject가 stale ref 가드를 지나 기록이 중복됐다 → `replace`. 회차 1에서 둘 다 닫힘 · 새 결함 0
+- 리뷰: F19 @ c543422 — (b) 0 · (c) 0 · nit 3 · 이월 3
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch에 타임아웃이 없다 — 응답이 매달리면 [다시 시도]가 비활성으로 남는다(Cloudflare 524까지 ~100s) · 가설 (회차 0)
+    - 방안: A `signal: AbortSignal.timeout(…)` (+1줄) · TODO · 감수
+    - 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 Cloudflare 504/524(느린 정상 서버)도 "서버 다운"으로 판정 — 앱 `TimeoutMiddleware`(30s) 504는 CORS가 붙어 먼저 오므로 드문 경로 · 가설 (회차 0)
+    - 방안: A 계획서 미결로 · TODO · 감수
+    - 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자가 누른 raw fetch(`uploadPdf` local · `uploadCover` · `uploadWatermark` · `getJobInfo`)는 감지되지 않는다 — 계획서 범위가 `apiFetch` 경로 · 가설 (회차 0)
+    - 방안: A 범위 확대를 계획서 미결로 · TODO · 감수
+    - 결정: TODO
+- 테스트 공백(nit): 회차 0 수정 두 가지(state 복원 · replace)를 단언하는 케이스가 없다 — F19-08은 경로만 본다
+- 케이스 **F19-01~12 (12/12)** · 프론트 전체 378/380 — 실패 2건(F17-17·20)은 **Node 20에 `fs.globSync`가 없어서**(Node 22+) 생긴 기존 환경 문제, main에서도 같다
+- **Phase 2 — 최상위 `errorElement`(흰 화면 방지)** — 렌더 크래시·`lazy` 청크 로드 실패에 [새로고침] 안내. `<App/>` 자리를 대신하므로 컨텍스트(인증·알림)에 기대지 않는다. 테스트는 **실제 `routes[0]`을 복제해 children에 터지는 라우트를 덧붙인다** — 그래야 "최상위에 달렸는가"가 검증된다
+- ⚠️ **catch-all 라우트가 없어서 없는 URL(404)도 최상위 `errorElement`로 온다** — 회차 2가 실측으로 찾았다. "새 버전 배포 · 새로고침" 문구가 404에도 떠 **새로고침해도 영원히 안 풀리는 막다른 화면**이 됐다(이전엔 react-router 기본 "404 Not Found"). 결정 A — `isRouteErrorResponse` 404면 "없는 페이지" + [홈으로](`a511df1`). catch-all `/` 리다이렉트(B)는 기각 — 안내 없이 조용히 튕긴다
+- 404 아닌 ErrorResponse(405 등)도 [새로고침]으로 가지만 **앱에 loader·action·`<Form>`·`useFetcher`가 0건**이라 발생 경로가 없다 — 데이터 라우터 API를 쓰기 시작하면 다시 볼 것
+- [새로고침]의 `window.location.reload()` 호출은 **jsdom이 `location` 재정의를 막아** 케이스로 못 쓴다 — 코드로만 본다
+- 리뷰: F19 @ 0384dfd — (b) 1 · (c) 0 · nit 3 · 이월 3 (회차 2)
+  - (b): [frontend/src/routes/router.tsx:33] catch-all 없어 404도 "새로고침" 막다른 안내 · 실측
+    - 방안: A 404 분기 + 홈 링크 (RouteError.jsx) · B catch-all → `/` 리다이렉트 · TODO · 감수 — 추천 A
+    - 결정: A → `a511df1` 회차 3에서 닫힘
+- 리뷰: F19 @ a511df1 — (b) 0 · (c) 0 · nit 2 · 이월 3 (회차 3)
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch에 타임아웃이 없다 · 가설 (회차 0)
+    - 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 Cloudflare 504/524도 "서버 다운"으로 판정 · 가설 (회차 0)
+    - 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자가 누른 raw fetch는 서버 다운 감지 안 됨 · 가설 (회차 0)
+    - 결정: TODO
+  - nit: 404 분기를 단언하는 케이스가 없다(F19-13·14는 [새로고침] 경로만) · 404 화면에 대시보드 내비 없음
+- 케이스 **F19-13·14 (2/2)** · F19 누계 14/14 · 프론트 380/382(실패 2건은 위 Node 20 환경 문제)
 
 ### REQ-D12 — 시스템 이름 변경 "오답 클립북 / ClipBook" (✅ — Phase 1로 종결)
 

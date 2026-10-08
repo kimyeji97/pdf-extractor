@@ -20,7 +20,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getStatus, setLoadingCallback } from 'api/client';
 
 // REQ-B27: 알림 API 도 인증이 필요해져 예외에서 뺐다 — 남은 건 무인증 엔드포인트뿐
-const UNAUTHENTICATED_RAW_FETCH = new Set(['logout']);
+// REQ-F19 Phase 4: getOperatingWindows — 운영 구간은 로그인·회원가입 화면의 꺼짐 예고 배너도 써서 백엔드가 무인증이다
+const UNAUTHENTICATED_RAW_FETCH = new Set(['logout', 'getOperatingWindows']);
 
 const jsonResponse = (body, { status = 200 } = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
