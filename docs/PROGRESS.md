@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-07
+> 최종 갱신: 2026-10-08
 
 ## 요구사항 인덱스
 
@@ -145,7 +145,7 @@
 | REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
-| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 2/4 — 케이스 14/14 · 리뷰 회차 3 @ `a511df1` (TODO 2 · 감수 1) |
+| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 2/4 (Phase 3 구현·케이스 완료 — 미결 `at(...)`·prod 반영 남음) — 케이스 24/24 · 리뷰 회차 6 @ `63d999b` (TODO 6 · 감수 4) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -264,6 +264,44 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-10-08
+
+### REQ-F19 — Phase 3 운영 구간 API (🟡 구현 완료 · prod 반영 전)
+
+- **`GET /api/operating-windows`(무인증)** — 백엔드가 ECS Application Auto Scaling 예약 작업을 `DescribeScheduledActions`로 읽어 앞으로 2주 치 `{start, end}`(ISO, 시간대 포함)를 준다. 켜짐/꺼짐은 이름이 아니라 **용량**(Min≥1 / Max=0)으로 식별. 로컬 AWS 자격증명으로 실제 prod 예약을 읽어 `10-07 15:00+09:00~23:00` 부터 10구간 — 실제 스케줄과 일치(읽기 전용 조회)
+- **AWS cron은 직접 해석했다(의존성 추가 없음)** — 6필드 · `?` · 요일 1=SUN…7=SAT · 연도 필드라 일반 cron 라이브러리 관례와 다르다. `python:3.11-slim`에서도 `zoneinfo`가 `Asia/Seoul`을 읽는 것을 확인(tzdata 별도 설치 불필요)
+- `SCHEDULE_RESOURCE_ID`가 비면(로컬·dev) 조회하지 않고 빈 목록. **prod 반영은 아직** — 태스크 역할 IAM `application-autoscaling:DescribeScheduledActions` + 태스크 정의 env + 배포가 필요하고, prod 인프라라 사용자 승인 대기
+- ⚠️ **`/review`가 회차 4·5·6을 돌며 한 겹씩 내려갔다** — 회차 4 실측 4건(`5/10` step 1회 발화 · 미지원 토큰 하나가 전체를 비움 · 14일 lookback 밖 진행 중 구간 소실 · 같은 시각 on/off 길이 0 구간) + 가설 ⑥(요청마다 AWS 호출 → 5분 캐시)을 고쳤더니, 회차 5가 **②의 "그 예약만 건너뛰기"가 off를 빼면 앞뒤 구간이 이어 붙어 "며칠째 켜짐"을 만든다**(N1, 실측)는 걸 찾았다. 결정 A — **해석 실패가 하나라도 있으면 `[]`. 틀린 구간보다 모름이 낫다.** 회차 6은 같은 증상이 `at(...)`·`rate(...)`(예외 없이 건너뜀)로도 난다는 걸 찾았고 TODO(계획서 미결 `at(...)`과 함께)
+- ⚠️ **작업 트리 공유 사고** — 2026-10-07 다른 세션이 공유 체크아웃을 `feat/D12-system-rename`으로 바꾸며 F19 계획서 미커밋 수정을 `stash@{0}`에 보관했다. F19는 **별도 worktree `../pdf-extractor-f19`** 로 옮겨 stash를 거기 적용하고 이어 갔다(D12 세션 무간섭). 동시에 두 REQ를 돌리면 체크아웃을 공유하지 말 것
+- 리뷰: F19 @ 5a0f22d — (b) 3 · (c) 0 · nit 5 · 이월 6 (회차 5)
+  - (b): [backend/app/services/operating_schedule.py:115-119] 건너뛴 예약이 off면 앞뒤 구간이 이어 붙어 "켜져 있음"이 며칠로 늘어난다 · 실측
+    - 방안: A 해석 실패가 하나라도 있으면 `[]` · TODO · 감수 — 추천 A
+    - 결정: A → `63d999b` 회차 6에서 닫힘
+  - (b): [operating_schedule.py:41-49] 실패는 캐시하지 않아 장애 동안 요청마다 AWS 호출 · 가설
+    - 결정: TODO
+  - (b): [operating_schedule.py:41] 캐시 만료 순간 동시 요청이 각자 AWS 호출 · 가설
+    - 결정: 감수
+- 리뷰: F19 @ b171aa2 — (b) 7 · (c) 0 · nit 3 · 이월 3 (회차 4)
+  - (b): ① `5/10` step 한 번만 발화 · ② 미지원 토큰 하나가 전체를 비움 · ③ lookback 14일 · ④ 같은 시각 on/off 길이 0 — 모두 실측 · 결정: A → `5a0f22d` 회차 5에서 닫힘
+  - (b): ⑤ 예약 작업 `StartTime`/`EndTime` 무시 · 가설 · 결정: TODO
+  - (b): ⑥ 요청마다 AWS 호출 · 가설 · 결정: A → `5a0f22d` 닫힘(성공 경로만)
+  - (b): ⑦ `NextToken` 페이지네이션 없음 · 가설 · 결정: 감수
+- 리뷰: F19 @ 63d999b — (b) 1 · (c) 0 · nit 2 · 이월 8 (회차 6)
+  - (b): [backend/app/services/operating_schedule.py:78-79] `at(...)`·`rate(...)` 예약은 예외 없이 건너뛰어 N1 가드를 안 탄다 — off 가 그렇게 빠지면 며칠짜리 켜짐 구간. 원인은 delta 이전(b171aa2) · 실측
+    - 방안: A cron 아닌 on/off 예약도 해석 실패로 `[]` · TODO · 감수 — 추천 TODO
+    - 결정: TODO
+  - (b): [operating_schedule.py:41-49] 실패 캐시 없음 · 가설 (회차 5) — 결정: TODO
+  - (b): [operating_schedule.py:41] 캐시 만료 동시 호출 · 가설 (회차 5) — 결정: 감수
+  - (b): [operating_schedule.py] `StartTime`/`EndTime` 무시 · 가설 (회차 4) — 결정: TODO
+  - (b): [operating_schedule.py:fetch_scheduled_actions] `NextToken` 없음 · 가설 (회차 4) — 결정: 감수
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch 타임아웃 없음 · 가설 (회차 0) — 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 504/524도 "서버 다운" · 가설 (회차 0) — 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자 raw fetch 미감지 · 가설 (회차 0) — 결정: TODO
+  - nit: 해석 실패 로그에 Schedule만(Timezone 원인 안 보임) · 잘못된 예약이 남은 동안 요청마다 경고
+- 테스트 공백: 회차 4·5 수정(step · 격리 → 전체 비움 · 탐색 범위 · 동시각 정렬 · 캐시)은 검증 계약 케이스가 없고 일회성 스크립트로만 확인
+- 케이스 **F19-15~24 (10/10)** · F19 누계 24/24 · 백엔드 420/420
+- **Phase 3 체크하지 않음** — 완료 기준 "prod에서 API 응답이 실제 `on`·`off` 스케줄과 일치한다"가 남았고(prod 반영 승인 대기), 계획서 미결 `at(...)`이 열려 있다
 
 ## 2026-10-07
 

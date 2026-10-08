@@ -1,6 +1,6 @@
 # PLAN-F19 · 백엔드가 꺼져 있거나 꺼질 예정이면 사용자에게 알린다
 
-> 출처: 2026-10-07 세션 대화 · 작성: 2026-10-07 · 상태: 🟡 진행 (Phase 2/4)
+> 출처: 2026-10-07 세션 대화 · 작성: 2026-10-07 · 상태: 🟡 진행 (Phase 2/4 — Phase 3 구현·케이스 완료, 미결 `at(...)`·prod 반영 남음)
 
 ## 배경
 
@@ -59,7 +59,7 @@ prod는 ECS Auto Scaling 예약 작업으로 켜지고 꺼진다(2026-10-07 실�
 
 ## 미결 질문
 
-없음 (2026-10-07 전부 닫힘)
+- [ ] **`at(...)` 일회성 예약이 섞이면 구간을 어떻게 바꾸나** — 일회성 off가 당일 구간을 자르나, 무시하나. 계획서는 "올 수 있다"까지만 적었다(2026-10-07 `/testgen` Phase 3에서 발견)
 
 ## 작업 단계
 
@@ -90,7 +90,7 @@ prod는 ECS Auto Scaling 예약 작업으로 켜지고 꺼진다(2026-10-07 실�
 
 ## 검증 계약
 
-> 작성: 2026-10-07 · 스펙: 없음(계획서가 근거) · 검증: `/testrun F19` · Phase 1·2 — Phase 3·4는 각 Phase 착수 직전에 추가
+> 작성: 2026-10-07 · 스펙: 없음(계획서가 근거) · 검증: `/testrun F19` · Phase 1~3 — Phase 4는 착수 직전에 추가
 
 | ID | 대상 | 케이스 | 유형 | 근거 | Phase | 결과 |
 |----|------|--------|:----:|------|:----:|:----:|
@@ -108,9 +108,20 @@ prod는 ECS Auto Scaling 예약 작업으로 켜지고 꺼진다(2026-10-07 실�
 | F19-12 | 안내 화면 | `onLine=false` 와 `true` 의 안내 문구가 다르다 | 정상 | PLAN § 범위 — "오프라인과 서버 다운을 구분할 수 있으면 구분한다" | 1 | ✅ |
 | F19-13 | `routes` | 하위 라우트가 렌더 중 throw → [새로고침] 버튼이 있는 안내 렌더(흰 화면 아님) | 정상 | PLAN § 작업 단계 — "렌더 중 throw하는 자식 아래에서 안내와 새로고침 버튼이 렌더되는" | 2 | ✅ |
 | F19-14 | `routes` | `lazy` 청크 로드 실패(import reject) → 같은 안내 렌더 | 회귀 | PLAN § 범위 — "청크 로드 실패로 흰 화면이 뜨는 것을 막는다" | 2 | ✅ |
+| F19-15 | `compute_windows` | 수 10:00 KST → 첫 구간 = 오늘 15:00–23:00 KST | 정상 | PLAN § 작업 단계 — "예약 작업 응답을 mock해 2주 치 구간을 계산한다" | 3 | ✅ |
+| F19-16 | `compute_windows` | 금 23:30 → 다음 구간 = 월 15:00 (주말 건너뜀) | 경계 | PLAN § 작업 단계 — "평일·주말·이미 지난 당일 시각을 덮는다" | 3 | ✅ |
+| F19-17 | `compute_windows` | 수 23:30 (당일 구간 끝남) → 첫 구간 = 목 15:00 | 경계 | PLAN § 작업 단계 — "평일·주말·이미 지난 당일 시각을 덮는다" | 3 | ✅ |
+| F19-18 | `compute_windows` | 수 16:00 (진행 중) → 첫 구간 = 오늘 15:00–23:00 (지금이 든 구간 포함) | 경계 | PLAN § 결정 — "배너는 지금이 들어 있는 구간의 `end`를 본다" | 3 | ✅ |
+| F19-19 | `compute_windows` | 수 10:00부터 2주 → 구간 10개 | 경계 | PLAN § 결정 — "앞으로 2주 치 `{start, end}` 목록" | 3 | ✅ |
+| F19-20 | `compute_windows` | `start`·`end`는 시간대 포함 ISO 문자열 | 불변식 | PLAN § 결정 — "ISO, 시간대 포함" | 3 | ✅ |
+| F19-21 | `compute_windows` | 예약 작업 이름이 `on`/`off`가 아니어도 용량(Min≥1 / Max=0)으로 식별 | 회귀 | PLAN § 제약 — "이름 `off`에 의존하지 않는다" | 3 | ✅ |
+| F19-22 | API | `fetch_scheduled_actions` 예외(권한 오류) → 200 + 빈 배열 | 예외 | PLAN § 작업 단계 — "스케줄이 없거나 권한 오류면 빈 목록을 준다" | 3 | ✅ |
+| F19-23 | API | 예약 작업 0건 → 200 + 빈 배열 | 경계 | PLAN § 작업 단계 — "스케줄이 없거나 권한 오류면 빈 목록을 준다" | 3 | ✅ |
+| F19-24 | API | 인증 헤더 없이 호출 → 200 (401 아님) | 정상 | PLAN § 범위 — "무인증이다" | 3 | ✅ |
 
 > 테스트가 정하는 인터페이스: `api/client` 의 **`setServerDownCallback(fn)`**(`setLoadingCallback` 짝) · `routes/paths` 의 **`paths.unavailable`** ·
 > Phase 2: `errorElement`는 **최상위 라우트**에 둔다 — 테스트가 실제 `routes[0]`을 복제해 children에 throw 라우트를 덧붙인다. [새로고침]의 `window.location.reload()` 호출은 jsdom에서 `location`을 재정의할 수 없어 케이스로 쓰지 않았다(리뷰에서 코드로 본다).
+> Phase 3: `app/services/operating_schedule.py`의 **`compute_windows(actions, now, days=14)`**(actions = boto3 `ScheduledActions` 항목 그대로) · **`fetch_scheduled_actions()`**(테스트가 monkeypatch — 엔드포인트는 모듈 속성으로 불러야 갈아끼워진다) · **`GET /api/operating-windows`** → `[{start, end}]`. prod 응답 대조는 수동(배포 후).
 > 버튼 이름 **"다시 시도"**(2026-10-07 선택한 미리보기). 이동은 **라우터 컨텍스트(`useNavigate`)로** 해야 한다 — 테스트가 `createMemoryRouter` 로 그리므로 모듈 싱글턴 `router` 로 이동하면 F19-06 이 실패한다.
 
 ## 제약·함정

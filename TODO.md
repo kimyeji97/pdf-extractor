@@ -11,5 +11,8 @@
 - [ ] 계정 차단 기능 — 임시 모니터링 화면(운영 콘솔 `scripts/ops/admin-console`)에서 (2026-10-06 추가)
 - [ ] F19 리뷰 TODO: 서버 다운 안내 [다시 시도]의 `/health` fetch에 타임아웃 없음 — 응답이 매달리면 버튼이 비활성으로 남음 (2026-10-07 추가)
 - [ ] F19 리뷰 TODO: 사용자가 누른 raw fetch(`uploadPdf` local · `uploadCover` · `uploadWatermark` · `getJobInfo`)는 서버 다운 감지 안 됨 (2026-10-07 추가)
+- [ ] F19 리뷰 TODO: 운영 구간 계산이 예약 작업 `StartTime`/`EndTime`(유효 기간)을 무시 — 기간 끝난 cron도 계속 발화로 계산 (2026-10-08 추가)
+- [ ] F19 리뷰 TODO: 운영 구간 AWS 조회 실패는 캐시 안 됨 — AccessDenied·스로틀 동안 요청마다 AWS 재호출 (2026-10-08 추가)
+- [ ] F19 리뷰 TODO: `at(...)`·`rate(...)` off 예약은 예외 없이 건너뛰어 앞뒤 구간이 이어 붙음 — 계획서 미결 `at(...)`과 함께 정리 (2026-10-08 추가)
 
 ## 완료
