@@ -8,7 +8,7 @@
  * 서버 다운 감지로 이동해 버린다). 시간은 가짜 타이머로 움직인다 — `waitFor`/`findBy` 는 내부에서
  * setInterval 로 폴링하므로 쓰지 않고 `act` 플러시로 기다린다(계약 #25).
  * 배너는 role="alert". 시각 표기는 Asia/Seoul 기준(계획서 예시 "10월 8일(목) 15:00 ~ 23:00").
- * F19-37 은 운영 구간 저장소 키만 막는다 — 그래서 그 키 이름에 `token`·`mode` 가 들어가면 안 된다.
+ * F19-37 은 운영 구간 저장소 키만 막는다 — 그래서 그 키 이름에 `token`·`mode`·`email` 이 들어가면 안 된다.
  */
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -150,7 +150,7 @@ describe('다운 안내 화면 — 운영 시간 (Phase 4)', () => {
     // 운영 구간 저장소만 막는다 — 인증 토큰·테마 키까지 막으면 앱 셸이 먼저 죽어 이 케이스가 보려는 게 아니게 된다
     const realGetItem = Storage.prototype.getItem;
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function getItem(key) {
-      if (/token|mode/i.test(key)) return realGetItem.call(this, key);
+      if (/token|mode|email/i.test(key)) return realGetItem.call(this, key); // 앱 셸 키(인증·테마·AuthProvider user_email)
       throw new Error('SecurityError');
     });
     await renderAt(paths.unavailable);
