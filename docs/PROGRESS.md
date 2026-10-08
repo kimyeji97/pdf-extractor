@@ -145,7 +145,7 @@
 | REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
-| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 2/4 (Phase 3 구현·케이스 완료 — 미결 `at(...)`·prod 반영 남음) — 케이스 24/24 · 리뷰 회차 6 @ `63d999b` (TODO 6 · 감수 4) |
+| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 1·2·4 ✅ · Phase 3 구현·케이스 완료(미결 `at(...)`·prod 반영 남음) — 케이스 38/38 · 리뷰 회차 8 @ `5710a3d` (TODO 7 · 감수 3) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -302,6 +302,37 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 - 테스트 공백: 회차 4·5 수정(step · 격리 → 전체 비움 · 탐색 범위 · 동시각 정렬 · 캐시)은 검증 계약 케이스가 없고 일회성 스크립트로만 확인
 - 케이스 **F19-15~24 (10/10)** · F19 누계 24/24 · 백엔드 420/420
 - **Phase 3 체크하지 않음** — 완료 기준 "prod에서 API 응답이 실제 `on`·`off` 스케줄과 일치한다"가 남았고(prod 반영 승인 대기), 계획서 미결 `at(...)`이 열려 있다
+
+### REQ-F19 — Phase 4 꺼짐 예고 배너 · 운영 구간 저장 · 다운 화면 운영 시간 (✅ Phase 4)
+
+- **배너는 `App`의 Outlet 밖 · `position: fixed`** — 로그인 화면에서도 보이고(사용자 결정), 100dvh 높이 체인(계약 #1)에 블록을 끼우지 않는다. filled warning Alert라 `*.lighter` 계열을 안 쓴다(계약 #20). 10초 틱 · 분 올림(최소 1분) · `now < end`라 끝 시각에 사라진다
+- **운영 구간 조회는 무인증 raw fetch** — apiFetch면 실패 시 서버 다운 안내로 튀고 딤이 켜진다(계약 #26). B23-03 무인증 예외 목록에 이유와 함께 올렸다(계약 #31). 테스트 파일이라 `/testgen`이 올렸다(`/implement`는 테스트를 못 고친다)
+- **다운 화면 운영 시간은 브라우저 저장값** — 서버가 꺼져 있으면 물을 수 없어서. 운영 중 장애면 **지금 구간을 표시**(2026-10-08 사용자 결정, `/testgen` 미결에서) — 라벨은 "운영 시간"/"다음 운영"으로 가른다. 시각 표기는 Asia/Seoul 고정
+- ⚠️ **API가 `[]`를 주면 저장하지 않는다**(회차 7, 실측) — 백엔드는 AWS 조회·해석 실패도 200 `[]`라서, 덮어쓰면 **서버가 불안정한 바로 그때** 다운 화면 운영 시간이 사라졌다. 대가: 스케줄을 정말 지워도 옛 구간이 최대 14일 남는다 — 백엔드가 실패를 `[]`와 구분해 주기 전까진 못 고친다
+- ⚠️ **F19-37 테스트 무대 결함**(`/testrun` (a)) — 저장소 읽기 실패를 흉내 내며 `token|mode` 키만 통과시켰더니 `AuthProvider`가 마운트 때 읽는 `user_email`이 막혀 **앱 셸이 먼저 죽었다**. `/token|mode|email/`로 넓혔지만 취약하다(nit) — 앱 셸이 새 키를 읽기 시작하면 무관하게 깨진다
+- ⚠️ **리뷰 에이전트가 worktree에서 `git stash`를 실수로 실행**했다가 즉시 pop — 미커밋 계획서·리뷰 결과 파일이 잠깐 빠졌고, 손실 없음을 재확인했다. 리뷰 에이전트에 "작업 트리를 바꾸는 git 명령 금지"를 함께 넘길 것
+- 리뷰: F19 @ 467c3f3 — (b) 2 · (c) 0 · nit 5 · 이월 9 (회차 7)
+  - (b): [frontend/src/components/ShutdownBanner.jsx:26] API `[]`가 저장된 운영 구간을 덮어 지운다 · 실측
+    - 방안: A 빈 배열은 저장 안 함 (1줄) · TODO · 감수 — 추천 A
+    - 결정: A → `5710a3d` 회차 8에서 닫힘
+  - (b): [frontend/src/components/ShutdownBanner.jsx:47] 좁은 화면에서 fixed 배너가 헤더 조작부·다이얼로그를 최대 1시간 가린다 · 가설
+    - 방안: A 위치·폭 조정 · TODO · 감수 — 추천 TODO(육안 확인 필요)
+    - 결정: TODO
+  - nit: 구간을 마운트 때 한 번만 받음(14일 넘은 탭은 배너 안 뜸) · 다운 화면 `now` 렌더 때 한 번 · F19-31은 문구 변화만 · F19-37 키 필터 취약 · 맞닿은 구간이면 배너 오탐(백엔드 소관)
+- 리뷰: F19 @ 5710a3d — (b) 0 · (c) 0 · nit 2 · 이월 9 (회차 8)
+  - (b): [frontend/src/components/ShutdownBanner.jsx:47] 배너 가림 · 가설 (회차 7) — 결정: TODO
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch 타임아웃 없음 · 가설 (회차 0) — 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 504/524도 "서버 다운" · 가설 (회차 0) — 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자 raw fetch 미감지 · 가설 (회차 0) — 결정: TODO
+  - (b): [backend/app/services/operating_schedule.py] `StartTime`/`EndTime` 무시 · 가설 (회차 4) — 결정: TODO
+  - (b): [operating_schedule.py:fetch_scheduled_actions] `NextToken` 없음 · 가설 (회차 4) — 결정: 감수
+  - (b): [operating_schedule.py:41-49] 실패 캐시 없음 · 가설 (회차 5) — 결정: TODO
+  - (b): [operating_schedule.py:41] 캐시 만료 동시 호출 · 가설 (회차 5) — 결정: 감수
+  - (b): [operating_schedule.py:78-79] `at(...)`·`rate(...)` 건너뛰기로 구간 병합 · 실측 (회차 6) — 결정: TODO
+  - nit: 스케줄 삭제 시 옛 구간이 최대 14일 캐시에 남음(결정 A의 대가) · 응답이 배열이 아니면 렌더 throw(이전부터, 실해 낮음)
+- 테스트 공백: 회차 7 수정("빈 목록은 저장 안 함")을 단언하는 케이스 없음 — 리뷰 에이전트 일회용 테스트로만 확인(수정 전 커밋에선 실패)
+- 케이스 **F19-25~38 (14/14)** · F19 누계 38/38 · B23-03 3/3
+- **REQ-F19는 ✅ 아님** — Phase 3 완료 기준(prod 응답 대조)과 미결 `at(...)`이 남았다
 
 ## 2026-10-07
 
