@@ -145,7 +145,7 @@
 | REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
-| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 1·2·4 ✅ · Phase 3 구현·케이스 완료(prod 반영·응답 대조만 남음) — 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
+| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 PR #43 머지(`dfcc485`) · dev·prod 배포 — Phase 3 prod 응답 대조(15:00 이후)·22시 배너 육안만 남음 · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
@@ -353,6 +353,16 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
   - nit: F19-42 약함 · at 해석이 오프셋을 조용히 덮음(`strptime`이 더 엄격) · 같은 시각 at-on/cron-off면 구간이 쪼개짐(가설) · at-on 뒤 off 없으면 "모름"
 - 케이스 **F19-39~43 (5/5)** · F19 누계 43/43 · 백엔드 425/425
 - **남은 것: Phase 3 완료 기준 "prod에서 API 응답이 실제 `on`·`off` 스케줄과 일치한다"** — IAM `application-autoscaling:DescribeScheduledActions` + 태스크 정의 env `SCHEDULE_RESOURCE_ID` + prod 배포(사용자 승인 대기)
+
+### REQ-F19 — PR #43 머지 · dev·prod 배포
+
+- **main(D12) 병합 충돌 3건은 문서뿐** — `CLAUDE.md` 다음 번호 줄(D13·F20 둘 다)·`TODO.md`·`PROGRESS.md`(2026-10-07 섹션에 F19·D12 둘 다). D12 쪽 로그가 미리 경고해 둔 그대로였다
+- **ECS 태스크에 task role이 없었다**(dev·prod 모두 execution role뿐) — 컨테이너 안 boto3가 AWS를 부르려면 task role이 필요해 **`pdf-extractor-ecs-task-role`**을 새로 만들었다(`DescribeScheduledActions` 읽기만, 신뢰 정책에 `aws:SourceAccount` 조건)
+- **dev는 prod 예약을 읽는다**(사용자 결정) — dev 서비스엔 예약 작업이 0건이라 dev 값이면 항상 `[]`. rev 9 env `SCHEDULE_RESOURCE_ID`=prod 서비스로 두니 dev API가 10/8(목)·10/9(금)·10/12(월) 15:00–23:00(+09:00) 10구간 — prod cron과 일치. 다운 안내·404 육안 확인 완료(사용자)
+- ⚠️ **`backend-deploy-prod.sh`는 서비스의 현재 리비전을 복사해 이미지만 바꾼다** — task role·env를 새로 넣을 땐 **그걸 넣은 리비전(rev 4)을 먼저 등록해 서비스를 옮겨 두고** 스크립트를 돌려야 rev 5가 이어받는다. prod는 desired 0이라 rev 4 전환은 태스크를 띄우지 않았다. rev 3(옛 이미지·role 없음)은 롤백용으로 활성 유지
+- ⚠️ **스크립트는 깨끗한 작업 트리를 요구한다** — worktree의 `frontend/node_modules` 심볼릭 링크(미추적)가 걸려 잠시 지웠다 되돌렸다
+- **prod 다운 화면에 운영 시간이 안 뜬 건 설계대로** — F19 프론트가 올라간 뒤 prod 백엔드가 한 번도 켜지지 않아 브라우저에 저장된 구간이 없었다. 꺼진 시간에 처음 온 사용자는 계속 못 본다(사용자: 따로 남기지 않음)
+- **남은 것** — Phase 3 완료 기준 "prod 응답 대조"(prod는 15:00 예약으로 켜짐) · 22~23시 배너·배너 가림(사용자 육안). 끝나면 Phase 3 체크·REQ ✅
 
 ## 2026-10-07
 

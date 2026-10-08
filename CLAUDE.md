@@ -365,15 +365,15 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ### 배포 상태 (세션마다 필요한 사실)
 
-⚠️ **prod 백엔드는 2026-10-05에 띄웠고(REQ-E02 ✅), 당분간(약 한 달) 사용자가 직접 켜고 끄며 월 비용을 본다** — 서비스 `pdf-extractor-backend-prod-svc` · 태스크 정의 `pdf-extractor-backend-prod:3` · 이미지 **`prod-51acedb`(버전 태그 고정, `:latest` 금지 — 2026-10-06 B29 반영. rev 1·2 는 deregister)** · 시크릿 `pdf-extractor/prod` · 로그 `/ecs/pdf-extractor-prod` · API `https://dailystudy-workbook-api.yejicraft-cf.com` · R2 `dailystudy`(prefix `pdf-extractor`). **`desired 0`이어도 장애가 아니다 — 켜고 끄는 건 사용자 몫이니 임의로 켜거나 끄지 말 것.** 상태는 `describe-services`로 직접 본다. prod 프론트는 2026-10-05 Worker **`dailystudy-workbook-prod`**(`wrangler.jsonc` `env.prod`, 커스텀 도메인 `https://dailystudy-workbook.yejicraft-cf.com`, Version `32ad6a44`, 앱 코드 = `c11b8a7`)로 배포됐다 — 2026-10-05 F18까지 갱신 — `frontend-deploy.sh prod`. 상세는 [PLAN-E02](docs/plans/PLAN-E02-prod-environment.md).
+⚠️ **prod 백엔드는 2026-10-05에 띄웠고(REQ-E02 ✅), 당분간(약 한 달) 사용자가 직접 켜고 끄며 월 비용을 본다** — 서비스 `pdf-extractor-backend-prod-svc` · 태스크 정의 `pdf-extractor-backend-prod:5` · 이미지 **`prod-dfcc485`(버전 태그 고정, `:latest` 금지 — 2026-10-08 F19 반영. rev 3(`prod-51acedb`, task role 없음)은 롤백용으로 활성 유지, rev 1·2·4 는 deregister)** · task role **`pdf-extractor-ecs-task-role`**(`DescribeScheduledActions` 읽기만, REQ-F19) + env `SCHEDULE_RESOURCE_ID`=prod 서비스 · **켜고 끄기는 ECS 예약 작업 `on`(평일 15:00)·`off`(평일 23:00, Asia/Seoul)** — 운영 구간 API가 이걸 읽는다(시각을 바꾸면 배너·다운 화면이 따라온다) · 시크릿 `pdf-extractor/prod` · 로그 `/ecs/pdf-extractor-prod` · API `https://dailystudy-workbook-api.yejicraft-cf.com` · R2 `dailystudy`(prefix `pdf-extractor`). **`desired 0`이어도 장애가 아니다 — 켜고 끄는 건 사용자 몫이니 임의로 켜거나 끄지 말 것.** 상태는 `describe-services`로 직접 본다. prod 프론트는 2026-10-05 Worker **`dailystudy-workbook-prod`**(`wrangler.jsonc` `env.prod`, 커스텀 도메인 `https://dailystudy-workbook.yejicraft-cf.com`, Version `3217a312`, 앱 코드 = `dfcc485`)로 배포됐다 — 2026-10-08 F19까지 갱신 — `frontend-deploy.sh prod`. 상세는 [PLAN-E02](docs/plans/PLAN-E02-prod-environment.md).
 
-⚠️ **dev 백엔드는 2026-10-05 main `eaa7f38`(B28까지, 이미지 태그 `b28-eaa7f38` = `:latest`)로 배포돼 있고, 육안 확인 뒤 사용자가 `desired 0`으로 내렸다.** (F18은 프론트 전용이라 dev 백엔드 재배포가 필요 없었다. 실행 당시 태스크 digest `sha256:ffca2c03…` 가 ECR 과 일치함을 확인했다.)
+⚠️ **dev 백엔드는 2026-10-08 F19 브랜치 `656c12d`(이미지 `f19-656c12d` = `:latest`, 태스크 정의 **rev 9** = rev 8 + task role + `SCHEDULE_RESOURCE_ID`=**prod 서비스** — dev엔 예약이 없어 prod 예약을 읽기 전용으로 보여 준다)로 배포돼 있고, 육안 확인 뒤 사용자가 `desired 0`으로 내렸다.** (rev 8은 롤백용으로 활성) (F18은 프론트 전용이라 dev 백엔드 재배포가 필요 없었다. 실행 당시 태스크 digest `sha256:ffca2c03…` 가 ECR 과 일치함을 확인했다.)
 (F17은 `pdf_service`가 바뀌어 **백엔드 배포가 따라왔다** — B25처럼 프론트 전용이 아니었다. 실행 digest `04af8fb8…`가 ECR `f17-25ee3d2`와 일치함을 확인했다.)
 (**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
-⚠️ **dev 프론트는 2026-10-05 main `c11b8a7` 빌드(F18까지, Worker Version `e7e4bbe7`)다** — 실체는 Pages가 아니라
+⚠️ **dev 프론트는 2026-10-08 F19 브랜치 빌드(Worker Version `b60242d6`)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
 "배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh dev` — 2026-10-05부터 `dev|prod` 인자 필수)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**
