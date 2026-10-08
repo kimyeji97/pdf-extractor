@@ -65,7 +65,8 @@ def _for(user: Optional[dict], event: dict) -> Optional[dict]:
 
 
 def _still_active(user: Optional[dict]) -> bool:
-    """콘솔은 별도 프로세스가 저장소에 쓰므로 다시 읽어야 안다 — heartbeat 주기마다 1회."""
+    """콘솔은 별도 프로세스가 저장소에 쓰므로 다시 읽어야 안다 — heartbeat 주기마다 1회.
+    이벤트마다 읽지 않는다 — 연결 수 × 이벤트 수만큼 R2 동기 GET 이 나가 루프를 막는다(리뷰 C12 회차 2)."""
     if user is None:
         return True
     current = storage.get_user(user["user_id"])
@@ -108,8 +109,6 @@ async def event_stream(
                     return
                 yield ": keepalive\n\n"
                 continue
-            if not _still_active(user):
-                return
             event = _for(user, event)
             if event is not None:
                 yield _format(event)

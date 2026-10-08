@@ -2,7 +2,7 @@
 REQ-C12 Phase 2 — 계정 차단
 
 검증 계약: docs/plans/PLAN-C12-ops-console-accounts-server.md `## 검증 계약`
-케이스: C12-09 ~ C12-14 · C12-17
+케이스: C12-09 ~ C12-14 · C12-17 · C12-19
 
 차단은 **즉시** — 로그인뿐 아니라 토큰 갱신·이미 받은 토큰(헤더·쿠키)으로 하는 요청도 403
 "이용이 제한된 계정"이다. 열린 알림 스트림은 heartbeat 주기 안에 끝난다. 데이터는 지우지 않는다.
@@ -133,3 +133,23 @@ def test_C12_17_admin_계정은_차단할_수_없다(client, isolated_storage):
 
     with pytest.raises(ValueError):
         auth_service.set_user_status(user_id, "blocked")
+
+
+@pytest.mark.anyio
+async def test_C12_19_스트림은_이벤트마다가_아니라_heartbeat에만_상태를_읽는다(client, monkeypatch):
+    """근거: PLAN § 결정 — "heartbeat(30초)마다 사용자 상태를 다시 읽어" (리뷰 회차 2 — 이벤트마다 R2 GET)"""
+    from app.routers.notification import event_stream
+    from app.services import notification_broker, storage
+
+    user_id, _ = _active_user(client, "c12-19@example.com")
+    gen = event_stream(last_event_id=None, heartbeat_s=60, user=storage.get_user(user_id))
+    await gen.__anext__()  # ": connected" — 구독이 잡힌 뒤
+    reads = []
+    real_get_user = storage.get_user
+    monkeypatch.setattr(storage, "get_user", lambda uid: reads.append(uid) or real_get_user(uid))
+
+    notification_broker.publish({"event": "read", "user_id": user_id, "data": {"ids": []}})  # 이 사용자에게 흘러가는 이벤트
+    await asyncio.wait_for(gen.__anext__(), timeout=2.0)
+    await gen.aclose()
+
+    assert reads == []

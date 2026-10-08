@@ -40,8 +40,8 @@ export function setBlockedCallback(fn) {
   _onBlocked = fn;
 }
 
-async function _watchBlocked(res) {
-  if (res.status !== 403 || !_getAccessToken()) return res;
+async function _watchBlocked(res, { requireToken = true } = {}) {
+  if (res.status !== 403 || (requireToken && !_getAccessToken())) return res;
   const body = await res.clone().json().catch(() => null);
   if (String(body?.detail || "").includes(BLOCKED_MARK)) {
     _clearTokens();
@@ -129,6 +129,8 @@ async function _tryRefresh(refreshToken) {
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
     if (!res.ok) {
+      // 차단이면 안내·로그아웃까지 — 화면을 열어 둔 채 차단되거나 만료 뒤 돌아오면 이 경로로 온다(REQ-C12 리뷰 회차 2)
+      await _watchBlocked(res, { requireToken: false });
       // 서버가 refresh 토큰을 **거부**했을 때만 지운다 — 5xx·네트워크(배포·장애)에 지우면 조용히 로그아웃된다(REQ-B27)
       if (res.status === 401 || res.status === 403) _clearTokens();
       return false;
