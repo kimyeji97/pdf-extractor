@@ -56,7 +56,7 @@ const QuestionItem = memo(
           cursor: "pointer",
           flexShrink: 0,
           transition: "background-color 0.1s",
-          // `*.lighter`/`*.dark`는 두 모드가 공유한다 → tint 헬퍼로 모드별 대응 (REQ-D08)
+          // `*.lighter`는 다크에서도 파스텔이다 → tint 헬퍼로 모드별 대응 (REQ-D08·D13)
           ...(isSelected ? tintFg("primary")(theme) : { color: "text.primary" }),
           bgcolor: isSelected ? tintBg("primary")(theme) : "transparent",
           "&:hover": { bgcolor: isSelected ? tintBg("primary")(theme) : "action.hover" },

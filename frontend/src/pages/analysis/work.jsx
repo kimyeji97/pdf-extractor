@@ -52,6 +52,10 @@ const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
 /** 리사이즈 가능한 패널의 [최소, 최대] 폭. */
 const PANEL_BOUNDS = { section1: [150, 400], section3: [200, 800] };
 
+
+// 드래그 오버레이 테두리 — 다크에서도 흰 PDF 지면 위라 모드별 primary(다크 #8EA4D6)를 쓰면 흐려진다(대비 2.49:1).
+// 종이 위 색이므로 모드 무관 브랜드 남색으로 고정한다 (REQ-D13 리뷰 회차 2)
+const PAPER_INK = "#1B2B4B";
 export default function AnalysisWorkPage() {
   const { jobId } = useParams();
   const navigate  = useNavigate();
@@ -371,7 +375,7 @@ export default function AnalysisWorkPage() {
           <Box sx={{
             position: "absolute",
             left: dragBox.left, top: dragBox.top, width: dragBox.width, height: dragBox.height,
-            border: "2px dashed", borderColor: "primary.main",
+            border: "2px dashed", borderColor: PAPER_INK,
             // 항상 흰 PDF 지면 위에 그려지므로 다크에서도 밝은 색조를 유지한다 (REQ-D08 §3)
             bgcolor: "primary.lighter", opacity: 0.6, pointerEvents: "none",
           }} />
@@ -383,7 +387,7 @@ export default function AnalysisWorkPage() {
             top:    pendingRegion.pt.y0 * scale,
             width:  (pendingRegion.pt.x1 - pendingRegion.pt.x0) * scale,
             height: (pendingRegion.pt.y1 - pendingRegion.pt.y0) * scale,
-            border: "2px solid", borderColor: "primary.main",
+            border: "2px solid", borderColor: PAPER_INK,
             // 위와 동일 — 흰 지면 위 오버레이 (REQ-D08 §3)
             bgcolor: "primary.lighter", opacity: 0.5, pointerEvents: "none",
           }} />

@@ -146,6 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 PR #43 머지(`dfcc485`) · dev·prod 배포 — Phase 3 prod 응답 대조(15:00 이후)·22시 배너 육안만 남음 · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
+| REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR·prod 배포 전 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
@@ -267,6 +268,58 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-08
+
+### REQ-D13 — 브랜드 리뉴얼 Phase 3 글꼴 (✅)
+
+- **본문·제목 모두 `Outfit Variable` → `Gothic A1` → OS 한글 고딕** — 계획서는 Gothic A1이 OS 고딕 "자리를 대체한다"였지만 OS 고딕은 **뒤에 남겼다**(글꼴 로드 전·실패 대비). Outfit은 가변 글꼴 1파일(등록 이름 `Outfit Variable` — `'Outfit'`이 아니다), Gothic A1은 굵기마다 별 파일이라 400~700만
+- Gothic A1 한글은 굵기당 `@font-face` 99개로 쪼개진 unicode-range라 빌드 `dist/assets`가 12MB(woff2 ~4.7MB)지만 브라우저는 쓰는 글자 조각만 받는다
+- ⚠️ **배포 직후 라이브 CSS가 옛 글꼴(Barlow·DM Sans)로 보였다** — `index.html` 캐시였다. 캐시 우회 재조회로 새 번들 확인. "배포했는데 안 바뀌었다"면 index부터 no-cache로 다시 볼 것
+- 생성 PDF 글꼴(`fitz.Font("korea")`)은 범위 밖 — 미리보기 라벨(테마 글꼴)과 PDF 글꼴은 DM Sans 때부터 달랐고 계약 #12·#14는 문자열·지면 색 짝이라 무관
+- 리뷰: D13 @ 122da1c — (b) 0 · (c) 0 · nit 4 (회차 6)
+  - nit: `typography.ts:73,80` h1·h2 `fontWeight: 800` 잔존(Gothic A1은 700까지, 사용처 0) · `typography.ts:52` 주석 "OS 기본 고딕" 잔존 · `brandFont.test.js` `/^Outfit/`이 `'Outfit'`도 통과 · 미리보기 vs PDF 글꼴 차이(범위 밖)
+- 케이스 **D13-25~30 (6/6)** · dev 배포(Worker `e2982dee`) 후 사용자 육안 확인 → **REQ-D13 ✅** — 남은 일: PR·main 머지·prod 프론트 배포(사용자 승인)
+
+### REQ-D13 — 브랜드 리뉴얼 Phase 2 테마색 (🟡 Phase 2/3)
+
+- **사용자가 최종 테마 셋(6색 × 6단계 + 남색 회색 grey)을 직접 줬다** — 처음 정한 빨강 `#F0503A` secondary·다크 primary `#8FA3D1`은 이 셋(주홍 `#CC4A12` · 다크 primary `#8EA4D6`)으로 대체. "수동" 칩은 셋을 받은 뒤에도 primary로 재확인 → F14-16 기대값 갱신(PLAN-F14 행에 대체 표시)
+- **테마 셋의 main은 라이트용 진한 색이라 다크에서 글자로 묻혔다**(회차 2, error 2.04:1) — primary만 다크용이 있었다. 5색(primary·secondary·info·success·error)을 **모드별 팔레트**로: 다크 main = 라이트 light. warning은 6.27:1이라 공유
+- ⚠️ **다크 `dark` 단계를 진하게 두면 채움 버튼 hover가 묻힌다**(회차 3) — MUI contained hover 배경이 `palette[color].dark`인데 글자는 다크 contrastText `#151D2E`라 error 2.68:1. 다크 `dark` = 다크 `light`(main보다 밝게)로 → 9.6~11.8:1. 같은 이유로 **다크 filled Alert(완료·실패 스낵바)는 파스텔 바탕 + 검정 글자**가 됐다 — 사용자 dev 육안 확인
+- 흰 PDF 지면 위 드래그 오버레이는 다크에서도 종이 위라 다크 primary면 2.49:1 → 모드 무관 `#1B2B4B` 고정(계약 #20 예외 그대로)
+- 계약 #20("main·lighter·darker 공유")의 전제가 깨져 문구 갱신(회차 4 (c) 결정 A) — 결론(tint를 쓴다)은 그대로, 이유를 "다크 lighter도 파스텔"로. #21 배경 hex·#36 수동 칩 색도 현행화
+- 리뷰: D13 @ 342019b — (b) 1 · (c) 0 · nit 1 (회차 3)
+  - (b): [frontend/src/theme/core/palette.ts:91-99] 다크 contained 버튼 hover 배경(*.dark) 위 contrastText #151D2E가 묻힘 — error 2.68:1 · success 3.36 · 실측
+    - 방안: A 다크 dark 단계를 main보다 밝게 · B contained hover 오버라이드 · TODO · 감수 — 추천 A
+    - 결정: A → `aed8739` 회차 4에서 닫힘
+- 리뷰: D13 @ aed8739 — (b) 0 · (c) 1 · nit 3 (회차 4)
+  - (c): [CLAUDE.md 계약 #20 · tint.js:3-8 · QuestionListPanel.jsx:59 · nav.tsx:121] "팔레트 공유" 문구가 실제(5색 모드별)와 다름 · 실측
+    - 방안: A 계약 #20(/checkpoint) + 주석 3곳(/implement) 갱신 · TODO · 감수 — 추천 A
+    - 결정: A → 주석 `62ed2ff` 회차 5에서 닫힘 · 계약 #20 이번 기록에서 갱신
+  - nit: 다크 filled Alert 파스텔 바탕(육안 확인) · 다크 책등 warning만 진함 · 다크 warning 배너 흰 글자 3.37:1(warning 공유 사각, delta 이전)
+- 리뷰: D13 @ 62ed2ff — (b) 0 · (c) 0 · nit 1 (회차 5)
+  - nit: 같은 옛 "공유" 이유 주석이 `UploadForm.jsx:55` · `work.jsx:552` · `NotificationBell.jsx:9-10`에 남음(결론은 맞음 · NotificationBell은 F09-46 스캔 대상)
+- 케이스 **D13-09~24 (16/16)** — `/testrun` @ `aed8739`. 그 뒤 `62ed2ff`는 주석만(회차 5 리뷰어가 비주석 변경 0 확인)이라 결과 유지
+- dev 배포(D13 브랜치 `62ed2ff`, Worker `eeec6b08`) 후 **사용자 육안 확인**(라이트·다크 버튼·칩·알림 바)
+
+### REQ-D13 — 브랜드 리뉴얼 Phase 1 로고·파비콘 (🟡 Phase 1/3)
+
+- **D12에서 분리했던 워드마크·아이콘·테마색을 한 REQ로** — 사용자가 새 로고 세트(light·dark·transparent·symbol·파비콘 묶음)를 `public/`에 올렸다. 범위: 로고+파비콘+테마색+글꼴(사용자 결정), 생성 PDF 지면(계약 #14·#39)·도메인은 제외
+- 결정 6건(2026-10-08 사용자): **남색 primary · 빨강 secondary**(다크는 primary를 `#8FA3D1`로 모드별 — 계약 #20) · **다크 로고는 `logo-dark.svg`에서 배경만 뺀 투명본 파생** · 글꼴 **본문·제목 모두 Outfit + Gothic A1, 400~700, fontsource 자체 호스팅**(D07 관례) · **"수동" 칩은 primary**(secondary가 빨강이 되면 실패 칩과 헷갈림) · 옛 워드마크만 삭제
+- **로고는 두 이미지를 DOM에 두고 `applyStyles('dark')`로 하나만 보인다** — JS로 모드를 읽어 src를 바꾸면 첫 페인트에 잘못된 로고가 번쩍인다(계약 #21 계열). 대가: 두 파일 다 내려받는다
+- ⚠️ **받은 로고 SVG는 481×184 캔버스에 사방 ~40 여백**이 있어 사이드바 26px에서 한글이 ~6px였다(회차 0, 도형 계산). viewBox를 내용 경계 `38 38 401 108`로 좁혀 ~11.8px. 그림은 그대로라 "디자인 수정 제외"를 넘지 않는다. CLIPBOOK은 여전히 ~4px(nit)
+- ⚠️ **받은 SVG마다 ~7.7KB C2PA 메타데이터**(파일의 43~95%) — 공개 배포되고, 파생본은 내용이 바뀌어 해시가 어긋난다. 앱이 쓰는 3개에서 제거(그림 바이트 동일). 안 쓰는 `symbol.svg`·`logo-light/dark.svg`엔 남음(nit)
+- ⚠️ **`favicon.ico`에 `sizes="any"`면 크롬이 svg 대신 ico를 고른다** → `32x32`
+- ⚠️ **자산을 Finder로 넣으면 `public/.DS_Store`가 생겨 빌드마다 `dist`로 복사·배포된다**(gitignore라 안 보임) → `public/.assetsignore`(wrangler가 assets 최상위에서 읽고 자신은 업로드 제외 — 소스 확인). 배포 후 `/.DS_Store`는 SPA 폴백 `index.html`로 응답(파일 아님) 확인
+- 리뷰: D13 @ 55dcc56 — (b) 4 · (c) 0 · nit 5 (회차 0)
+  - (b): [frontend/src/components/common/Logo.tsx:29] 로고 SVG 여백으로 26px에서 글자 ~6px · 실측(도형 계산)
+    - 방안: A viewBox 자르기 · B CSS 확대 · TODO · 감수 — 추천 A
+    - 결정: A → `05784b9` 회차 1에서 닫힘
+  - (b): [frontend/index.html:8] ico `sizes="any"`로 svg 대신 ico · 가설 — 결정: A → `05784b9` 닫힘
+  - (b): [frontend/public/*.svg] C2PA 메타데이터 공개·파생본 해시 불일치 · 실측 — 결정: A → `05784b9` 닫힘
+  - (b): [frontend/public/.DS_Store] Finder 부산물 배포 · 실측 — 결정: A → `05784b9` 닫힘
+- 리뷰: D13 @ 05784b9 — (b) 0 · (c) 0 · nit 5 (회차 1)
+  - nit: CLIPBOOK ~4.2px · 크롬이 탭에 png를 고를 수 있음(같은 그림) · 미사용 SVG에 C2PA 잔존 · Logo.tsx 주석이 viewBox 자르기 전 기준 · 회차 0 이월 nit(두 이미지 다운로드·단언 약함·`showName=false` 죽은 분기)
+- dev 배포(D13 브랜치, Worker `52d1f053`) 후 **사용자 육안: 로고(라이트·다크 전환)·파비콘 확인** — dev 백엔드는 사용자가 다시 내림
+- 케이스 **D13-01~08 (8/8)** — D13-08은 구현 전에도 통과(기존 아이콘 링크도 실재 파일이었다)
 
 ### REQ-F19 — Phase 3 운영 구간 API (🟡 구현 완료 · prod 반영 전)
 

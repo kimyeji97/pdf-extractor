@@ -66,6 +66,38 @@ export type GreyExtend = {
 // Primary color
 export const primary = createPaletteChannel(themeConfig.palette.primary);
 
+// 다크 모드 primary — REQ-D13. 남색 #1B2B4B 는 다크 배경 #151D2E 에 묻혀서 밝힌 남색으로 따로 둔다.
+// basePalette 의 main·lighter·darker 는 두 모드가 공유하므로(계약 #20) 여기서 통째로 덮어야 한다 —
+// createPaletteChannel 을 거쳐야 mainChannel 도 바뀐다(tintBg/tintSx 가 채널을 쓴다).
+export const primaryDark = createPaletteChannel({
+  lighter: '#E6ECF8',
+  light: '#B6C5E6',
+  main: '#8EA4D6',
+  dark: '#B6C5E6',
+  darker: '#2E4272',
+  contrastText: '#151D2E',
+});
+
+// 다크 모드 secondary·info·success·error — REQ-D13 리뷰 회차 2. 테마 셋의 main 은 라이트용 진한 색이라
+// 다크 배경 위 글자색(삭제 버튼·오류 문구 등)으로 쓰면 대비 2~2.8:1로 묻힌다. 각 색의 light 를 main 으로
+// 올린다(lighter=라이트 lighter · light=light·lighter 중간 · dark=light · darker=라이트 dark).
+// warning 은 라이트 main 도 다크에서 6.27:1 이라 공유한다.
+// dark 를 light 와 같게 둔 건 회차 3 — MUI contained 버튼 hover 배경이 *.dark 라, 진하게 두면 어두운 글자가
+// 묻힌다(error 2.68:1). primaryDark 도 같은 이유로 dark=light.
+const DARK_TEXT = '#151D2E';
+export const secondaryDark = createPaletteChannel({
+  lighter: '#FFEEE6', light: '#F8B498', main: '#F27A4A', dark: '#F8B498', darker: '#A33A0E', contrastText: DARK_TEXT,
+});
+export const infoDark = createPaletteChannel({
+  lighter: '#E0F5F9', light: '#A6DFEB', main: '#6CC9DD', dark: '#A6DFEB', darker: '#08657A', contrastText: DARK_TEXT,
+});
+export const successDark = createPaletteChannel({
+  lighter: '#E3F6EA', light: '#B0E4C5', main: '#7DD3A0', dark: '#B0E4C5', darker: '#116632', contrastText: DARK_TEXT,
+});
+export const errorDark = createPaletteChannel({
+  lighter: '#FDE7EC', light: '#F8B7C6', main: '#F2879F', dark: '#F8B7C6', darker: '#990E30', contrastText: DARK_TEXT,
+});
+
 // Secondary color
 export const secondary = createPaletteChannel(themeConfig.palette.secondary);
 
@@ -111,7 +143,7 @@ export const background = {
   dark: createPaletteChannel({
     paper: grey[800],
     default: grey[900],
-    neutral: '#28323D',
+    neutral: '#2E3A55', // REQ-D13 테마 셋
   }),
 };
 
@@ -156,6 +188,11 @@ export const palette: Partial<Record<ThemeColorScheme, ColorSystemOptions['palet
   },
   dark: {
     ...basePalette,
+    primary: primaryDark,
+    secondary: secondaryDark,
+    info: infoDark,
+    success: successDark,
+    error: errorDark,
     text: text.dark,
     background: background.dark,
     action: action.dark,

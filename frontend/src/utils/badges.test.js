@@ -30,8 +30,9 @@ describe('detectionBadge', () => {
 });
 
 describe('표식·정보성 칩', () => {
-  it('[F14-16] 오탐 = warning · 수동 = secondary', () => {
-    expect(MARK_COLOR).toEqual({ falsePositive: 'warning', manual: 'secondary' });
+  // 수동은 REQ-D13(2026-10-08 사용자 결정)에서 secondary → primary로 바뀌었다 — 새 secondary(주홍)가 error(진홍)와 가깝다
+  it('[F14-16] 오탐 = warning · 수동 = primary', () => {
+    expect(MARK_COLOR).toEqual({ falsePositive: 'warning', manual: 'primary' });
   });
 
   it('[F14-17] 정보성 칩 = primary 테두리형', () => {

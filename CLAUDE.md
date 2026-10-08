@@ -312,7 +312,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 | (숫자) | 핵심·v2·v3 기능 (기획 단위) | REQ-01~30 |
 | `B` | 버그 수정 (Bug) | REQ-B01~B29 |
 | `C` | 보완 기능 (Complement) | REQ-C01~C11 |
-| `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D12 |
+| `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D13 |
 | `E` | 실험·인프라성 기능 (Enhancement) | REQ-E01~E02 |
 | `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F19 |
 | `P` | 성능 (Performance) | REQ-P01~P06 |
@@ -337,7 +337,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-10-08 기준 각 prefix 다음 번호: `B30`(B29 = 메타 저장 실패 알림 🟡), `C12`, `D13`(D12 = 시스템 이름 변경 ✅), `E03`, `F20`(F19 = 서버 다운 안내 🟡), `P07`, 숫자 `31`.
+2026-10-08 기준 각 prefix 다음 번호: `B30`(B29 = 메타 저장 실패 알림 🟡), `C12`, `D14`(D13 = 브랜드 리뉴얼 ✅ 2026-10-08), `E03`, `F20`(F19 = 서버 다운 안내 🟡), `P07`, 숫자 `31`.
 (2026-09-30에 착수 대기 13건을 **B21·B22·F14·F15·C10·C11·P06**으로 예약했다 — 전부 미착수이고 REQ-28은 ⏸.
 예약분은 PROGRESS "미착수 — 번호만 부여된 것" 표가 단일 출처다. 번호는 완료돼도 재사용하지 않는다)
 
@@ -373,7 +373,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
-⚠️ **dev 프론트는 2026-10-08 F19 브랜치 빌드(Worker Version `b60242d6`)다** — 실체는 Pages가 아니라
+⚠️ **dev 프론트는 2026-10-08 D13 브랜치 빌드(Phase 3 글꼴까지 `122da1c`, Worker Version `e2982dee`)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
 "배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh dev` — 2026-10-05부터 `dev|prod` 인자 필수)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**
@@ -431,9 +431,11 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     높이 체인 래퍼가 한 겹 늘어나는데, 화면마다 손으로 쓰면 계약 #1이 깨지는 지점이 4곳이 된다.
     카드 사이 여백은 `CardResizeHandle`이 만든다 — `CardRow`에 `gap`을 같이 걸면 간격이 두 배가 된다.
     (REQ-D07 Phase 4)
-20. **팔레트의 `*.lighter`·`*.darker`·`*.main`은 라이트/다크가 공유한다** — 모드별로 갈리는 것은
-    `text`·`background`·`action` 셋뿐이다(`palette.ts`의 `basePalette`는 공유). 그래서 선택·활성
-    강조 배경에 `primary.lighter`를 쓰면 **다크에서 어두운 화면에 파스텔 블록이 박힌다.**
+20. **팔레트의 `*.lighter`는 다크 모드에서도 파스텔이다** — warning·grey는 라이트/다크가 공유하고, primary·secondary·
+    info·success·error는 REQ-D13부터 모드별 팔레트(`palette.ts`의 `*Dark` — 다크는 글자 대비를 위해 main을 밝혔다)지만
+    다크 쪽 `lighter`도 밝은 색이다. 그래서 선택·활성 강조 배경에 `primary.lighter`를 쓰면 **다크에서 어두운 화면에 파스텔 블록이 박힌다.**
+    ⚠️ 다크 팔레트를 고칠 땐 `createPaletteChannel`을 거쳐 통째로 덮는다(`mainChannel`을 tint가 쓴다) · 다크 `dark`는
+    main보다 **밝게** 둔다 — MUI contained 버튼 hover 배경·다크 filled Alert 바탕이 `*.dark`라 진하게 두면 어두운 글자가 묻힌다(D13 실측 2.68:1).
     하드코딩 hex가 아니라 **정상 토큰을 썼는데 깨지므로 grep으로 안 잡히고**, 콘솔·빌드도 조용하다.
     → 색조 배경은 `theme/tint.js`의 **`tintBg`/`tintSx`/`tintFg`**를 쓴다(main 채널 알파 + 모드별 글자색).
     **예외는 "흰 지면 위"에 그려지는 것뿐**(`work.jsx`의 드래그 오버레이) — 종이는 다크에서도 희다.
@@ -441,7 +443,7 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     **아무것도 안 들어가고 에러도 안 난다** — `sx={(theme) => ({ ...tintSx('primary')(theme) })}`.
     (REQ-D08. 계약 #18과 같은 "조용히 틀린 색" 계열)
 36. **뱃지·칩의 색과 이름은 `frontend/src/utils/badges.js` 한 곳에서만 정한다** — 감지 상태(`detectionBadge`: 대기 default
-    "대기 중" · 분석 중 info · 실패 error "분석 실패" · 완료 success "N문항") · 표식(`MARK_COLOR`: 오탐 warning · 수동 secondary) ·
+    "대기 중" · 분석 중 info · 실패 error "분석 실패" · 완료 success "N문항") · 표식(`MARK_COLOR`: 오탐 warning · 수동 primary — D13) ·
     그 외 정보성 칩(`INFO_CHIP`: primary 테두리형). 화면마다 표를 들고 있다가 **같은 "분석 중"이 info·warning·"감지 중…" 세 가지**가
     됐고 "수동"은 세 색이었다(REQ-F14). 새 칩은 여기서 가져다 쓴다 — F14-18·19가 import와 옛 이름을 스캔하지만 칩 하나하나는 못 본다.
     ⚠️ **`default`(회색)는 MUI 팔레트 키가 아니다** — `tintSx('default')`/`tintBg('default')`는 `palette.default` 가 없어 **화면이 죽는다.**
@@ -550,7 +552,7 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     재현한 값이고 `pdf_service`의 라벨 배경과 짝을 이룬다.
 21. **`index.html`의 사전 페인트 스크립트는 테마 설정과 3중으로 묶여 있다** — 저장 키 `mui-mode`
     (MUI `modeStorageKey` 기본값) · 속성명 `data-color-scheme`(`theme-config.ts`의
-    `colorSchemeSelector`) · 배경 hex `#141A21`/`#F9FAFB`(`grey[900]`/`grey[100]`).
+    `colorSchemeSelector`) · 배경 hex `#151D2E`/`#F6F8FB`(`grey[900]`/`grey[100]`, D13).
     한쪽만 바꾸면 **에러 없이 다크 사용자에게 흰 화면이 번쩍인다**(FOUC). 번들 로드 전 구간은
     테마 프로바이더가 못 막으므로 이 스크립트가 유일한 방어선이다. (REQ-D08)
 

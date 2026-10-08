@@ -2,10 +2,10 @@
  * 색조(tint) 강조 헬퍼 — REQ-D08
  *
  * ━━━ 왜 필요한가 ━━━
- * `palette.ts`의 `basePalette`(primary·secondary·info·success·warning·error·grey)는
- * **light와 dark 색상 스킴이 공유한다.** 모드별로 갈리는 것은 `text`·`background`·`action`
- * 셋뿐이다. 그래서 선택·활성 강조에 흔히 쓰는 `primary.lighter`는 다크에서도 `#D0ECFE`
- * 그대로라 **어두운 화면에 파스텔 블록이 박힌다.**
+ * 팔레트의 `*.lighter`는 다크 모드에서도 **파스텔**이다 — warning·grey는 두 모드가 공유하고,
+ * primary·secondary·info·success·error는 REQ-D13부터 모드별 팔레트지만 다크 쪽도 `lighter`는
+ * 밝은 색이다(글자 대비용으로 main을 밝힌 것). 그래서 선택·활성 강조에 흔히 쓰는
+ * `primary.lighter`를 그대로 쓰면 **어두운 화면에 파스텔 블록이 박힌다.**
  *
  * 하드코딩 hex가 아니라 팔레트 토큰을 썼는데도 깨지므로 **grep으로는 안 잡힌다.**
  * REQ-D08 브라우저 검증에서 통계 카드 3장이 밝게 남아 있는 것을 눈으로 보고 발견했다.
