@@ -66,6 +66,18 @@ export type GreyExtend = {
 // Primary color
 export const primary = createPaletteChannel(themeConfig.palette.primary);
 
+// 다크 모드 primary — REQ-D13. 남색 #1B2B4B 는 다크 배경 #141A21 에 묻혀서 밝힌 남색으로 따로 둔다.
+// basePalette 의 main·lighter·darker 는 두 모드가 공유하므로(계약 #20) 여기서 통째로 덮어야 한다 —
+// createPaletteChannel 을 거쳐야 mainChannel 도 바뀐다(tintBg/tintSx 가 채널을 쓴다).
+export const primaryDark = createPaletteChannel({
+  lighter: '#E3E8F4',
+  light: '#B8C6E4',
+  main: '#8FA3D1',
+  dark: '#5E74A8',
+  darker: '#36487A',
+  contrastText: '#141A21',
+});
+
 // Secondary color
 export const secondary = createPaletteChannel(themeConfig.palette.secondary);
 
@@ -156,6 +168,7 @@ export const palette: Partial<Record<ThemeColorScheme, ColorSystemOptions['palet
   },
   dark: {
     ...basePalette,
+    primary: primaryDark,
     text: text.dark,
     background: background.dark,
     action: action.dark,

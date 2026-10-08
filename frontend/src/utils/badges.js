@@ -35,7 +35,8 @@ export function detectionBadge(status, questionCount) {
   return DETECTION[status] ?? null;
 }
 
-export const MARK_COLOR = { falsePositive: "warning", manual: "secondary" };
+// 수동은 primary(남색) — secondary 가 브랜드 빨강이 되며 "분석 실패"(error) 칩과 헷갈리지 않게 (REQ-D13)
+export const MARK_COLOR = { falsePositive: "warning", manual: "primary" };
 
 /** 상태를 말하지 않는 정보성 칩 — 채움형 상태 뱃지와 모양으로도 갈린다 */
 export const INFO_CHIP = { color: "primary", variant: "outlined" };

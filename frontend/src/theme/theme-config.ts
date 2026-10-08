@@ -37,20 +37,22 @@ export const themeConfig: ThemeConfig = {
    * Palette
    *************************************** */
   palette: {
+    // 오답 클립북 남색 — REQ-D13. 다크 모드는 palette.ts 의 primaryDark 가 덮는다(계약 #20)
     primary: {
-      lighter: '#D0ECFE',
-      light: '#73BAFB',
-      main: '#1877F2',
-      dark: '#0C44AE',
-      darker: '#042174',
+      lighter: '#D3D9E6',
+      light: '#5B6E96',
+      main: '#1B2B4B',
+      dark: '#121D33',
+      darker: '#0A111F',
       contrastText: '#FFFFFF',
     },
+    // 채점 펜 빨강 — REQ-D13
     secondary: {
-      lighter: '#EFD6FF',
-      light: '#C684FF',
-      main: '#8E33FF',
-      dark: '#5119B7',
-      darker: '#27097A',
+      lighter: '#FDDCD6',
+      light: '#F7907F',
+      main: '#F0503A',
+      dark: '#C5341F',
+      darker: '#8E1F10',
       contrastText: '#FFFFFF',
     },
     info: {
