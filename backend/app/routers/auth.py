@@ -39,7 +39,7 @@ def signup(body: SignupRequest):
         raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
 
     user = auth_service.create_user(body.email, body.password)
-    return {"user_id": user["user_id"], "email": user["email"], "role": user["role"]}
+    return {"user_id": user["user_id"], "email": user["email"], "role": user["role"], "status": user["status"]}
 
 
 @router.post("/auth/login")
@@ -48,6 +48,8 @@ def login(body: LoginRequest, response: Response):
     user = auth_service.get_user_by_email(body.email)
     if user is None or not auth_service.verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
+    if auth_service.user_status(user) == "pending":  # REQ-C12 — 비밀번호가 맞을 때만 알린다
+        raise HTTPException(status_code=403, detail="가입 승인 대기 중입니다. 관리자 승인 후 이용할 수 있습니다.")
 
     tokens = auth_service.create_token_pair(user["user_id"])
     auth_service.set_access_cookie(response, tokens["access_token"])

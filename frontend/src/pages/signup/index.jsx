@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -13,16 +12,16 @@ import { useAuth } from "contexts/AuthContext";
 import paths from "routes/paths";
 
 /**
- * 회원가입 화면 (REQ-27 Phase 4). 가입 성공 직후 같은 자격증명으로 자동 로그인된다
- * (`AuthContext.signup()` — 계획서 § 결정(Phase 4) — 회원가입 직후 동작).
+ * 회원가입 화면 (REQ-27 Phase 4). 가입 성공 뒤엔 승인 안내만 띄운다 — 새 가입자는 운영 콘솔에서
+ * 승인해야 로그인된다(REQ-C12. 예전의 가입 직후 자동 로그인을 대체).
  */
 export default function SignupPage() {
-  const navigate = useNavigate();
   const { signup } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,7 +29,7 @@ export default function SignupPage() {
     setSubmitting(true);
     try {
       await signup(email, password);
-      navigate(paths.analysis);
+      setDone(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -53,6 +52,12 @@ export default function SignupPage() {
         <Typography variant="h5" fontWeight={700} sx={{ mb: 3 }}>
           회원가입
         </Typography>
+
+        {done && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            가입 신청이 접수됐습니다. 관리자 승인 후 이용할 수 있습니다.
+          </Alert>
+        )}
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -77,7 +82,7 @@ export default function SignupPage() {
           sx={{ mb: 3 }}
         />
 
-        <Button type="submit" variant="contained" fullWidth disabled={submitting} sx={{ mb: 2 }}>
+        <Button type="submit" variant="contained" fullWidth disabled={submitting || done} sx={{ mb: 2 }}>
           회원가입
         </Button>
 

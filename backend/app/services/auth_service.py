@@ -55,8 +55,29 @@ def create_user(email: str, password: str) -> dict:
         "email": email,
         "password_hash": hash_password(password),
         "role": "user",
+        "status": "pending",  # REQ-C12 — 운영 콘솔에서 승인해야 로그인된다
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    storage.save_user(user_id, user)
+    return user
+
+
+# REQ-C12 — 계정 상태. 필드가 없는 기존 레코드는 active(오픈 전 가입자 — 이관 없음)
+USER_STATUSES = ("pending", "active", "blocked")
+
+
+def user_status(user: dict) -> str:
+    return user.get("status", "active")
+
+
+def set_user_status(user_id: str, status: str) -> dict:
+    """운영 콘솔이 부르는 승인·차단. 값 검사를 여기 둬서 콘솔이 엉뚱한 값을 못 쓴다."""
+    if status not in USER_STATUSES:
+        raise ValueError(f"status 는 {'|'.join(USER_STATUSES)}")
+    user = storage.get_user(user_id)
+    if user is None:
+        raise ValueError("사용자 없음")
+    user["status"] = status
     storage.save_user(user_id, user)
     return user
 

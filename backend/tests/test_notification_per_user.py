@@ -259,7 +259,12 @@ def test_B27_15_스트림은_헤더_없이_access_쿠키만으로_연결된다(i
     monkeypatch.setattr(router_mod, "event_stream", _finite)
     c = TestClient(app, base_url="https://testserver")
     pw = "correct-horse-battery-staple"
-    c.post("/api/auth/signup", json={"email": "b27-cookie@example.com", "password": pw})
+    signup = c.post("/api/auth/signup", json={"email": "b27-cookie@example.com", "password": pw}).json()
+    from app.services import storage  # REQ-C12 — 새 가입자는 승인 대기라 로그인 전에 승인한다
+
+    user = storage.get_user(signup["user_id"])
+    user["status"] = "active"
+    storage.save_user(signup["user_id"], user)
     c.post("/api/auth/login", json={"email": "b27-cookie@example.com", "password": pw})
 
     with c.stream("GET", "/api/notifications/stream") as res:

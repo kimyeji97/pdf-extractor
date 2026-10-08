@@ -79,17 +79,15 @@ describe('login()', () => {
 });
 
 describe('signup()', () => {
-  it('[27-59] 회원가입 성공 직후 같은 자격증명으로 로그인이 자동 호출된다', async () => {
-    client.signup.mockResolvedValue({ user_id: 'u1', email: 'a@b.com', role: 'user' });
-    client.login.mockResolvedValue({ access_token: 'acc', refresh_token: 'ref', token_type: 'bearer' });
+  // 27-59(가입 직후 자동 로그인)는 REQ-C12에서 대체됐다 — 새 가입자는 승인 대기라 로그인이 403이다
+  it('[C12-06] 가입 뒤 login()을 부르지 않고 미인증으로 남는다', async () => {
+    client.signup.mockResolvedValue({ user_id: 'u1', email: 'a@b.com', role: 'user', status: 'pending' });
     renderProvider();
 
     await act(async () => {
       screen.getByText('signup').click();
     });
 
-    expect(client.signup).toHaveBeenCalledWith('a@b.com', 'pw1234');
-    expect(client.login).toHaveBeenCalledWith('a@b.com', 'pw1234');
-    expect(screen.getByTestId('auth')).toHaveTextContent('true');
+    expect([client.login.mock.calls.length, screen.getByTestId('auth').textContent]).toEqual([0, 'false']);
   });
 });

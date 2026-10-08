@@ -37,6 +37,7 @@
   .s-DONE { color: var(--primary); } .s-FAILED { color: var(--error); }
   .s-PROCESSING, .s-QUEUED, .s-PENDING { color: var(--info); } .s-NONE { color: var(--muted); }
   .r-admin { color: var(--warn); } .r-user { color: var(--muted); }
+  .u-pending { color: var(--warn); } .u-active { color: var(--primary); } .u-blocked { color: var(--error); }
   button, select { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
   button:hover { border-color: var(--primary); }
   .muted { color: var(--muted); }
@@ -216,15 +217,18 @@ function renderServer(s, busy) {
 }
 
 function renderUsers(users, orphan) {
-  $('userCount').textContent = `${users.length}명 · admin ${users.filter(u => u.role === 'admin').length}`;
-  $('users').innerHTML = `<tr><th>이메일</th><th>권한</th><th>가입</th><th class="num">업로드</th><th class="num">쪽</th><th class="num">생성</th><th>마지막 활동</th><th></th></tr>` +
+  const pending = users.filter(u => u.status === 'pending').length;
+  $('userCount').textContent = `${users.length}명 · admin ${users.filter(u => u.role === 'admin').length}` + (pending ? ` · 승인 대기 ${pending}` : '');
+  $('users').innerHTML = `<tr><th>이메일</th><th>상태</th><th>권한</th><th>가입</th><th class="num">업로드</th><th class="num">쪽</th><th class="num">생성</th><th>마지막 활동</th><th></th></tr>` +
     users.map(u => `<tr>
-      <td>${esc(u.email)}</td><td>${chip(u.role, 'r')}</td><td>${kst(u.created_at)}</td>
+      <td>${esc(u.email)}</td><td>${chip(u.status, 'u')}</td><td>${chip(u.role, 'r')}</td><td>${kst(u.created_at)}</td>
       <td class="num">${n(u.uploads)}</td><td class="num">${n(u.pages)}</td><td class="num">${n(u.workbooks)}</td>
       <td>${u.last ? kst(u.last) : '—'}</td>
-      <td><button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-role="${u.role === 'admin' ? 'user' : 'admin'}">${u.role === 'admin' ? 'admin 회수' : 'admin 부여'}</button></td>
+      <td>${u.status === 'pending'
+        ? `<button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-status="active">승인</button> <button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-status="blocked">차단</button>`
+        : `<button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-role="${u.role === 'admin' ? 'user' : 'admin'}">${u.role === 'admin' ? 'admin 회수' : 'admin 부여'}</button>`}</td>
     </tr>`).join('') +
-    (orphan ? `<tr class="muted"><td>(소유자 없는 옛 레코드)</td><td></td><td></td><td class="num">${n(orphan.uploads)}</td><td class="num">${n(orphan.pages)}</td><td class="num">${n(orphan.workbooks)}</td><td></td><td></td></tr>` : '');
+    (orphan ? `<tr class="muted"><td>(소유자 없는 옛 레코드)</td><td></td><td></td><td></td><td class="num">${n(orphan.uploads)}</td><td class="num">${n(orphan.pages)}</td><td class="num">${n(orphan.workbooks)}</td><td></td><td></td></tr>` : '');
 }
 
 let FAILED = { a: [], g: [] };
@@ -331,7 +335,14 @@ async function loadAll() {
 $('users').addEventListener('click', async (e) => {
   const b = e.target.closest('button[data-uid]');
   if (!b) return;
-  const { uid, email, role } = b.dataset;
+  const { uid, email, role, status } = b.dataset;
+  if (status) {   // REQ-C12 — 승인 대기 처리
+    if (!confirm(`${email} → ${status === 'active' ? '가입 승인' : '차단'}\n\n진행할까요?`)) return;
+    b.disabled = true;
+    try { await getJSON('/api/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, status }) }); await loadSummary(); }
+    catch (err) { alert(`실패: ${err.message}`); b.disabled = false; }
+    return;
+  }
   if (!confirm(`${email} → ${role === 'admin' ? 'admin 부여' : 'admin 회수'}\n\nadmin 은 모든 사용자의 파일·문제집을 볼 수 있습니다. 진행할까요?`)) return;
   b.disabled = true;
   try { await getJSON('/api/role', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, role }) }); await loadSummary(); }
