@@ -1,7 +1,7 @@
 # TODO
 
 ## 진행 중
-- [ ] 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off → REQ-C12 (2026-10-08 Phase 1 가입 승인 ✅, Phase 2 차단 · Phase 3 on/off 남음)
+- [ ] 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off → REQ-C12 (2026-10-08 Phase 1 가입 승인 · Phase 2 계정 차단 ✅, Phase 3 on/off 남음)
 
 ## 예정
 - [ ] E02 리뷰 TODO: `backend-deploy-prod.sh` 안정화 대기 실패·시간 초과 시 이전 리비전이 ACTIVE로 남고 재실행하면 영영 정리 안 됨 · PRIMARY 배포가 NEW인지 확인 안 함 (2026-10-05 추가)
