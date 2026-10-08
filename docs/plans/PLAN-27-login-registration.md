@@ -158,7 +158,7 @@ D07 리디자인 때 프론트에는 이미 자리만 만들어 뒀다 — `auth
 | 27-56 | `AuthContext`(`useAuth`) | 마운트 시 `access_token`이 있으면 `isAuthenticated`가 true다 | 정상 | PLAN § Phase 4 완료 기준 — "`contexts/AuthContext`가 로그인 상태를 들고" | 4 | ✅ |
 | 27-57 | `AuthContext`(`useAuth`) | 마운트 시 토큰이 없으면 `isAuthenticated`가 false다 | 경계 | 상동 | 4 | ✅ |
 | 27-58 | `AuthContext.login()` | 로그인 성공 시 `isAuthenticated`가 true가 되고, 입력한 이메일이 사용자 정보로 노출된다(로그인 응답엔 이메일이 없다) | 정상 | 근거 문서 없음 — 검증 계약이 관례로 고정(로그인 응답 봉투에 이메일이 없어 입력값을 쓴다) | 4 | ✅ |
-| 27-59 | `AuthContext.signup()` | 회원가입 성공 직후 같은 자격증명으로 로그인이 자동 호출되어 `isAuthenticated`가 true가 된다 | 정상 | PLAN § 결정(Phase 4) — "회원가입 직후 동작 \| ... 성공 직후 같은 자격증명으로 `POST /api/auth/login`을 자동 호출" | 4 | ✅ |
+| 27-59 | `AuthContext.signup()` | **REQ-C12에서 C12-06으로 대체(2026-10-08 — 새 가입자는 승인 대기라 자동 로그인 안 함)** — 회원가입 성공 직후 같은 자격증명으로 로그인이 자동 호출되어 `isAuthenticated`가 true가 된다 | 정상 | PLAN § 결정(Phase 4) — "회원가입 직후 동작 \| ... 성공 직후 같은 자격증명으로 `POST /api/auth/login`을 자동 호출" | 4 | ✅ |
 | 27-60 | `RequireAuth` | 인증된 상태에서는 children을 그대로 렌더한다 | 정상 | PLAN § Phase 4 완료 기준 — "보호된 4개 화면이 정상 동작" | 4 | ✅ |
 | 27-61 | `RequireAuth` | 미인증 상태에서는 children을 렌더하지 않고 `/login`으로 리다이렉트한다 | 예외 | PLAN § Phase 4 완료 기준 — "`RequireAuth`가 미인증 접근을 `/login`으로 리다이렉트" | 4 | ✅ |
 | 27-62 | `pages/login` | 이메일·비밀번호를 입력하고 제출하면 그 값 그대로 `login()`이 호출된다 | 정상 | PLAN § Phase 4 완료 기준 — "`pages/login`...에서 회원가입·로그인이 동작" | 4 | ✅ |
