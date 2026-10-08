@@ -2,7 +2,7 @@
 REQ-C12 Phase 1 — 가입 승인
 
 검증 계약: docs/plans/PLAN-C12-ops-console-accounts-server.md `## 검증 계약`
-케이스: C12-01 ~ C12-05
+케이스: C12-01 ~ C12-05 · C12-08
 
 새 가입자는 승인 대기(`pending`)이고 로그인이 403으로 거부된다. `status`가 없는 기존 레코드는
 `active`로 취급한다. 승인은 운영 콘솔이 부를 `auth_service.set_user_status()`로 한다
@@ -72,3 +72,15 @@ def test_C12_05_정해진_세_값_밖의_status는_ValueError(client):
 
     with pytest.raises(ValueError):
         auth_service.set_user_status(user_id, "approved")
+
+
+def test_C12_08_blocked_사용자_로그인은_403과_제한_안내(client):
+    """근거: PLAN § 결정 — "`active`가 아니면 로그인 거부" (리뷰 회차 0 — pending만 막으면 [차단]이 로그인을 연다)"""
+    from app.services import auth_service
+
+    user_id = _signup(client).json()["user_id"]
+    auth_service.set_user_status(user_id, "blocked")
+
+    res = _login(client)
+
+    assert (res.status_code, "이용이 제한된 계정" in res.json().get("detail", "")) == (403, True)

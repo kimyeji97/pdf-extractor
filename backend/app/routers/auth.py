@@ -48,8 +48,13 @@ def login(body: LoginRequest, response: Response):
     user = auth_service.get_user_by_email(body.email)
     if user is None or not auth_service.verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
-    if auth_service.user_status(user) == "pending":  # REQ-C12 — 비밀번호가 맞을 때만 알린다
+    # REQ-C12 — active만 로그인. 비밀번호가 맞을 때만 상태를 알린다.
+    # pending만 막으면 콘솔에서 승인 대기를 [차단]하는 순간 로그인이 열린다(리뷰 회차 0)
+    status = auth_service.user_status(user)
+    if status == "pending":
         raise HTTPException(status_code=403, detail="가입 승인 대기 중입니다. 관리자 승인 후 이용할 수 있습니다.")
+    if status != "active":
+        raise HTTPException(status_code=403, detail="이용이 제한된 계정입니다. 관리자에게 문의해 주세요.")
 
     tokens = auth_service.create_token_pair(user["user_id"])
     auth_service.set_access_cookie(response, tokens["access_token"])
