@@ -13,7 +13,7 @@ import jwt
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from app.services import auth_service
+from app.services import auth_service, storage
 
 router = APIRouter()
 
@@ -50,11 +50,7 @@ def login(body: LoginRequest, response: Response):
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
     # REQ-C12 — active만 로그인. 비밀번호가 맞을 때만 상태를 알린다.
     # pending만 막으면 콘솔에서 승인 대기를 [차단]하는 순간 로그인이 열린다(리뷰 회차 0)
-    status = auth_service.user_status(user)
-    if status == "pending":
-        raise HTTPException(status_code=403, detail="가입 승인 대기 중입니다. 관리자 승인 후 이용할 수 있습니다.")
-    if status != "active":
-        raise HTTPException(status_code=403, detail="이용이 제한된 계정입니다. 관리자에게 문의해 주세요.")
+    auth_service.ensure_active(user)
 
     tokens = auth_service.create_token_pair(user["user_id"])
     auth_service.set_access_cookie(response, tokens["access_token"])
@@ -68,6 +64,10 @@ def refresh(body: RefreshRequest, response: Response):
         payload = auth_service.decode_refresh_token(body.refresh_token)
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="유효하지 않은 refresh 토큰입니다.")
+    user = storage.get_user(payload["sub"])
+    if user is None:
+        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+    auth_service.ensure_active(user)  # REQ-C12 — 차단되면 토큰 갱신도 막는다
 
     tokens = auth_service.create_token_pair(payload["sub"])
     auth_service.set_access_cookie(response, tokens["access_token"])

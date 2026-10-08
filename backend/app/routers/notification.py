@@ -18,7 +18,7 @@ from starlette.responses import StreamingResponse
 
 from app.models.schemas import NotificationListResponse, NotificationReadResponse
 from app.services import notification_broker as broker
-from app.services import auth_service, notification_service
+from app.services import auth_service, notification_service, storage
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -64,6 +64,14 @@ def _for(user: Optional[dict], event: dict) -> Optional[dict]:
     return event
 
 
+def _still_active(user: Optional[dict]) -> bool:
+    """콘솔은 별도 프로세스가 저장소에 쓰므로 다시 읽어야 안다 — heartbeat 주기마다 1회."""
+    if user is None:
+        return True
+    current = storage.get_user(user["user_id"])
+    return current is not None and auth_service.user_status(current) == "active"
+
+
 async def event_stream(
     last_event_id: Optional[str], heartbeat_s: float = HEARTBEAT_S, user: Optional[dict] = None
 ) -> AsyncIterator[str]:
@@ -96,8 +104,12 @@ async def event_stream(
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=heartbeat_s)
             except asyncio.TimeoutError:
+                if not _still_active(user):  # REQ-C12 — 차단되면 열린 스트림도 heartbeat 안에 끊는다
+                    return
                 yield ": keepalive\n\n"
                 continue
+            if not _still_active(user):
+                return
             event = _for(user, event)
             if event is not None:
                 yield _format(event)

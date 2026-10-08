@@ -29,6 +29,27 @@ function _watchDown(promise) {
   });
 }
 
+// ── 차단된 계정 감지 (REQ-C12) ────────────────────────────
+// 차단은 즉시다 — 이미 로그인한 세션의 요청도 403 "이용이 제한된 계정"을 받는다. 토큰을 지우고 구독자(App)에게
+// 알려 로그인 화면으로 보낸다. 토큰이 없을 때(로그인 시도 자체가 403)는 그 화면이 오류를 보여 주므로 알리지 않는다.
+// apiFetch 경로(_rawFetch)만 본다 — 배경 raw fetch(계약 #26)는 다음 사용자 요청에서 잡힌다.
+const BLOCKED_MARK = "이용이 제한된 계정";
+let _onBlocked = null;
+
+export function setBlockedCallback(fn) {
+  _onBlocked = fn;
+}
+
+async function _watchBlocked(res) {
+  if (res.status !== 403 || !_getAccessToken()) return res;
+  const body = await res.clone().json().catch(() => null);
+  if (String(body?.detail || "").includes(BLOCKED_MARK)) {
+    _clearTokens();
+    _onBlocked?.(body.detail);
+  }
+  return res;
+}
+
 // ── GET 요청 중복 방지 (REQ-P02-03) ────────────────────────
 // 리렌더·동시 마운트로 같은 GET이 겹치면 진행 중인 fetch Promise를 공유한다.
 // Response.clone()으로 반환해 여러 호출자가 각자 독립적으로 res.json()을 호출할 수 있게 한다.
@@ -39,7 +60,7 @@ async function _rawFetch(url, options) {
   if (method !== "GET") {
     _setLoading(+1);
     try {
-      return await _watchDown(fetch(url, options));
+      return await _watchDown(fetch(url, options)).then(_watchBlocked);
     } finally {
       _setLoading(-1);
     }
@@ -52,7 +73,7 @@ async function _rawFetch(url, options) {
 
   _setLoading(+1);
   // 감지는 공유 Promise 에 한 번만 건다 — 같은 GET 을 기다리는 호출자가 여럿이어도 알림은 1회
-  const promise = _watchDown(fetch(url, options)).finally(() => _setLoading(-1));
+  const promise = _watchDown(fetch(url, options)).then(_watchBlocked).finally(() => _setLoading(-1));
   _inflightGets.set(url, promise);
   try {
     const res = await promise;

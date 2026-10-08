@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -18,6 +18,7 @@ import paths from "routes/paths";
  */
 export default function LoginPage() {
   const navigate = useNavigate();
+  const notice = useLocation().state?.notice; // 차단으로 로그아웃돼 넘어온 안내 (REQ-C12)
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -53,6 +54,12 @@ export default function LoginPage() {
         <Typography variant="h5" fontWeight={700} sx={{ mb: 3 }}>
           로그인
         </Typography>
+
+        {notice && !error && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {notice}
+          </Alert>
+        )}
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>

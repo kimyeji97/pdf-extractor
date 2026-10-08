@@ -66,8 +66,21 @@ def create_user(email: str, password: str) -> dict:
 USER_STATUSES = ("pending", "active", "blocked")
 
 
+PENDING_DETAIL = "가입 승인 대기 중입니다. 관리자 승인 후 이용할 수 있습니다."
+BLOCKED_DETAIL = "이용이 제한된 계정입니다. 관리자에게 문의해 주세요."  # 프론트가 이 문구로 차단을 알아챈다
+
+
 def user_status(user: dict) -> str:
     return user.get("status", "active")
+
+
+def ensure_active(user: dict) -> None:
+    """active 가 아니면 403 — 로그인·토큰 갱신·인증 요청이 모두 여기를 지난다(차단은 즉시)."""
+    status = user_status(user)
+    if status == "pending":
+        raise HTTPException(status_code=403, detail=PENDING_DETAIL)
+    if status != "active":
+        raise HTTPException(status_code=403, detail=BLOCKED_DETAIL)
 
 
 def set_user_status(user_id: str, status: str) -> dict:
@@ -77,6 +90,9 @@ def set_user_status(user_id: str, status: str) -> dict:
     user = storage.get_user(user_id)
     if user is None:
         raise ValueError("사용자 없음")
+    if status == "blocked" and user.get("role") == "admin":
+        # 콘솔은 로그인 사용자가 아니라 "자기 자신"을 모른다 — admin 은 회수한 뒤 차단한다
+        raise ValueError("admin 계정은 차단할 수 없습니다 — 먼저 admin 을 회수하세요")
     user["status"] = status
     storage.save_user(user_id, user)
     return user
@@ -133,6 +149,7 @@ def _user_from_access_token(token: str) -> dict:
     user = storage.get_user(payload["sub"])
     if user is None:
         raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+    ensure_active(user)  # REQ-C12 — 이미 받은 토큰(헤더·쿠키)도 차단되면 바로 막힌다
 
     return user
 

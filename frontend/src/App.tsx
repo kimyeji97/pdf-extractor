@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import GlobalDim from 'components/GlobalDim';
-import { AuthProvider } from 'contexts/AuthContext';
+import { AuthProvider, useAuth } from 'contexts/AuthContext';
 import { NotificationProvider } from 'contexts/NotificationContext';
 import NotificationSnackbar from 'components/NotificationSnackbar';
 import ShutdownBanner from 'components/ShutdownBanner';
-import { setLoadingCallback, setServerDownCallback } from 'api/client';
+import { setBlockedCallback, setLoadingCallback, setServerDownCallback } from 'api/client';
 import paths from 'routes/paths';
 
 /**
@@ -16,6 +16,23 @@ import paths from 'routes/paths';
  * 라우트 전환 시 window.scrollTo도 뺐다. 셸이 100dvh 고정이라 window는 스크롤되지 않고,
  * 스크롤은 각 패널 내부에서만 일어난다.
  */
+/**
+ * 차단된 계정이면 로그아웃하고 로그인 화면으로 보낸다 (REQ-C12).
+ * `useAuth()`가 필요해 AuthProvider 안쪽에 둔다 — App 자신은 Provider 바깥이다.
+ */
+function BlockedGuard() {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+  useEffect(() => {
+    setBlockedCallback((notice: string) => {
+      logout();
+      navigate(paths.login, { replace: true, state: { notice } });
+    });
+    return () => setBlockedCallback(null);
+  }, [navigate, logout]);
+  return null;
+}
+
 const App = () => {
   const [apiLoading, setApiLoading] = useState(false);
 
@@ -50,6 +67,7 @@ const App = () => {
   // useAuth()를 써야 하기 때문이다 (REQ-27 Phase 4).
   return (
     <AuthProvider>
+      <BlockedGuard />
       <NotificationProvider>
         <GlobalDim visible={apiLoading} />
         {/* 꺼짐 예고 배너도 라우트 밖이다 — 로그인 화면에서도 보여야 한다 (REQ-F19 Phase 4) */}

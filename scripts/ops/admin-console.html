@@ -226,7 +226,9 @@ function renderUsers(users, orphan) {
       <td>${u.last ? kst(u.last) : '—'}</td>
       <td>${u.status === 'pending'
         ? `<button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-status="active">승인</button> <button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-status="blocked">차단</button>`
-        : `<button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-role="${u.role === 'admin' ? 'user' : 'admin'}">${u.role === 'admin' ? 'admin 회수' : 'admin 부여'}</button>`}</td>
+        : u.status === 'blocked'
+        ? `<button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-status="active">차단 해제</button>`
+        : `<button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-role="${u.role === 'admin' ? 'user' : 'admin'}">${u.role === 'admin' ? 'admin 회수' : 'admin 부여'}</button>${u.role === 'admin' ? '' : ` <button data-uid="${esc(u.user_id)}" data-email="${esc(u.email)}" data-status="blocked">차단</button>`}`}</td>
     </tr>`).join('') +
     (orphan ? `<tr class="muted"><td>(소유자 없는 옛 레코드)</td><td></td><td></td><td></td><td class="num">${n(orphan.uploads)}</td><td class="num">${n(orphan.pages)}</td><td class="num">${n(orphan.workbooks)}</td><td></td><td></td></tr>` : '');
 }
@@ -337,7 +339,8 @@ $('users').addEventListener('click', async (e) => {
   if (!b) return;
   const { uid, email, role, status } = b.dataset;
   if (status) {   // REQ-C12 — 승인 대기 처리
-    if (!confirm(`${email} → ${status === 'active' ? '가입 승인' : '차단'}\n\n진행할까요?`)) return;
+    const label = b.textContent; // 가입 승인 · 차단 해제 · 차단 — 차단은 즉시 로그아웃된다(REQ-C12)
+    if (!confirm(`${email} → ${label}${status === 'blocked' ? '\n\n이 사용자는 바로 로그아웃되고 다시 로그인할 수 없습니다.' : ''}\n\n진행할까요?`)) return;
     b.disabled = true;
     try { await getJSON('/api/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, status }) }); await loadSummary(); }
     catch (err) { alert(`실패: ${err.message}`); b.disabled = false; }

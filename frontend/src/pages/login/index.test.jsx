@@ -56,4 +56,18 @@ describe('로그인 화면', () => {
 
     expect(client.login).toHaveBeenCalledWith('a@b.com', 'pw1234');
   });
+
+  it('[C12-16] 이동 state.notice가 있으면 그 안내를 보여 준다', () => {
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={[{ pathname: '/login', state: { notice: '이용이 제한된 계정입니다.' } }]}>
+          <ThemeProvider>
+            <LoginPage />
+          </ThemeProvider>
+        </MemoryRouter>
+      </AuthProvider>,
+    );
+
+    expect(screen.queryByText('이용이 제한된 계정입니다.')).not.toBeNull();
+  });
 });
