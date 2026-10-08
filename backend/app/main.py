@@ -52,7 +52,7 @@ def _backfill_page_lists() -> None:
 
 
 app = FastAPI(
-    title="PDF Question Extractor",
+    title="ClipBook API",
     description="기출문제 PDF에서 원하는 문항만 추출하는 서비스",
     version="3.0.0",
     lifespan=lifespan,
