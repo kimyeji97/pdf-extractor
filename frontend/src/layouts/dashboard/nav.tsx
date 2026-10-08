@@ -118,7 +118,7 @@ function WorkspaceSelector() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            // `*.lighter`/`*.dark`는 두 색상 스킴이 공유한다 → tint 헬퍼 (REQ-D08)
+            // `*.lighter`는 다크에서도 파스텔이다 → tint 헬퍼 (REQ-D08·D13)
             ...tintSx('primary')(theme),
             typography: 'caption',
             fontWeight: 'fontWeightBold',
