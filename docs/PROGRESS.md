@@ -145,7 +145,7 @@
 | REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
-| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 1·2·4 ✅ · Phase 3 구현·케이스 완료(미결 `at(...)`·prod 반영 남음) — 케이스 38/38 · 리뷰 회차 8 @ `5710a3d` (TODO 7 · 감수 3) |
+| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 Phase 1·2·4 ✅ · Phase 3 구현·케이스 완료(prod 반영·응답 대조만 남음) — 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
 
 ### 미착수 — 번호만 부여된 것 (2026-07-29)
 
@@ -333,6 +333,25 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 - 테스트 공백: 회차 7 수정("빈 목록은 저장 안 함")을 단언하는 케이스 없음 — 리뷰 에이전트 일회용 테스트로만 확인(수정 전 커밋에선 실패)
 - 케이스 **F19-25~38 (14/14)** · F19 누계 38/38 · B23-03 3/3
 - **REQ-F19는 ✅ 아님** — Phase 3 완료 기준(prod 응답 대조)과 미결 `at(...)`이 남았다
+
+### REQ-F19 — Phase 3 미결 `at(...)` 결정 · 구현 (리뷰 회차 9)
+
+- **사용자 결정(2026-10-08)** — `at(yyyy-mm-ddThh:mm:ss)`는 그 예약의 Timezone을 붙인 **한 번의 켜짐/꺼짐**으로 반영("오늘만 일찍 끄기"가 실제 운영 시나리오). `rate(...)`가 켜짐/꺼짐에 섞이면 **`[]`**(기준점이 `StartTime`이라 계산이 까다롭고 ECS on/off에 쓸 일이 드묾 — 회차 5 N1과 같은 "틀린 구간보다 모름"). 기각: at 무시(앞뒤 구간이 붙는 오답) · at도 `[]` · rate를 StartTime 기준 계산
+- 구현은 `_occurrences`에서 cron·at이 아닌 표현식을 `ValueError`로 올려 기존 해석 실패 가드(`[]`)에 태웠다 — 새 분기를 만들지 않았다. 회차 6 TODO(at/rate 건너뛰기 병합)가 이걸로 닫혔다
+- ⚠️ **F19-42는 수정 전 코드로도 통과한다** — `[ON, rate_off]`는 원래 off가 없어 구간이 안 생긴다. 회차 9가 지적(nit). `[ON, OFF, rate_off]` + on 쪽 rate로 강화해야 결정을 실제로 지킨다
+- 리뷰: F19 @ 340ddea — (b) 0 · (c) 0 · nit 4 · 이월 8 (회차 9)
+  - (b): [frontend/src/components/ShutdownBanner.jsx:47] 배너 가림 · 가설 (회차 7) — 결정: TODO
+  - (b): [frontend/src/pages/unavailable/index.jsx:35] 재시도 fetch 타임아웃 없음 · 가설 (회차 0) — 결정: TODO
+  - (c): [frontend/src/api/client.js:28] CORS 없는 504/524도 "서버 다운" · 가설 (회차 0) — 결정: 감수
+  - (c): [frontend/src/api/client.js] 사용자 raw fetch 미감지 · 가설 (회차 0) — 결정: TODO
+  - (b): [backend/app/services/operating_schedule.py] `StartTime`/`EndTime` 무시 · 가설 (회차 4) — 결정: TODO
+  - (b): [operating_schedule.py:fetch_scheduled_actions] `NextToken` 없음 · 가설 (회차 4) — 결정: 감수
+  - (b): [operating_schedule.py:41-49] 실패 캐시 없음 · 가설 (회차 5) — 결정: TODO
+  - (b): [operating_schedule.py:41] 캐시 만료 동시 호출 · 가설 (회차 5) — 결정: 감수
+  - 닫힘: 회차 6 TODO `at(...)`·`rate(...)` 건너뛰기로 구간 병합 → `340ddea`
+  - nit: F19-42 약함 · at 해석이 오프셋을 조용히 덮음(`strptime`이 더 엄격) · 같은 시각 at-on/cron-off면 구간이 쪼개짐(가설) · at-on 뒤 off 없으면 "모름"
+- 케이스 **F19-39~43 (5/5)** · F19 누계 43/43 · 백엔드 425/425
+- **남은 것: Phase 3 완료 기준 "prod에서 API 응답이 실제 `on`·`off` 스케줄과 일치한다"** — IAM `application-autoscaling:DescribeScheduledActions` + 태스크 정의 env `SCHEDULE_RESOURCE_ID` + prod 배포(사용자 승인 대기)
 
 ## 2026-10-07
 
