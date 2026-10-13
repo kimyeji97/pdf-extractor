@@ -1,7 +1,7 @@
-import { Box, Link, LinkProps } from '@mui/material';
-import { rootPaths } from 'routes/paths';
+import { Box, Link, LinkProps } from "@mui/material";
+import { rootPaths } from "routes/paths";
 
-interface LogoProps extends Omit<LinkProps, 'href'> {
+interface LogoProps extends Omit<LinkProps, "href"> {
   showName?: boolean;
   height?: number;
 }
@@ -14,13 +14,16 @@ interface LogoProps extends Omit<LinkProps, 'href'> {
  * 다크용은 `logo-dark.svg`에서 배경 사각형만 뺀 투명본이다. 글자는 path라 폰트와 무관하다.
  */
 const Logo = ({ showName = true, height = 32, sx, ...rest }: LogoProps) => {
-  const style = { height, width: 'auto', display: 'block' } as const;
+  const style = { height: "auto", width: "100%", display: "block" } as const;
 
   return (
     <Link
       href={rootPaths.root}
       underline="none"
-      sx={[{ display: 'flex', alignItems: 'center' }, ...(Array.isArray(sx) ? sx : [sx])]}
+      sx={[
+        { display: "flex", alignItems: "center" },
+        ...(Array.isArray(sx) ? sx : [sx]),
+      ]}
       {...rest}
     >
       {showName ? (
@@ -29,13 +32,20 @@ const Logo = ({ showName = true, height = 32, sx, ...rest }: LogoProps) => {
             component="img"
             src="/logo-transparent.svg"
             alt="오답 클립북"
-            sx={(theme) => ({ ...style, ...theme.applyStyles('dark', { display: 'none' }) })}
+            sx={(theme) => ({
+              ...style,
+              ...theme.applyStyles("dark", { display: "none" }),
+            })}
           />
           <Box
             component="img"
             src="/logo-dark-transparent.svg"
             alt="오답 클립북"
-            sx={(theme) => ({ ...style, display: 'none', ...theme.applyStyles('dark', { display: 'block' }) })}
+            sx={(theme) => ({
+              ...style,
+              display: "none",
+              ...theme.applyStyles("dark", { display: "block" }),
+            })}
           />
         </>
       ) : (
