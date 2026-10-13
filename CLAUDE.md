@@ -443,8 +443,8 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     **아무것도 안 들어가고 에러도 안 난다** — `sx={(theme) => ({ ...tintSx('primary')(theme) })}`.
     (REQ-D08. 계약 #18과 같은 "조용히 틀린 색" 계열)
 36. **뱃지·칩의 색과 이름은 `frontend/src/utils/badges.js` 한 곳에서만 정한다** — 감지 상태(`detectionBadge`: 대기 default
-    "대기 중" · 분석 중 info · 실패 error "분석 실패" · 완료 success "N문항") · 표식(`MARK_COLOR`: 오탐 warning · 수동 primary — D13) ·
-    그 외 정보성 칩(`INFO_CHIP`: primary 테두리형). 화면마다 표를 들고 있다가 **같은 "분석 중"이 info·warning·"감지 중…" 세 가지**가
+    "대기 중" · 분석 중 secondary · 실패 error "분석 실패" · 완료 primary "N문항") · 표식(`MARK_COLOR`: 미탐지 쪽 warning · 오탐 error · 수동 info) ·
+    그 외 정보성 칩(`INFO_CHIP`: secondary 테두리형 · `HIGH_INFO_CHIP`: secondary 채움형) — 색은 2026-10-08 색상 정리(`a8811e5`) 기준. 화면마다 표를 들고 있다가 **같은 "분석 중"이 info·warning·"감지 중…" 세 가지**가
     됐고 "수동"은 세 색이었다(REQ-F14). 새 칩은 여기서 가져다 쓴다 — F14-18·19가 import와 옛 이름을 스캔하지만 칩 하나하나는 못 본다.
     ⚠️ **`default`(회색)는 MUI 팔레트 키가 아니다** — `tintSx('default')`/`tintBg('default')`는 `palette.default` 가 없어 **화면이 죽는다.**
     회색 배경은 모드별로 갈리는 `action.selected`·`text.secondary` 토큰으로 칠한다(현황판 대기 타일, 계약 #20과 같은 이유)
