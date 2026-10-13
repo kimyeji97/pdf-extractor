@@ -114,11 +114,11 @@
 | F14-10 | `listJobs({ background: true })` | 전역 로딩 콜백을 켜지 않는다 | 정상 | PLAN § 작업 단계 — "이 배경 재조회는 전역 딤을 켜지 않는다" | 1 | ✅ |
 | F14-11 | `getStats()` | 옵션 없는 호출은 지금처럼 로딩 콜백을 켠다 | 회귀 | PLAN § 미결 질문 — "사용자가 누른 조회(검색·새로고침 버튼)는 그대로" | 1 | ✅ |
 | F14-12 | `detectionBadge()` | PENDING·QUEUED → `{label:'대기 중', color:'default'}` | 정상 | PLAN § 작업 단계 — "대기 = default "대기 중"" | 2 | ✅ |
-| F14-13 | 〃 | PROCESSING → `{label:'분석 중', color:'info'}` | 정상 | PLAN § 작업 단계 — "분석 중 = info" | 2 | ✅ |
+| F14-13 | 〃 | PROCESSING → `{label:'분석 중', color:'info'}` → **2026-10-08 색상 정리(`a8811e5`)에서 secondary로 대체**(사용자 결정, 2026-10-13 기대값 갱신) | 정상 | PLAN § 작업 단계 — "분석 중 = info" | 2 | ✅ |
 | F14-14 | 〃 | FAILED → `{label:'분석 실패', color:'error'}` | 정상 | PLAN § 작업 단계 — "실패 = error "분석 실패"" | 2 | ✅ |
-| F14-15 | 〃 | DONE + 12 → `{label:'12문항', color:'success'}` | 정상 | PLAN § 작업 단계 — "완료 "N문항"과 작업 화면 페이지별 "N문항"은 분석 상태 색(success)" | 2 | ✅ |
-| F14-16 | `MARK_COLOR` | 오탐 = warning · 수동 = secondary → **REQ-D13에서 수동 = primary로 대체**(2026-10-08, 기대값 갱신) | 정상 | PLAN § 작업 단계 — "오탐 = warning · 수동 = secondary" | 2 | ✅ |
-| F14-17 | `INFO_CHIP` | `{color:'primary', variant:'outlined'}` | 정상 | PLAN § 작업 단계 — "그 외 정보성 칩은 primary 테두리형" | 2 | ✅ |
+| F14-15 | 〃 | DONE + 12 → `{label:'12문항', color:'success'}` → **2026-10-08 색상 정리(`a8811e5`)에서 primary로 대체**(사용자 결정, 2026-10-13 기대값 갱신) | 정상 | PLAN § 작업 단계 — "완료 "N문항"과 작업 화면 페이지별 "N문항"은 분석 상태 색(success)" | 2 | ✅ |
+| F14-16 | `MARK_COLOR` | 오탐 = warning · 수동 = secondary → **REQ-D13에서 수동 = primary로 대체**(2026-10-08, 기대값 갱신) → **2026-10-08 색상 정리(`a8811e5`)에서 미탐지 쪽 warning · 오탐 error · 수동 info로 대체**(사용자 결정, 2026-10-13 기대값 갱신) | 정상 | PLAN § 작업 단계 — "오탐 = warning · 수동 = secondary" | 2 | ✅ |
+| F14-17 | `INFO_CHIP` | `{color:'primary', variant:'outlined'}` → **2026-10-08 색상 정리(`a8811e5`)에서 secondary 테두리형로 대체**(사용자 결정, 2026-10-13 기대값 갱신) | 정상 | PLAN § 작업 단계 — "그 외 정보성 칩은 primary 테두리형" | 2 | ✅ |
 | F14-18 | 소스 스캔 9개 파일 | 현황판·목록 카드·편집 화면 파일 목록·작업 화면·분석 패널·문항 목록·선택 바구니·편집 화면·생성 이력이 `utils/badges`를 import | 불변식 | PLAN § 작업 단계 — "현황판 타일·목록 카드 뱃지·편집 화면 파일 목록·작업 화면 오탐 칩·분석 패널·문항 목록이 그 정의를 쓴다" | 2 | ✅ |
 | F14-19 | 소스 스캔 전체 | 문자열 리터럴 "감지 중"·"감지 실패"·"감지 대기"가 없다(주석·JSX 텍스트 제외) | 회귀 | PLAN § 작업 단계 — ""감지 대기"·"처리 중" 상태 이름이 남지 않는다" | 2 | ✅ |
 | F14-20 | 소스 스캔 `analysis/index.jsx` | 문자열 리터럴 "처리 중"이 없다(업로드 상태 칩은 제외 범위) | 회귀 | PLAN § 작업 단계 — ""감지 대기"·"처리 중" 상태 이름이 남지 않는다" | 2 | ✅ |

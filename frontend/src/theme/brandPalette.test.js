@@ -41,8 +41,8 @@ describe('REQ-D13 테마색 (Phase 2)', () => {
     expect(up(palette.light.secondary.main)).toBe('#CC4A12');
   });
 
-  it('[D13-13] "수동" 칩이 primary다', () => {
-    expect(MARK_COLOR.manual).toBe('primary');
+  it('[D13-13] "수동" 칩이 info다', () => {
+    expect(MARK_COLOR.manual).toBe('info');
   });
 
   it('[D13-14] 다크 primary.contrastText가 #151D2E다', () => {

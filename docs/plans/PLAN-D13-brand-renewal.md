@@ -106,7 +106,7 @@
 | D13-10 | `palette.dark` | `primary.main` = `#8EA4D6` | 정상 | PLAN § 작업 단계 — "다크 `#8EA4D6`(모드별, 글자 `#151D2E`)" | 2 | ✅ |
 | D13-11 | `palette.dark` | `primary.mainChannel` = `#8EA4D6` 채널(142 164 214) — tint가 채널을 쓴다 | 회귀 | PLAN § 제약 — "색조 배경은 `tintBg`/`tintSx`를 거친다" | 2 | ✅ |
 | D13-12 | `palette.light` | `secondary.main` = `#CC4A12`(다크는 회차 2 결정으로 모드별 — D13-19) | 정상 | PLAN § 작업 단계 — "secondary가 `#CC4A12`" | 2 | ✅ |
-| D13-13 | `badges.js` | `MARK_COLOR.manual` = `'primary'` | 정상 | PLAN § 작업 단계 — "\"수동\" 칩이 primary다" | 2 | ✅ |
+| D13-13 | `badges.js` | `MARK_COLOR.manual` = `'primary'` → **2026-10-08 색상 정리(`a8811e5`)에서 `'info'`로 대체**(사용자 결정, 2026-10-13 기대값 갱신) | 정상 | PLAN § 작업 단계 — "\"수동\" 칩이 primary다" | 2 | ✅ |
 | D13-14 | `palette.dark` | `primary.contrastText` = `#151D2E` | 정상 | PLAN § 작업 단계 — "다크 `#8EA4D6`(모드별, 글자 `#151D2E`)" | 2 | ✅ |
 | D13-15 | `palette` | info·success·warning·error `main` = `#0B7F99`·`#15803D`·`#F5A524`·`#BE123C` | 정상 | PLAN § 작업 단계 — "info·success·warning·error가 최종 테마 셋 값이다" | 2 | ✅ |
 | D13-16 | `palette` | grey 50~900 = 최종 테마 셋 10값 | 정상 | PLAN § 작업 단계 — "grey 50~900과 다크 background.neutral이 최종 테마 셋 값이다" | 2 | ✅ |

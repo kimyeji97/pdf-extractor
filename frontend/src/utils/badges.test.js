@@ -16,26 +16,26 @@ describe('detectionBadge', () => {
     expect(detectionBadge(status)).toEqual({ label: '대기 중', color: 'default' });
   });
 
-  it('[F14-13] PROCESSING → 분석 중 · info', () => {
-    expect(detectionBadge('PROCESSING')).toEqual({ label: '분석 중', color: 'info' });
+  it('[F14-13] PROCESSING → 분석 중 · secondary', () => {
+    expect(detectionBadge('PROCESSING')).toEqual({ label: '분석 중', color: 'secondary' });
   });
 
   it('[F14-14] FAILED → 분석 실패 · error', () => {
     expect(detectionBadge('FAILED')).toEqual({ label: '분석 실패', color: 'error' });
   });
 
-  it('[F14-15] DONE + 문항 12개 → 12문항 · success', () => {
-    expect(detectionBadge('DONE', 12)).toEqual({ label: '12문항', color: 'success' });
+  it('[F14-15] DONE + 문항 12개 → 12문항 · primary', () => {
+    expect(detectionBadge('DONE', 12)).toEqual({ label: '12문항', color: 'primary' });
   });
 });
 
 describe('표식·정보성 칩', () => {
-  // 수동은 REQ-D13(2026-10-08 사용자 결정)에서 secondary → primary로 바뀌었다 — 새 secondary(주홍)가 error(진홍)와 가깝다
-  it('[F14-16] 오탐 = warning · 수동 = primary', () => {
-    expect(MARK_COLOR).toEqual({ falsePositive: 'warning', manual: 'primary' });
+  // 2026-10-08 색상 정리(a8811e5, 사용자 결정) — 미탐지 쪽 warning · 오탐 error · 수동 info
+  it('[F14-16] 미탐지 쪽 = warning · 오탐 = error · 수동 = info', () => {
+    expect(MARK_COLOR).toEqual({ missPage: 'warning', falsePositive: 'error', manual: 'info' });
   });
 
-  it('[F14-17] 정보성 칩 = primary 테두리형', () => {
-    expect(INFO_CHIP).toEqual({ color: 'primary', variant: 'outlined' });
+  it('[F14-17] 정보성 칩 = secondary 테두리형', () => {
+    expect(INFO_CHIP).toEqual({ color: 'secondary', variant: 'outlined' });
   });
 });
