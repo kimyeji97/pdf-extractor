@@ -65,7 +65,7 @@ const TILES = [
     field: "undetected_page_count",
     label: "미탐지 페이지 수",
     icon: "material-symbols:visibility-off-outline-rounded",
-    color: "warning",
+    color: MARK_COLOR.missPage,
     clickable: true,
   },
   {
