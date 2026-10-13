@@ -287,6 +287,7 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ### 배포 — C12 Phase 1·2 + 색상 정리 → dev·prod
 - 결과: 백엔드 dev `c12-289a3a3`(rev 9, `:latest`) · prod **rev 6 `prod-8cd781b`**(rev 5 deregister) — 둘 다 같은 digest `baacf3e0…`(그사이 백엔드 변경 없음), 실행 digest = ECR 대조 · `/health` 200 · 프론트 dev `187a3853` · prod `1b4b81a1`(라이브 번들 = 로컬 dist)
 - ⚠️ **첫 시도에서 prod 백엔드가 조용히 안 올라갔다.** 백엔드 빌드와 `frontend-deploy.sh`를 동시에 돌렸더니 wrangler가 `frontend/.wrangler/tmp`를 만들었고, `backend-deploy-prod.sh`의 `git status --porcelain` 검사가 이를 미커밋 변경으로 보고 **"거부"로 끝났다.** 출력을 `| tail`로 잘라 종료 코드가 0으로 보였고 **완료로 오보고**했다 — 다음 확인(`describe-services`가 여전히 rev 5)에서 발견. → prod 백엔드 배포는 **단독으로, 파이프 없이, exit 코드와 실행 digest를 보고** 판정한다. `.wrangler/`는 지금 빈 디렉터리라 git엔 안 보이지만, 안에 파일이 생기는 순간 다시 걸린다
+- dev 백엔드는 배포 뒤 사용자 요청으로 `desired 0`(running 0 확인). prod는 그대로 켜 둠(사용자 몫)
 - 배포 도중 사용자가 중단을 요청했으나 프론트 2건·dev 백엔드는 이미 끝난 뒤였다 → 되돌리지 않고 `missPage` 커밋 후 재배포로 결정(사용자)
 
 ## 2026-10-08
