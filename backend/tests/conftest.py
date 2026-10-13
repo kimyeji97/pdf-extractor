@@ -313,6 +313,7 @@ def authed_client(client, isolated_storage):
     user_path = isolated_storage / "users" / f"{signup['user_id']}.json"
     user = _json.loads(user_path.read_text(encoding="utf-8"))
     user["role"] = "admin"
+    user["status"] = "active"  # REQ-C12 — 새 가입자는 승인 대기
     user_path.write_text(_json.dumps(user), encoding="utf-8")
 
     login = client.post("/api/auth/login", json={"email": email, "password": password}).json()

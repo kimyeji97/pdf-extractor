@@ -43,8 +43,19 @@ def _cookie_client():
     return TestClient(app, base_url="https://testserver")
 
 
+
+def _approve(user_id):
+    """REQ-C12 — 새 가입자는 승인 대기(pending)라 로그인 전에 승인한다(이 테스트의 의도는 승인과 무관)."""
+    from app.services import storage
+
+    user = storage.get_user(user_id)
+    user["status"] = "active"
+    storage.save_user(user_id, user)
+
+
 def _signup_login(c, email):
     signup = c.post("/api/auth/signup", json={"email": email, "password": PASSWORD}).json()
+    _approve(signup["user_id"])
     res = c.post("/api/auth/login", json={"email": email, "password": PASSWORD})
     return res, {**res.json(), "user_id": signup["user_id"]}
 

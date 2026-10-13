@@ -1,4 +1,4 @@
-"""운영 콘솔 — 이용 현황 조회 + admin 부여/회수. 내 맥에서만 뜬다(127.0.0.1).
+"""운영 콘솔 — 이용 현황 조회 + admin 부여/회수 + 가입 승인(REQ-C12). 내 맥에서만 뜬다(127.0.0.1).
 
 prod API 에 새 엔드포인트를 만들지 않고, promote-admin.sh 처럼 **저장소(R2)를 직접** 읽고 쓴다.
 자격증명은 Secrets Manager(`pdf-extractor/<env>`)에서 받아 프로세스 env 로만 넣는다 — 디스크에 안 남긴다.
@@ -49,7 +49,7 @@ else:
     sys.exit(f"env 는 prod|dev|local: {ENV}")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
-from app.services import storage  # noqa: E402
+from app.services import auth_service, storage  # noqa: E402
 
 
 def _day(v) -> str:
@@ -90,6 +90,7 @@ def summary() -> dict:
         "now": datetime.now(timezone.utc).isoformat(),
         "users": [{
             "user_id": u["user_id"], "email": u.get("email", ""), "role": u.get("role", "user"),
+            "status": auth_service.user_status(u),
             "created_at": u.get("created_at", ""), **per_user[u["user_id"]],
         } for u in users],
         "orphan": per_user.get(None),   # owner_id 없는 옛 레코드
@@ -285,6 +286,12 @@ def set_role(user_id: str, role: str) -> dict:
     return {"user_id": user_id, "email": user.get("email"), "role": role}
 
 
+def set_status(user_id: str, status: str) -> dict:
+    """REQ-C12 — 승인(active)·차단(blocked). 값 검사는 auth_service 가 한다."""
+    user = auth_service.set_user_status(user_id, status)
+    return {"user_id": user_id, "email": user.get("email"), "status": status}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         data = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False, default=str).encode()
@@ -324,9 +331,11 @@ class Handler(BaseHTTPRequestHandler):
         # 다른 사이트가 브라우저를 통해 localhost 로 쏘는 요청 차단 — 같은 오리진에서 온 것만
         if self.headers.get("Origin") not in (f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}"):
             return self._send(403, {"error": "origin"})
-        if self.path != "/api/role":
+        if self.path not in ("/api/role", "/api/status"):
             return self._send(404, {"error": "not found"})
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        if self.path == "/api/status":
+            return self._run(lambda: set_status(body.get("user_id", ""), body.get("status", "")))
         self._run(lambda: set_role(body.get("user_id", ""), body.get("role", "")))
 
     def log_message(self, fmt, *args):

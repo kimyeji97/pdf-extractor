@@ -32,11 +32,10 @@ export function AuthProvider({ children }) {
 
   const signup = useCallback(
     async (email, password) => {
+      // 가입 직후 자동 로그인은 하지 않는다 — 새 가입자는 승인 대기라 로그인이 403이다(REQ-C12)
       await apiSignup(email, password);
-      // 가입 직후 같은 자격증명으로 자동 로그인 (계획서 § 결정(Phase 4) — 회원가입 직후 동작)
-      await login(email, password);
     },
-    [login],
+    [],
   );
 
   const logout = useCallback(() => {

@@ -31,7 +31,19 @@ def _jwt_payload(token: str) -> dict:
 
 
 def _signup(client, email="user@example.com", password="correct-horse-battery-staple"):
-    return client.post("/api/auth/signup", json={"email": email, "password": password})
+    res = client.post("/api/auth/signup", json={"email": email, "password": password})
+    if res.status_code == 201:
+        _approve(res.json()["user_id"])  # REQ-C12 — 이 파일은 로그인·토큰 동작을 본다
+    return res
+
+def _approve(user_id):
+    """REQ-C12 — 새 가입자는 승인 대기(pending)라 로그인 전에 승인한다(이 테스트의 의도는 승인과 무관)."""
+    from app.services import storage
+
+    user = storage.get_user(user_id)
+    user["status"] = "active"
+    storage.save_user(user_id, user)
+
 
 
 # ── 회원가입 ──────────────────────────────────────────────

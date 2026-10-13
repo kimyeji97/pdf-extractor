@@ -14,14 +14,26 @@ from app.models.schemas import BoundariesStatus
 
 # ── 헬퍼 (test_auth_authorization.py와 같은 모양) ─────────────
 
+
+def _approve(user_id):
+    """REQ-C12 — 새 가입자는 승인 대기(pending)라 로그인 전에 승인한다(이 테스트의 의도는 승인과 무관)."""
+    from app.services import storage
+
+    user = storage.get_user(user_id)
+    user["status"] = "active"
+    storage.save_user(user_id, user)
+
+
 def _signup_and_login(client, email, password="correct-horse-battery-staple"):
     signup = client.post("/api/auth/signup", json={"email": email, "password": password}).json()
+    _approve(signup["user_id"])
     login = client.post("/api/auth/login", json={"email": email, "password": password}).json()
     return {"user_id": signup["user_id"], "access_token": login["access_token"]}
 
 
 def _make_admin(client, isolated_storage, email, password="correct-horse-battery-staple"):
     signup = client.post("/api/auth/signup", json={"email": email, "password": password}).json()
+    _approve(signup["user_id"])
     user_path = isolated_storage / "users" / f"{signup['user_id']}.json"
     user = json.loads(user_path.read_text(encoding="utf-8"))
     user["role"] = "admin"
