@@ -224,7 +224,7 @@
 |-----|--------|------|------|:----:|
 | REQ-28 | 공유 기능 (분석 파일·생성 문제집을 계정에 공유) | [TODO](TODO.md) | 대 — REQ-27 선행 | ⏸ 보류 |
 | REQ-C11 | "유제"(보이는 번호 없는 하위 문항) 감지 — HWP 출력 기본문제 PDF | [TODO §8](TODO.md) · B20에서 분리 | — | ❌ **기각(2026-10-01)** — 2026-10-06 오픈 후 실사용 케이스를 보고 넣을지 다시 정한다. 그때 새 번호로(번호 재사용 안 함) |
-| REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/PLAN-C12-ops-console-accounts-server.md) | — | 🟡 Phase 2/3 ✅(가입 승인 · 계정 차단) — 케이스 19/19 · 리뷰 회차 3 @ `9fe0043` (b)·(c) 0 · **PR #47 머지(`97c1410`, 2026-10-13)** · Phase 3은 미결 2건 대기 · dev·prod 배포 전 |
+| REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/PLAN-C12-ops-console-accounts-server.md) | — | 🟡 Phase 2/3 ✅(가입 승인 · 계정 차단) — 케이스 19/19 · 리뷰 회차 3 @ `9fe0043` (b)·(c) 0 · **PR #47 머지(`97c1410`, 2026-10-13)** · dev·prod 배포(2026-10-13, 백엔드 prod rev 6 `prod-8cd781b`) · **브라우저 육안 전** · Phase 3은 미결 2건 대기 |
 
 > **REQ-B25는 2026-10-03에 계획서가 현행화되고 Phase 1 구현·리뷰가 끝나 이 표에서 빠졌다**(위 인덱스 🟡).
 > dev 육안(212쪽)만 남았다 — 단위 테스트가 구조적으로 못 덮는 부분이다.
@@ -280,9 +280,14 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ### 색상 정리 (`a8811e5`, 2026-10-08 사용자 직접 커밋 — REQ 없음)
 - 뱃지 색을 바꿨다: 분석 중 info→**secondary** · 완료 success→**primary** · 오탐 warning→**error** · 수동 primary→**info** · 정보성 칩 primary→**secondary** 테두리형 · 신규 `HIGH_INFO_CHIP`(secondary 채움, 생성 이력) · 신규 `MARK_COLOR.missPage`(warning)
 - `/review`·`/testrun`을 거치지 않고 main에 들어가 **F14-13·15·16·17 · D13-13 5건이 main에서 5일간 빨간 상태**였다. C12 머지 검증 중 발견 → 사용자 확인 "의도한 색" → 테스트 기대값·계획서 표(F14·D13)를 새 색으로 갱신(`9008162`). 계약 #36도 현행화
-- ⚠️ `MARK_COLOR.missPage`는 **정의만 있고 쓰는 곳이 없다**(2026-10-13 grep) · `badges.js`의 "수동은 primary(남색)" 주석은 이제 틀렸다(코드는 info)
+- `MARK_COLOR.missPage`는 정의만 있다가 현황판 미탐지 타일이 쓰도록 사용자가 연결(`8cd781b`) · `badges.js`의 "수동은 primary(남색)" 주석은 이제 틀렸다(코드는 info)
 - ⚠️ D13이 "수동 = primary"로 정한 이유(새 secondary 주홍이 error 진홍과 붉어 헷갈림)는 이번에 수동이 info로 가며 해소됐지만, **오탐이 error가 되면서 "오탐"과 "분석 실패"가 같은 색**이 됐다 — 의도인지 미확인
-- dev·prod 배포 전
+- dev·prod 배포 → 아래
+
+### 배포 — C12 Phase 1·2 + 색상 정리 → dev·prod
+- 결과: 백엔드 dev `c12-289a3a3`(rev 9, `:latest`) · prod **rev 6 `prod-8cd781b`**(rev 5 deregister) — 둘 다 같은 digest `baacf3e0…`(그사이 백엔드 변경 없음), 실행 digest = ECR 대조 · `/health` 200 · 프론트 dev `187a3853` · prod `1b4b81a1`(라이브 번들 = 로컬 dist)
+- ⚠️ **첫 시도에서 prod 백엔드가 조용히 안 올라갔다.** 백엔드 빌드와 `frontend-deploy.sh`를 동시에 돌렸더니 wrangler가 `frontend/.wrangler/tmp`를 만들었고, `backend-deploy-prod.sh`의 `git status --porcelain` 검사가 이를 미커밋 변경으로 보고 **"거부"로 끝났다.** 출력을 `| tail`로 잘라 종료 코드가 0으로 보였고 **완료로 오보고**했다 — 다음 확인(`describe-services`가 여전히 rev 5)에서 발견. → prod 백엔드 배포는 **단독으로, 파이프 없이, exit 코드와 실행 digest를 보고** 판정한다. `.wrangler/`는 지금 빈 디렉터리라 git엔 안 보이지만, 안에 파일이 생기는 순간 다시 걸린다
+- 배포 도중 사용자가 중단을 요청했으나 프론트 2건·dev 백엔드는 이미 끝난 뒤였다 → 되돌리지 않고 `missPage` 커밋 후 재배포로 결정(사용자)
 
 ## 2026-10-08
 
