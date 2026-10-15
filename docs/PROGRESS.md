@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-13
+> 최종 갱신: 2026-10-15
 
 ## 요구사항 인덱스
 
@@ -145,7 +145,7 @@
 | REQ-B29 | 메타 저장 실패 시 PDF 가 조용히 사라진다 — 재시도 + 실패 알림 | [plan](plans/PLAN-B29-workbook-meta-save-failure.md) | 2026-10-06 | ✅ 케이스 11/11 · `/review` 3회차 · **prod 정상 생성 확인**(실패 경로는 R2 를 끊어야 재현돼 육안 불가 — 테스트가 실제 저장 키·알림 파일을 덮는다) |
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
-| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | — | 🟡 PR #43 머지(`dfcc485`) · dev·prod 배포 — Phase 3 prod 응답 대조(15:00 이후)·22시 배너 육안만 남음 · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
+| REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
 
@@ -224,7 +224,7 @@
 |-----|--------|------|------|:----:|
 | REQ-28 | 공유 기능 (분석 파일·생성 문제집을 계정에 공유) | [TODO](TODO.md) | 대 — REQ-27 선행 | ⏸ 보류 |
 | REQ-C11 | "유제"(보이는 번호 없는 하위 문항) 감지 — HWP 출력 기본문제 PDF | [TODO §8](TODO.md) · B20에서 분리 | — | ❌ **기각(2026-10-01)** — 2026-10-06 오픈 후 실사용 케이스를 보고 넣을지 다시 정한다. 그때 새 번호로(번호 재사용 안 함) |
-| REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/PLAN-C12-ops-console-accounts-server.md) | — | 🟡 Phase 2/3 ✅(가입 승인 · 계정 차단) — 케이스 19/19 · 리뷰 회차 3 @ `9fe0043` (b)·(c) 0 · **PR #47 머지(`97c1410`, 2026-10-13)** · dev·prod 배포(2026-10-13, 백엔드 prod rev 6 `prod-8cd781b`) · **브라우저 육안 전** · Phase 3은 미결 2건 대기 |
+| REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/PLAN-C12-ops-console-accounts-server.md) | — | 🟡 Phase 1·2 ✅ · **Phase 3 구현·리뷰 끝**(브랜치 `feat/C12-server-onoff`, 리뷰 회차 6 @ `ed9d061` (b)·(c) 0) — 케이스 27/27 · dev 육안 확인(승인·차단·30초 로그인 이동·콘솔 on/off) · **남은 것: prod 확인 창 육안 · prod 실측 1회(수동 켜기 → 23:00 off)** · PR 전 |
 
 > **REQ-B25는 2026-10-03에 계획서가 현행화되고 Phase 1 구현·리뷰가 끝나 이 표에서 빠졌다**(위 인덱스 🟡).
 > dev 육안(212쪽)만 남았다 — 단위 테스트가 구조적으로 못 덮는 부분이다.
@@ -267,6 +267,44 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-10-15
+
+### REQ-C12 — Phase 3 서버 수동 on/off (🟡 구현·리뷰 끝, prod 확인 남음)
+- **미결 2건 종결**: 켜는 방식은 **`desiredCount`만 변경**(scalable target 최소·최대는 안 건드림) · dev도 **같은 버튼**(다음 예약 "없음")
+- dev 실측(임시 scalable target min=max=0, 끝나고 삭제): 범위 밖 desired 1을 10분 둬도 그대로(스케일링 활동 0건) → 한 번 도는 예약(min=max=0)이 돌자 17:36:35에 min/max 변경 직후 desired 0. **AAS는 예약이 돌 때만 범위로 맞춘다**(prod엔 스케일링 정책이 없다 — 정책을 추가하면 다시 볼 것). 주말에 수동으로 켜면 다음 off가 월 23:00이라 그때까지 켜져 있다
+- 실측 방향의 한계(회차 4 (c), 감수): 확인한 건 "desired > 최대" 쪽뿐이다. 운영 구간 안에서 끄기(desired 0 < 최소 1)가 안 되돌려지는지는 미실측
+- 로직은 F19 모듈에 둔다 — `operating_schedule.next_scheduled`(켜져 있으면 다음 꺼짐, 꺼져 있으면 다음 켜짐) · `set_service_running`. 콘솔 스크립트는 임포트 시 `sys.argv`를 읽어 테스트 불가(Phase 1과 같은 이유)
+- ⚠️ **다음 예약은 구간(`compute_windows`)이 아니라 예약 하나하나에서 고른다**(회차 4 실측) — 구간은 켜짐→꺼짐 쌍만 남겨, 한 번 도는 `at()` off가 끼면 12:00 대신 23:00, 짝 없는 예약만 있으면 "없음"이 나왔다
+- ⚠️ **해석 실패를 `None`으로 삼키면 "없음"(= 예약 없음)으로 보인다**(회차 5 실측) — 운영자는 수동으로 끈 게 계속 간다고 읽는다. 예외를 올려 콘솔이 "조회 실패"로 보이게 했다. 이걸로 회차 4 (c) "해석 실패와 없음 구별"(TODO 결정)도 해소돼 `TODO.md`엔 넣지 않았다
+- dev 육안(사용자): 가입 → 승인 대기 안내 · 로그인 403 안내 · [승인] 후 진입 · 열어 둔 화면에서 [차단] → **30초 안에 로그인 화면** · [차단 해제] · 콘솔로 dev 켜기(18:42 태스크 기동)·끄기(18:45 정지)
+- 리뷰: C12 @ e7e37ca — (b) 2 · (c) 2 · nit 3 (회차 4, 범위 66d7d6f..e7e37ca — 직전 기준 9fe0043..HEAD엔 main의 C12 아닌 커밋이 섞여 분기점 delta로)
+  - (b): [backend/app/services/operating_schedule.py:154 `next_scheduled`] 쌍 구간에서만 뽑아 짝 없는 예약(at() 등)을 놓침 · 실측
+    - 방안: A 예약 이벤트 직접 조회 (~10줄 · 테스트 1건) · TODO · 감수 — 추천 A
+    - 결정: A → `b562ef6` 회차 5에서 닫힘
+  - (b): [scripts/ops/admin_console.py:137 `server`] 예약 조회 실패면 server() 500 → 패널·on/off 버튼 소실 · 가설
+    - 방안: A try/except + "조회 실패" (~5줄) · TODO · 감수 — 추천 TODO
+    - 결정: A → `b562ef6` 회차 5에서 닫힘
+  - (c): [PLAN-C12 § 제약] 운영 구간 안에서 끄기 미실측 · 가설
+    - 방안: A prod 실측 항목에 추가 · TODO · 감수 — 추천 A
+    - 결정: 감수
+  - (c): [operating_schedule.py `compute_windows`] 해석 실패도 [] → "없음", dev와 구별 안 됨 · 가설
+    - 방안: A 계획서에 실패 표시 결정 · TODO · 감수 — 추천 TODO
+    - 결정: TODO → 회차 5 (b) 수정으로 해소
+- 리뷰: C12 @ b562ef6 — (b) 1 · (c) 1 · nit 3 (회차 5)
+  - (b): [backend/app/services/operating_schedule.py:169 `next_scheduled`] 해석 못 하는 예약(`L`·`rate()`)을 삼켜 None → "없음" · 실측
+    - 방안: A try/except 삭제 (−4줄) · TODO · 감수 — 추천 A
+    - 결정: A → `ed9d061` 회차 6에서 닫힘
+  - (c): 운영 구간 안 끄기 미실측 — 결정: 감수(회차 4 그대로)
+  - nit: 14일 안에 예약이 없으면 "없음" · StartTime/EndTime 무시(compute_windows 때부터) · schedule_error 원문이 화면에 안 보임
+- 리뷰: C12 @ ed9d061 — (b) 0 · (c) 1 · nit 1 (회차 6)
+  - (c): 운영 구간 안 끄기 미실측 — 결정: 감수
+  - nit: 해석 실패가 예외로 올라오는 경로를 고정하는 케이스가 없다(try/except를 되살려도 녹색)
+- 케이스 **C12-20~27 (8/8)** · C12 전체 27/27 · 백엔드 449 · Phase 3 체크는 아직 — **prod 확인 창 육안 · prod 실측 1회(15시 전 콘솔로 켜고 23:00 off 확인)**가 완료 기준에 남았다
+
+### REQ-F19 — ✅ (Phase 3 prod 대조)
+- prod `GET /api/operating-windows`(17:22, 운영 구간 중) ↔ AWS 예약(`on` 평일 15:00 · `off` 평일 23:00 Asia/Seoul): 10-15~10-29 평일 11구간 · 주말 제외 · 진행 중 당일 구간 포함 — **일치**. 22시 배너는 사용자 육안 확인(10-08 이후)
+- 리뷰 게이트: 게이트 명령이 `2576d4b`를 마지막 코드 커밋으로 낸다 — 루트 `CLAUDE.md`만 바꾼 문서 커밋이라 `:/!docs` 밖으로 잡힌 것(알려진 게이트 sha 문제). 실제 마지막 코드 커밋은 리뷰 sha `340ddea`와 같아 ✅로 올렸다. 회차 9 결정(TODO 5 · 감수 3)은 10-08에 옮겨 둠
 
 ## 2026-10-13
 
