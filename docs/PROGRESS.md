@@ -146,6 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
+| REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
 
@@ -224,7 +225,8 @@
 |-----|--------|------|------|:----:|
 | REQ-28 | 공유 기능 (분석 파일·생성 문제집을 계정에 공유) | [TODO](TODO.md) | 대 — REQ-27 선행 | ⏸ 보류 |
 | REQ-C11 | "유제"(보이는 번호 없는 하위 문항) 감지 — HWP 출력 기본문제 PDF | [TODO §8](TODO.md) · B20에서 분리 | — | ❌ **기각(2026-10-01)** — 2026-10-06 오픈 후 실사용 케이스를 보고 넣을지 다시 정한다. 그때 새 번호로(번호 재사용 안 함) |
-| REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/PLAN-C12-ops-console-accounts-server.md) | — | 🟡 Phase 1·2 ✅ · **Phase 3 구현·리뷰 끝**(브랜치 `feat/C12-server-onoff`, 리뷰 회차 6 @ `ed9d061` (b)·(c) 0) — 케이스 27/27 · dev 육안 확인(승인·차단·30초 로그인 이동·콘솔 on/off) · **남은 것: prod 확인 창 육안 · prod 실측 1회(수동 켜기 → 23:00 off)** · PR 전 |
+
+> **REQ-C12는 2026-10-15에 Phase 3까지 끝나 이 표에서 빠졌다**(위 인덱스 ✅).
 
 > **REQ-B25는 2026-10-03에 계획서가 현행화되고 Phase 1 구현·리뷰가 끝나 이 표에서 빠졌다**(위 인덱스 🟡).
 > dev 육안(212쪽)만 남았다 — 단위 테스트가 구조적으로 못 덮는 부분이다.
@@ -301,6 +303,11 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
   - (c): 운영 구간 안 끄기 미실측 — 결정: 감수
   - nit: 해석 실패가 예외로 올라오는 경로를 고정하는 케이스가 없다(try/except를 되살려도 녹색)
 - 케이스 **C12-20~27 (8/8)** · C12 전체 27/27 · 백엔드 449 · Phase 3 체크는 아직 — **prod 확인 창 육안 · prod 실측 1회(15시 전 콘솔로 켜고 23:00 off 확인)**가 완료 기준에 남았다
+
+### REQ-C12 — ✅ (Phase 3 마무리)
+- prod 콘솔 확인 창 육안(사용자) — [서버 끄기] → "PROD 서버를 끕니다" 확인 창 → 취소
+- ⚠️ **계획 이탈**: Phase 3 완료 기준 "수동으로 켠 뒤 다음 off 예약이 정상으로 내린다(prod 실측 1회)"는 **사용자 결정으로 생략**. 같은 메커니즘(예약이 돌면 desired를 범위로 내린다)을 오늘 dev 임시 target 실측으로 봤다. prod에서 직접 본 적은 없으니, prod에 스케일링 정책을 붙이거나 예약을 바꾸면 그때 확인할 것
+- 리뷰 게이트: 마지막 코드 커밋 `ed9d061` = 리뷰 회차 6 sha · (b) 0 · (c) 1 감수 → ✅. 코드는 `feat/C12-server-onoff`에만 있고 **PR·배포 전**(서버 쪽은 함수 2개 추가뿐이라 prod 동작 무변경 — 콘솔은 머지 후 바로 쓴다)
 
 ### REQ-F19 — ✅ (Phase 3 prod 대조)
 - prod `GET /api/operating-windows`(17:22, 운영 구간 중) ↔ AWS 예약(`on` 평일 15:00 · `off` 평일 23:00 Asia/Seoul): 10-15~10-29 평일 11구간 · 주말 제외 · 진행 중 당일 구간 포함 — **일치**. 22시 배너는 사용자 육안 확인(10-08 이후)
