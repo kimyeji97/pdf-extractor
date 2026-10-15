@@ -49,7 +49,7 @@ else:
     sys.exit(f"env 는 prod|dev|local: {ENV}")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
-from app.services import auth_service, storage  # noqa: E402
+from app.services import auth_service, operating_schedule, storage  # noqa: E402
 
 
 def _day(v) -> str:
@@ -133,6 +133,15 @@ def server(hours: int) -> dict:
     tasks = ecs.list_tasks(cluster=CLUSTER, serviceName=SERVICE)["taskArns"]
     started = [t.get("startedAt") for t in ecs.describe_tasks(cluster=CLUSTER, tasks=tasks)["tasks"]] if tasks else []
     td = ecs.describe_task_definition(taskDefinition=svc["taskDefinition"])["taskDefinition"]
+    # REQ-C12 — 수동 on/off 는 다음 예약까지만 유효하다. 켜져 있으면 다음 꺼짐, 꺼져 있으면 다음 켜짐(dev 는 예약 없음 → None)
+    # 예약 조회가 실패해도 패널·on/off 버튼은 살린다(리뷰 C12 회차 4) — 다음 예약만 "조회 실패"로
+    try:
+        actions = boto3.client("application-autoscaling", region_name=REGION).describe_scheduled_actions(
+            ServiceNamespace="ecs", ResourceId=f"service/{CLUSTER}/{SERVICE}")["ScheduledActions"]
+        nxt, schedule_error = operating_schedule.next_scheduled(
+            actions, datetime.now(timezone.utc), running=svc["desiredCount"] > 0), None
+    except Exception as e:
+        nxt, schedule_error = None, f"{type(e).__name__}: {e}"
 
     end = datetime.now(timezone.utc)
     period = 60 if hours <= 3 else 300 if hours <= 24 else 3600
@@ -145,7 +154,9 @@ def server(hours: int) -> dict:
     series = {r["Id"]: [[t.isoformat(), round(v, 1)] for t, v in zip(r["Timestamps"], r["Values"])]
               for r in res["MetricDataResults"]}
     return {
-        "service": SERVICE, "desired": svc["desiredCount"], "running": svc["runningCount"],
+        "service": SERVICE, "env": ENV, "desired": svc["desiredCount"], "running": svc["runningCount"],
+        "next_scheduled": nxt.isoformat() if nxt else None,
+        "schedule_error": schedule_error,
         "task_def": svc["taskDefinition"].split("/")[-1], "cpu": td.get("cpu"), "memory": td.get("memory"),
         "image": next((c["image"].split(":")[-1] for c in td["containerDefinitions"] if c["name"] == "backend"), ""),
         "started": [str(s) for s in started if s], "period": period, "series": series,
@@ -292,6 +303,16 @@ def set_status(user_id: str, status: str) -> dict:
     return {"user_id": user_id, "email": user.get("email"), "status": status}
 
 
+def set_power(on) -> dict:
+    """REQ-C12 Phase 3 — desiredCount 만 바꾼다. 예약은 그대로라 다음 예약 시각에 덮어써진다."""
+    if SERVICE is None:
+        raise ValueError("local 모드 — ECS 서비스 없음")
+    if not isinstance(on, bool):
+        raise ValueError(f"on 은 true|false: {on!r}")
+    operating_schedule.set_service_running(boto3.client("ecs", region_name=REGION), CLUSTER, SERVICE, on)
+    return {"service": SERVICE, "desired": 1 if on else 0}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         data = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False, default=str).encode()
@@ -331,9 +352,11 @@ class Handler(BaseHTTPRequestHandler):
         # 다른 사이트가 브라우저를 통해 localhost 로 쏘는 요청 차단 — 같은 오리진에서 온 것만
         if self.headers.get("Origin") not in (f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}"):
             return self._send(403, {"error": "origin"})
-        if self.path not in ("/api/role", "/api/status"):
+        if self.path not in ("/api/role", "/api/status", "/api/power"):
             return self._send(404, {"error": "not found"})
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        if self.path == "/api/power":
+            return self._run(lambda: set_power(body.get("on")))
         if self.path == "/api/status":
             return self._run(lambda: set_status(body.get("user_id", ""), body.get("status", "")))
         self._run(lambda: set_role(body.get("user_id", ""), body.get("role", "")))

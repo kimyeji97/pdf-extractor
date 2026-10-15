@@ -149,3 +149,29 @@ def upcoming_windows() -> list[dict]:
     except Exception:
         logger.warning("운영 구간 조회 실패 — 빈 목록으로 응답", exc_info=True)
         return []
+
+
+def next_scheduled(actions: list[dict], now: datetime, running: bool) -> datetime | None:
+    """운영 콘솔(REQ-C12)용 다음 예약 시각 — 켜져 있으면 다음 꺼짐, 꺼져 있으면 다음 켜짐. 예약이 없으면 None.
+
+    수동 on/off 는 다음 예약까지만 유효하다(예약이 돌면 그 범위로 맞춰진다 — 2026-10-15 dev 실측).
+    """
+    # 구간(compute_windows)이 아니라 예약 하나하나를 본다 — 짝 없는 예약(한 번 도는 at() 등)도 다음 예약이다(리뷰 C12 회차 4)
+    horizon = now + timedelta(days=14)
+    times = []
+    for a in actions:
+        cap = a.get("ScalableTargetAction") or {}
+        is_on = cap.get("MinCapacity", 0) >= 1
+        if not is_on and cap.get("MaxCapacity") != 0:
+            continue
+        if is_on == running:  # 켜져 있으면 꺼짐만, 꺼져 있으면 켜짐만
+            continue
+        # 해석 실패는 삼키지 않는다 — None 은 "예약 없음"이라, 호출부(콘솔)가 받아 "조회 실패"로 보여야 한다(리뷰 C12 회차 5)
+        times += _occurrences(a.get("Schedule", ""), ZoneInfo(a.get("Timezone") or "UTC"), now, horizon)
+    return min(times, default=None)
+
+
+def set_service_running(ecs, cluster: str, service: str, on: bool) -> None:
+    """운영 콘솔(REQ-C12)의 수동 on/off — ECS desiredCount 만 바꾼다. scalable target 최소·최대는 건드리지 않는다."""
+    # ponytail: 켜기 = 1대 고정, 여러 대가 필요해지면 대수를 인자로
+    ecs.update_service(cluster=cluster, service=service, desiredCount=1 if on else 0)
