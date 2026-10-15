@@ -206,7 +206,12 @@ function renderServer(s, busy) {
       ${tile('기동 시각', s.started.length ? kst(s.started[0]) : '꺼짐')}
       ${tile('분석 중 / 대기', `${busy.PROCESSING || 0} / ${busy.QUEUED || 0}`, (busy.QUEUED || 0) > 0 ? 'warn' : '')}
       ${tile('생성 중', busy.EXPORT || 0)}
+      ${tile(s.desired > 0 ? '다음 예약 꺼짐' : '다음 예약 켜짐', s.next_scheduled ? kst(s.next_scheduled) : '없음')}
     </div>
+    <p style="margin:0 0 8px">${s.desired > 0
+      ? '<button id="powerBtn" data-on="false">서버 끄기</button>'
+      : '<button id="powerBtn" data-on="true">서버 켜기</button>'}
+      <span class="muted" style="font-size:12px">수동 조작은 다음 예약까지만 유효합니다(REQ-C12).</span></p>
     <p class="muted" style="margin:0 0 8px;font-size:12px">분석 동시 한도 5건(REQ-B17) — 넘으면 대기(QUEUED). 메모리 최고가 90%를 넘기면 OOM 위험(perf-infra-capacity).</p>
     <div class="grid2">
       <div><b>CPU</b><div id="cpuChart"></div></div>
@@ -349,6 +354,16 @@ $('users').addEventListener('click', async (e) => {
   if (!confirm(`${email} → ${role === 'admin' ? 'admin 부여' : 'admin 회수'}\n\nadmin 은 모든 사용자의 파일·문제집을 볼 수 있습니다. 진행할까요?`)) return;
   b.disabled = true;
   try { await getJSON('/api/role', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, role }) }); await loadSummary(); }
+  catch (err) { alert(`실패: ${err.message}`); b.disabled = false; }
+});
+$('server').addEventListener('click', async (e) => {   // REQ-C12 Phase 3 — 서버 수동 on/off
+  const b = e.target.closest('#powerBtn');
+  if (!b) return;
+  const on = b.dataset.on === 'true', s = LAST.server;
+  const until = s.next_scheduled ? `\n다음 예약(${kst(s.next_scheduled)})에 예약대로 돌아갑니다.` : '';
+  if (s.env === 'prod' && !confirm(`PROD 서버를 ${on ? '켭니다' : '끕니다'}.${on ? '' : '\n사용 중인 사용자의 작업이 끊깁니다.'}${until}\n\n진행할까요?`)) return;
+  b.disabled = true;
+  try { await getJSON('/api/power', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }) }); await loadServer(); }
   catch (err) { alert(`실패: ${err.message}`); b.disabled = false; }
 });
 let tailTimer = null, tailSince = 0;

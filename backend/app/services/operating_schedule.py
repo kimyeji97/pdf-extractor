@@ -149,3 +149,20 @@ def upcoming_windows() -> list[dict]:
     except Exception:
         logger.warning("운영 구간 조회 실패 — 빈 목록으로 응답", exc_info=True)
         return []
+
+
+def next_scheduled(actions: list[dict], now: datetime, running: bool) -> datetime | None:
+    """운영 콘솔(REQ-C12)용 다음 예약 시각 — 켜져 있으면 다음 꺼짐, 꺼져 있으면 다음 켜짐. 예약이 없으면 None.
+
+    수동 on/off 는 다음 예약까지만 유효하다(예약이 돌면 그 범위로 맞춰진다 — 2026-10-15 dev 실측).
+    """
+    windows = compute_windows(actions, now)
+    if running:
+        return datetime.fromisoformat(windows[0]["end"]) if windows else None
+    return next((s for w in windows if (s := datetime.fromisoformat(w["start"])) > now), None)
+
+
+def set_service_running(ecs, cluster: str, service: str, on: bool) -> None:
+    """운영 콘솔(REQ-C12)의 수동 on/off — ECS desiredCount 만 바꾼다. scalable target 최소·최대는 건드리지 않는다."""
+    # ponytail: 켜기 = 1대 고정, 여러 대가 필요해지면 대수를 인자로
+    ecs.update_service(cluster=cluster, service=service, desiredCount=1 if on else 0)
