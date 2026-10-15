@@ -166,11 +166,8 @@ def next_scheduled(actions: list[dict], now: datetime, running: bool) -> datetim
             continue
         if is_on == running:  # 켜져 있으면 꺼짐만, 꺼져 있으면 켜짐만
             continue
-        try:
-            times += _occurrences(a.get("Schedule", ""), ZoneInfo(a.get("Timezone") or "UTC"), now, horizon)
-        except Exception:
-            logger.warning("해석할 수 없는 예약 작업 — 다음 예약을 비운다: %s", a.get("Schedule"), exc_info=True)
-            return None
+        # 해석 실패는 삼키지 않는다 — None 은 "예약 없음"이라, 호출부(콘솔)가 받아 "조회 실패"로 보여야 한다(리뷰 C12 회차 5)
+        times += _occurrences(a.get("Schedule", ""), ZoneInfo(a.get("Timezone") or "UTC"), now, horizon)
     return min(times, default=None)
 
 
