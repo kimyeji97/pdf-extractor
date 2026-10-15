@@ -156,10 +156,22 @@ def next_scheduled(actions: list[dict], now: datetime, running: bool) -> datetim
 
     수동 on/off 는 다음 예약까지만 유효하다(예약이 돌면 그 범위로 맞춰진다 — 2026-10-15 dev 실측).
     """
-    windows = compute_windows(actions, now)
-    if running:
-        return datetime.fromisoformat(windows[0]["end"]) if windows else None
-    return next((s for w in windows if (s := datetime.fromisoformat(w["start"])) > now), None)
+    # 구간(compute_windows)이 아니라 예약 하나하나를 본다 — 짝 없는 예약(한 번 도는 at() 등)도 다음 예약이다(리뷰 C12 회차 4)
+    horizon = now + timedelta(days=14)
+    times = []
+    for a in actions:
+        cap = a.get("ScalableTargetAction") or {}
+        is_on = cap.get("MinCapacity", 0) >= 1
+        if not is_on and cap.get("MaxCapacity") != 0:
+            continue
+        if is_on == running:  # 켜져 있으면 꺼짐만, 꺼져 있으면 켜짐만
+            continue
+        try:
+            times += _occurrences(a.get("Schedule", ""), ZoneInfo(a.get("Timezone") or "UTC"), now, horizon)
+        except Exception:
+            logger.warning("해석할 수 없는 예약 작업 — 다음 예약을 비운다: %s", a.get("Schedule"), exc_info=True)
+            return None
+    return min(times, default=None)
 
 
 def set_service_running(ecs, cluster: str, service: str, on: bool) -> None:

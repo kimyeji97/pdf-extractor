@@ -206,7 +206,7 @@ function renderServer(s, busy) {
       ${tile('기동 시각', s.started.length ? kst(s.started[0]) : '꺼짐')}
       ${tile('분석 중 / 대기', `${busy.PROCESSING || 0} / ${busy.QUEUED || 0}`, (busy.QUEUED || 0) > 0 ? 'warn' : '')}
       ${tile('생성 중', busy.EXPORT || 0)}
-      ${tile(s.desired > 0 ? '다음 예약 꺼짐' : '다음 예약 켜짐', s.next_scheduled ? kst(s.next_scheduled) : '없음')}
+      ${tile(s.desired > 0 ? '다음 예약 꺼짐' : '다음 예약 켜짐', s.next_scheduled ? kst(s.next_scheduled) : s.schedule_error ? '조회 실패' : '없음', s.schedule_error ? 'warn' : '')}
     </div>
     <p style="margin:0 0 8px">${s.desired > 0
       ? '<button id="powerBtn" data-on="false">서버 끄기</button>'

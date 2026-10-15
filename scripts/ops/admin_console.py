@@ -134,9 +134,14 @@ def server(hours: int) -> dict:
     started = [t.get("startedAt") for t in ecs.describe_tasks(cluster=CLUSTER, tasks=tasks)["tasks"]] if tasks else []
     td = ecs.describe_task_definition(taskDefinition=svc["taskDefinition"])["taskDefinition"]
     # REQ-C12 — 수동 on/off 는 다음 예약까지만 유효하다. 켜져 있으면 다음 꺼짐, 꺼져 있으면 다음 켜짐(dev 는 예약 없음 → None)
-    actions = boto3.client("application-autoscaling", region_name=REGION).describe_scheduled_actions(
-        ServiceNamespace="ecs", ResourceId=f"service/{CLUSTER}/{SERVICE}")["ScheduledActions"]
-    nxt = operating_schedule.next_scheduled(actions, datetime.now(timezone.utc), running=svc["desiredCount"] > 0)
+    # 예약 조회가 실패해도 패널·on/off 버튼은 살린다(리뷰 C12 회차 4) — 다음 예약만 "조회 실패"로
+    try:
+        actions = boto3.client("application-autoscaling", region_name=REGION).describe_scheduled_actions(
+            ServiceNamespace="ecs", ResourceId=f"service/{CLUSTER}/{SERVICE}")["ScheduledActions"]
+        nxt, schedule_error = operating_schedule.next_scheduled(
+            actions, datetime.now(timezone.utc), running=svc["desiredCount"] > 0), None
+    except Exception as e:
+        nxt, schedule_error = None, f"{type(e).__name__}: {e}"
 
     end = datetime.now(timezone.utc)
     period = 60 if hours <= 3 else 300 if hours <= 24 else 3600
@@ -151,6 +156,7 @@ def server(hours: int) -> dict:
     return {
         "service": SERVICE, "env": ENV, "desired": svc["desiredCount"], "running": svc["runningCount"],
         "next_scheduled": nxt.isoformat() if nxt else None,
+        "schedule_error": schedule_error,
         "task_def": svc["taskDefinition"].split("/")[-1], "cpu": td.get("cpu"), "memory": td.get("memory"),
         "image": next((c["image"].split(":")[-1] for c in td["containerDefinitions"] if c["name"] == "backend"), ""),
         "started": [str(s) for s in started if s], "period": period, "series": series,

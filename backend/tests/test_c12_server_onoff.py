@@ -1,7 +1,7 @@
 """
 REQ-C12 Phase 3 — 서버 수동 on/off (운영 콘솔이 부르는 로직)
 
-검증 계약: docs/plans/PLAN-C12-ops-console-accounts-server.md `## 검증 계약` (C12-20 ~ C12-25)
+검증 계약: docs/plans/PLAN-C12-ops-console-accounts-server.md `## 검증 계약` (C12-20 ~ C12-27)
 
 콘솔 스크립트는 임포트 시점에 `sys.argv`를 읽어 테스트로 부를 수 없다 — 로직은 `operating_schedule`에 둔다.
 켜고 끄기는 ECS `desiredCount`만 바꾼다(2026-10-15 dev 실측). 다음 예약이 돌면 그 범위로 맞춰지므로
@@ -82,3 +82,19 @@ def test_C12_25_turn_off_sets_desired_count_zero():
     ecs = _FakeEcs()
     _svc().set_service_running(ecs, CLUSTER, SERVICE, on=False)
     assert ecs.calls == [{"cluster": CLUSTER, "service": SERVICE, "desiredCount": 0}]
+
+
+# ── 리뷰 회차 4 (b) — 짝 없는 예약(한 번 도는 at() 등)도 다음 예약이다 ──
+
+def test_C12_26_one_off_off_before_paired_off_is_next():
+    at_off = {"Schedule": "at(2026-10-07T12:00:00)", "Timezone": "Asia/Seoul",
+              "ScalableTargetAction": {"MinCapacity": 0, "MaxCapacity": 0}}
+    now = datetime(2026, 10, 7, 10, 0, tzinfo=KST)  # 수, 켜져 있음
+    assert _svc().next_scheduled([ON, OFF, at_off], now, running=True) == datetime(2026, 10, 7, 12, 0, tzinfo=KST)
+
+
+def test_C12_27_unpaired_one_off_on_is_next():
+    at_on = {"Schedule": "at(2026-10-07T13:00:00)", "Timezone": "Asia/Seoul",
+             "ScalableTargetAction": {"MinCapacity": 1, "MaxCapacity": 1}}
+    now = datetime(2026, 10, 7, 10, 0, tzinfo=KST)  # 수, 꺼져 있음
+    assert _svc().next_scheduled([at_on], now, running=False) == datetime(2026, 10, 7, 13, 0, tzinfo=KST)
