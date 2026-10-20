@@ -41,22 +41,22 @@ from app.services import thumbnail_service
 from app.services import prewarm_service
 from app.services import notification_service
 from app.services import question_stats_service
+from app.services import share_service
 from app.utils.question_parser import detect_question_boundaries, QuestionBoundary
 from app.utils import question_key
 
 router = APIRouter()
 
 
-def _get_owned_job(job_id: str, current_user: dict):
-    """job을 조회하고 소유권을 확인한다 (REQ-27 Phase 2).
+def _get_owned_job(job_id: str, current_user: dict, need: str = share_service.VIEWER):
+    """job을 조회하고 역할을 확인한다 (REQ-27 Phase 2 · REQ-28).
 
-    없으면 404, 있어도 본인 소유가 아니고 admin도 아니면 404(존재를 숨긴다 —
-    검증 계약이 403/404 중 404로 고정).
+    없거나 못 읽으면 404(존재를 숨긴다), 읽을 수는 있는데 `need`에 못 미치면 403.
     """
     job = storage.get_status(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
-    auth_service.ensure_owner_or_admin(current_user, job.owner_id)
+    share_service.ensure_role(current_user, job, need)
     return job
 
 
@@ -74,6 +74,7 @@ class JobSummary(BaseModel):
     workbook_name: Optional[str] = None
     workbook_types: Optional[list[str]] = None
     original_pdf_url: Optional[str] = None  # 원본 PDF 뷰어용 (REQ-F07, 단건 조회에서만 채움)
+    my_role: Optional[str] = None           # owner | editor | viewer (REQ-28 — 프론트가 컨트롤을 숨긴다)
 
 
 class JobListResponse(BaseModel):
@@ -99,14 +100,9 @@ class StatsResponse(BaseModel):
 
 
 def _visible_sources(current_user: dict) -> list:
-    """현황판이 집계할 SOURCE job — `user`는 본인 소유만, `admin`은 전체(REQ-B24, `list_jobs`와 같은 규칙).
-
-    owner_id 없는 옛 job은 admin만 본다(`ensure_owner_or_admin`과 같은 None 처리).
-    """
+    """현황판이 집계할 SOURCE job — 소유했거나 공유받은 것, `admin`은 전체(REQ-B24·REQ-28, `list_jobs`와 같은 규칙)."""
     sources = [j for j in storage.list_jobs() if j.job_type == JobType.SOURCE]
-    if current_user["role"] != "admin":
-        sources = [j for j in sources if j.owner_id == current_user["user_id"]]
-    return sources
+    return share_service.visible(current_user, sources)
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -245,11 +241,11 @@ def list_jobs(
     검색(name/types)은 서버에서 적용한 뒤 페이지를 자른다.
     프론트가 페이지 단위로만 받으므로 클라이언트 필터로는 뒷 페이지를 찾을 수 없기 때문.
 
-    `user` 역할은 본인 소유 job만 본다. `admin`은 전체를 본다(REQ-27 Phase 2).
+    `user` 역할은 소유했거나 공유받은 job만 본다(REQ-28). `admin`은 전체를 본다(REQ-27 Phase 2).
     """
-    job_files = [j for j in storage.list_jobs() if j.job_type == job_type]
-    if current_user["role"] != "admin":
-        job_files = [j for j in job_files if j.owner_id == current_user["user_id"]]
+    job_files = share_service.visible(
+        current_user, [j for j in storage.list_jobs() if j.job_type == job_type]
+    )
 
     name_lower = (name or "").strip().lower()
     types_lower = (types or "").strip().lower()
@@ -266,6 +262,7 @@ def list_jobs(
 
     total = len(job_files)
     page = job_files[skip: skip + limit]
+    shares = storage.get_shares()
 
     items = [
         JobSummary(
@@ -279,6 +276,7 @@ def list_jobs(
             total_question_count=j.total_question_count,
             workbook_name=j.workbook_name,
             workbook_types=j.workbook_types,
+            my_role=share_service.role_of(current_user, j, shares),
         )
         for j in page
     ]
@@ -312,6 +310,7 @@ def get_job(job_id: str, current_user: dict = Depends(auth_service.get_current_u
         workbook_name=job.workbook_name,
         workbook_types=job.workbook_types,
         original_pdf_url=original_pdf_url,
+        my_role=share_service.role_of(current_user, job),
     )
 
 
@@ -324,9 +323,10 @@ def delete_job(job_id: str, current_user: dict = Depends(auth_service.get_curren
     되돌릴 수 없다. 이 job의 문항을 담고 있던 문제집은 남지만, 참조가 끊겨
     편집 화면에서 해당 문항 썸네일이 표시되지 않는다(문제집 자체는 열린다).
     """
-    _get_owned_job(job_id, current_user)
+    _get_owned_job(job_id, current_user, share_service.OWNER)
 
     storage.delete_job(job_id)
+    share_service.drop_job(job_id)
     return Response(status_code=204)
 
 
@@ -342,7 +342,7 @@ def update_job_meta(
     job_id: str, body: JobMetaUpdate, current_user: dict = Depends(auth_service.get_current_user)
 ):
     """job의 문제집 이름/유형 메타데이터를 수정한다."""
-    job = _get_owned_job(job_id, current_user)
+    job = _get_owned_job(job_id, current_user, share_service.EDITOR)
     if body.workbook_name is not None:
         job.workbook_name = body.workbook_name or None
     if body.workbook_types is not None:
@@ -388,7 +388,7 @@ def refresh_job_questions(
       - GET /api/jobs/{job_id} 를 폴링하여 DONE/FAILED 확인
       - DONE 이 되면 해당 페이지 문항 목록 다시 로드
     """
-    job = _get_owned_job(job_id, current_user)
+    job = _get_owned_job(job_id, current_user, share_service.OWNER)  # 남의 편집을 지우므로 소유자만(REQ-28)
 
     # 이미 처리 중·대기 중이면 중복 요청 방지 (QUEUED 는 REQ-B17)
     if job.boundaries_status in (BoundariesStatus.PROCESSING, BoundariesStatus.QUEUED):
@@ -826,7 +826,7 @@ def update_question_title(
     자동 감지 문항의 타이틀을 수정한다. k = 같은 쪽·번호 안 순번(생략 시 0, ADR-0006).
     변경사항은 boundaries/{job_id}.json 캐시에 직접 반영되어 서버에 영속 저장된다.
     """
-    _get_owned_job(job_id, current_user)
+    _get_owned_job(job_id, current_user, share_service.EDITOR)
     cached = storage.get_boundaries_cache(job_id)
     if cached is None:
         raise HTTPException(status_code=404, detail="경계 캐시가 없습니다. 먼저 문항 목록을 조회해 주세요.")
@@ -856,7 +856,7 @@ def delete_question(
     boundaries 캐시에서 제거하고 questions_per_page, total_question_count를 재계산한다.
     문항 썸네일 캐시도 함께 삭제한다.
     """
-    _get_owned_job(job_id, current_user)
+    _get_owned_job(job_id, current_user, share_service.EDITOR)
     cached = storage.get_boundaries_cache(job_id)
     if cached is None:
         raise HTTPException(status_code=404, detail="경계 캐시가 없습니다.")
@@ -909,7 +909,7 @@ def add_manual_question(
       3. 해당 영역 크롭 PNG 생성 → 썸네일 캐시 저장
       4. ManualQuestion 응답 반환
     """
-    job = _get_owned_job(job_id, current_user)
+    job = _get_owned_job(job_id, current_user, share_service.EDITOR)
 
     manual_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -978,7 +978,7 @@ def update_manual_question_title(
     current_user: dict = Depends(auth_service.get_current_user),
 ):
     """수동 추가 문항의 타이틀을 수정한다. manual_questions/{job_id}.json에 저장."""
-    _get_owned_job(job_id, current_user)
+    _get_owned_job(job_id, current_user, share_service.EDITOR)
     manual_list = storage.get_manual_questions(job_id)
     updated = False
     for m in manual_list:
@@ -1004,7 +1004,7 @@ def delete_manual_question(
     current_user: dict = Depends(auth_service.get_current_user),
 ):
     """수동 추가 문항을 삭제한다. 썸네일 캐시도 함께 삭제."""
-    _get_owned_job(job_id, current_user)
+    _get_owned_job(job_id, current_user, share_service.EDITOR)
     manual_list = storage.get_manual_questions(job_id)
     original_count = len(manual_list)
     manual_list = [m for m in manual_list if m.get("manual_id") != manual_id]
@@ -1060,7 +1060,7 @@ def bulk_delete_questions(
     - 수동 문항: manual_questions 목록에서 manual_id∈manual_ids 일괄 제거.
     - 관련 썸네일 캐시도 함께 삭제(존재하지 않으면 무시).
     """
-    _get_owned_job(job_id, current_user)
+    _get_owned_job(job_id, current_user, share_service.EDITOR)
     deleted_auto = 0
     deleted_manual = 0
 

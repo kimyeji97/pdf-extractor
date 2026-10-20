@@ -673,6 +673,15 @@ def save_read_ids(user_id: str, ids: list) -> None:
     _put_json(_key("notification_reads", f"{user_id}.json"), {"ids": ids})
 
 
+# 공유 인덱스 (REQ-28) — local_storage_service 와 같은 모양
+def get_shares() -> dict:
+    return _get_json_or_none(_key("shares", "index.json")) or {}
+
+
+def save_shares(data: dict) -> None:
+    _put_json(_key("shares", "index.json"), data)
+
+
 def delete_job(job_id: str) -> None:
     """
     job과 연관된 오브젝트를 전부 삭제한다 (원본·결과·상태·경계·썸네일·수동문항·페이지캐시).

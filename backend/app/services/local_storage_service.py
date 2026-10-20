@@ -534,6 +534,20 @@ def save_read_ids(user_id: str, ids: list) -> None:
     path.write_text(json.dumps({"ids": ids}), encoding="utf-8")
 
 
+# 공유 인덱스 — {job_id: [{user_id, role}]} 파일 하나 (REQ-28). 상태 파일에 두면 읽어 둔 job 을 통째로 쓰는
+# 28곳이 그 사이 추가된 공유를 덮어쓴다(PLAN-28 § 결정 "저장 위치").
+def get_shares() -> dict:
+    path = _BASE / "shares" / "index.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_shares(data: dict) -> None:
+    path = _ensure(_BASE / "shares" / "index.json")
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
 def cover_image_key(cover_id: str, ext: str = "jpg") -> str:
     return f"covers/{cover_id}.{ext}"
 
