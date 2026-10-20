@@ -39,6 +39,7 @@ import { getPages, refreshJobQuestions, addManualQuestion, getAllQuestions } fro
 import { useJobCompletion } from "hooks/useJobCompletion";
 import { useAnalysisEntryGuard } from "hooks/useAnalysisEntryGuard";
 import { isRefreshBlocked } from "utils/jobStatus";
+import { canEdit, isOwner } from "utils/jobRole";
 import { columnsForWidth } from "utils/questionGrid";
 import { resolveDocumentName, resolveFileSubtitle } from "utils/documentName";
 import { resolveTargetPage } from "utils/targetPage";
@@ -173,6 +174,9 @@ export default function AnalysisWorkPage() {
   // 대기 중(PENDING)이면 재감지가 이미 걸려 있다 — 버튼만 막는다 (REQ-F11 Phase 2).
   // 목록과 같은 판정 함수를 쓴다.
   const refreshQueued = isRefreshBlocked(jobInfo);
+  // 공유받은 분석 (REQ-28) — 뷰어는 문항을 못 고치고, 재감지는 남의 편집을 지우므로 소유자만
+  const editable = canEdit(jobInfo);
+  const owner = isOwner(jobInfo);
   const [detectedAfterRefresh, setDetectedAfterRefresh] = useState(false);
   useEffect(() => { setDetectedAfterRefresh(false); }, [jobId]);
   // 경계 캐시가 없어 문항이 0개로만 보이던 FAILED·DONE 파일 안내 (REQ-B22). 재감지 중엔 숨긴다
@@ -495,17 +499,19 @@ export default function AnalysisWorkPage() {
                 재감지 대기 중
               </Typography>
             )}
-            <Tooltip title={refreshQueued ? "재감지가 대기 중입니다" : "전체 재감지"}>
-              <span>
-                <IconButton
-                  size="small"
-                  onClick={handleRefresh}
-                  disabled={refreshing || refreshQueued}
-                >
-                  {refreshing ? <CircularProgress size={14} /> : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 16 }} />}
-                </IconButton>
-              </span>
-            </Tooltip>
+            {owner && (
+              <Tooltip title={refreshQueued ? "재감지가 대기 중입니다" : "전체 재감지"}>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={handleRefresh}
+                    disabled={refreshing || refreshQueued}
+                  >
+                    {refreshing ? <CircularProgress size={14} /> : <Icon icon="material-symbols:refresh-rounded" style={{ fontSize: 16 }} />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
           </PanelCardHeader>
 
           {refreshError && <Alert severity="error" sx={{ mx: 1, mt: 0.5, py: 0, fontSize: 11 }}>{refreshError}</Alert>}
@@ -593,7 +599,7 @@ export default function AnalysisWorkPage() {
             <Icon icon="material-symbols:image-outline-rounded" style={{ fontSize: 18, flexShrink: 0 }} />
             <Typography variant="subtitle2" fontWeight={700} noWrap>페이지 미리보기</Typography>
             <Box sx={{ flex: 1 }} />
-            {pdfUrl && (
+            {pdfUrl && editable && (
               <Button
                 size="small" variant={drawMode ? "contained" : "outlined"}
                 color={drawMode ? "error" : "primary"}
@@ -686,6 +692,7 @@ export default function AnalysisWorkPage() {
               /* REQ-D10: 열 수는 패널 너비 상태값에서 계산한다 — 상태값이 곧 실제 폭이다
                  (section3은 고정폭, 창이 좁아지면 줄어드는 쪽은 section2). */
               columns={columnsForWidth(panelWidths.section3)}
+              readOnly={!editable}
             />
           ) : (
             <>

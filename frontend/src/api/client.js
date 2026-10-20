@@ -632,6 +632,45 @@ export async function bulkDeleteQuestions(jobId, pageNum, questions = [], manual
   return res.json();
 }
 
+// ── 분석 결과 공유 (REQ-28) — 소유자 전용. 실패하면 서버 문구(없는 이메일 등)로 던진다 ──
+
+async function _shareRequest(url, options, fallback) {
+  const res = await apiFetch(url, options);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || fallback);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+/** GET /api/jobs/{jobId}/shares → { shares: [{ user_id, email, role }] } */
+export function listShares(jobId) {
+  return _shareRequest(`${BASE_URL}/jobs/${jobId}/shares`, undefined, "공유 목록 조회 실패");
+}
+
+/** POST /api/jobs/{jobId}/shares — role: "editor" | "viewer" */
+export function addShare(jobId, email, role) {
+  return _shareRequest(`${BASE_URL}/jobs/${jobId}/shares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, role }),
+  }, "공유 추가 실패");
+}
+
+/** PATCH /api/jobs/{jobId}/shares/{userId} */
+export function updateShare(jobId, userId, role) {
+  return _shareRequest(`${BASE_URL}/jobs/${jobId}/shares/${userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role }),
+  }, "역할 변경 실패");
+}
+
+/** DELETE /api/jobs/{jobId}/shares/{userId} */
+export function removeShare(jobId, userId) {
+  return _shareRequest(`${BASE_URL}/jobs/${jobId}/shares/${userId}`, { method: "DELETE" }, "공유 해제 실패");
+}
+
 /**
  * GET /api/workbooks
  * 생성된 문제집 이력 목록 (REQ-21 / 페이지네이션 REQ-P03-03)
