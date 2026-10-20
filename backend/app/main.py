@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from app.routers import upload, extract, browse, workbook, cover, notification, footnote, watermark, template, auth, operating
+from app.routers import upload, extract, browse, workbook, cover, notification, footnote, watermark, template, auth, operating, share
 from app.core.config import settings
 from app.services import analysis_slots
 from app.services import question_stats_service
@@ -81,6 +81,7 @@ app.include_router(template.router, prefix="/api", tags=["template"])
 app.include_router(notification.router, prefix="/api", tags=["notification"])
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(operating.router, prefix="/api", tags=["operating"])
+app.include_router(share.router, prefix="/api", tags=["share"])
 
 
 @app.get("/health")

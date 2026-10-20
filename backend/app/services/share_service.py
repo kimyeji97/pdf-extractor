@@ -57,3 +57,31 @@ def drop_job(job_id: str) -> None:
         data = storage.get_shares()
         if data.pop(job_id, None) is not None:
             storage.save_shares(data)
+
+
+def shares_of(job_id: str) -> list:
+    return storage.get_shares().get(job_id, [])
+
+
+def put_share(job_id: str, user_id: str, role: str) -> None:
+    """추가 또는 역할 변경 — 같은 사람은 한 항목만 둔다."""
+    with _index_lock:
+        data = storage.get_shares()
+        entries = [e for e in data.get(job_id, []) if e["user_id"] != user_id]
+        data[job_id] = entries + [{"user_id": user_id, "role": role}]
+        storage.save_shares(data)
+
+
+def remove_share(job_id: str, user_id: str) -> bool:
+    with _index_lock:
+        data = storage.get_shares()
+        entries = data.get(job_id, [])
+        kept = [e for e in entries if e["user_id"] != user_id]
+        if len(kept) == len(entries):
+            return False
+        if kept:
+            data[job_id] = kept
+        else:
+            data.pop(job_id)
+        storage.save_shares(data)
+        return True
