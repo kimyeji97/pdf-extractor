@@ -21,6 +21,7 @@ GET    /api/jobs/{job_id}/pages/{n}/questions/manual/{mid}/thumbnail     - 수�
 """
 import dataclasses
 import tempfile
+import threading
 import uuid
 from pathlib import Path
 from datetime import datetime, timezone
@@ -46,6 +47,19 @@ from app.utils.question_parser import detect_question_boundaries, QuestionBounda
 from app.utils import question_key
 
 router = APIRouter()
+
+# 같은 job 의 문항 쓰기를 한 줄로 세운다(REQ-28 Phase 3). 쓰기 경로가 boundaries·manual·상태 파일을
+# 읽고-고치고-통째로 쓰므로, 공유받은 편집자 둘이 동시에 쓰면 한쪽이 조용히 사라진다.
+# ponytail: 프로세스 안 잠금 — ECS 태스크·uvicorn 워커가 2개 이상이면 깨진다(PLAN-28 § 제약)
+_job_locks: dict = {}
+_job_locks_guard = threading.Lock()
+
+
+def _edit_lock(job_id: str):
+    with _job_locks_guard:
+        lock = _job_locks.setdefault(job_id, threading.Lock())
+    with lock:
+        yield
 
 
 def _get_owned_job(job_id: str, current_user: dict, need: str = share_service.VIEWER):
@@ -339,7 +353,10 @@ class JobMetaUpdate(BaseModel):
 
 @router.patch("/jobs/{job_id}", response_model=JobSummary)
 def update_job_meta(
-    job_id: str, body: JobMetaUpdate, current_user: dict = Depends(auth_service.get_current_user)
+    job_id: str,
+    body: JobMetaUpdate,
+    current_user: dict = Depends(auth_service.get_current_user),
+    _lock: None = Depends(_edit_lock),
 ):
     """job의 문제집 이름/유형 메타데이터를 수정한다."""
     job = _get_owned_job(job_id, current_user, share_service.EDITOR)
@@ -821,6 +838,7 @@ def update_question_title(
     body: QuestionTitleUpdate,
     k: int = Query(0, ge=0),
     current_user: dict = Depends(auth_service.get_current_user),
+    _lock: None = Depends(_edit_lock),
 ):
     """
     자동 감지 문항의 타이틀을 수정한다. k = 같은 쪽·번호 안 순번(생략 시 0, ADR-0006).
@@ -850,6 +868,7 @@ def delete_question(
     question_num: int,
     k: int = Query(0, ge=0),
     current_user: dict = Depends(auth_service.get_current_user),
+    _lock: None = Depends(_edit_lock),
 ):
     """
     자동 감지 문항을 삭제한다. k 로 지목한 경계 하나만 — 생략하면 k=0(ADR-0006).
@@ -898,6 +917,7 @@ def add_manual_question(
     page_num: int,
     body: ManualQuestionCreate,
     current_user: dict = Depends(auth_service.get_current_user),
+    _lock: None = Depends(_edit_lock),
 ):
     """
     수동 드래그로 지정한 영역을 문항으로 추가한다.
@@ -976,6 +996,7 @@ def update_manual_question_title(
     manual_id: str,
     body: QuestionTitleUpdate,
     current_user: dict = Depends(auth_service.get_current_user),
+    _lock: None = Depends(_edit_lock),
 ):
     """수동 추가 문항의 타이틀을 수정한다. manual_questions/{job_id}.json에 저장."""
     _get_owned_job(job_id, current_user, share_service.EDITOR)
@@ -1002,6 +1023,7 @@ def delete_manual_question(
     page_num: int,
     manual_id: str,
     current_user: dict = Depends(auth_service.get_current_user),
+    _lock: None = Depends(_edit_lock),
 ):
     """수동 추가 문항을 삭제한다. 썸네일 캐시도 함께 삭제."""
     _get_owned_job(job_id, current_user, share_service.EDITOR)
@@ -1047,6 +1069,7 @@ def bulk_delete_questions(
     page_num: int,
     body: BulkDeleteRequest,
     current_user: dict = Depends(auth_service.get_current_user),
+    _lock: None = Depends(_edit_lock),
 ):
     """
     선택된 자동/수동 문항을 한 번에 삭제한다 (REQ-B06).
