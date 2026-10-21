@@ -86,7 +86,7 @@ const editStartValue = (q) => (q.is_manual && !q.title ? "" : questionNameRest(q
 // isEditing/editingValue가 바뀌므로 나머지 카드는 리렌더를 건너뛴다.
 const QuestionCard = memo(
   function QuestionCard({
-    q, isChecked, isEditing, editingValue,
+    q, isChecked, isEditing, editingValue, readOnly,
     onToggleCheck, onStartEdit, onCommitEdit, onCancelEdit, onEditingValueChange,
   }) {
     const displayTitle = questionDisplayName(q);
@@ -109,16 +109,18 @@ const QuestionCard = memo(
       >
         {/* 상단 행: 체크박스 + 배지 + 타이틀 */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1, py: 0.75 }}>
-          <Tooltip
-            title={fp ? "오탐지 의심 문항입니다. 이미지를 확인한 뒤 선택하여 삭제할 수 있습니다." : ""}
-          >
-            <Checkbox
-              size="small"
-              checked={isChecked}
-              onChange={() => onToggleCheck(q.question_id)}
-              sx={{ p: 0.25, flexShrink: 0 }}
-            />
-          </Tooltip>
+          {!readOnly && (
+            <Tooltip
+              title={fp ? "오탐지 의심 문항입니다. 이미지를 확인한 뒤 선택하여 삭제할 수 있습니다." : ""}
+            >
+              <Checkbox
+                size="small"
+                checked={isChecked}
+                onChange={() => onToggleCheck(q.question_id)}
+                sx={{ p: 0.25, flexShrink: 0 }}
+              />
+            </Tooltip>
+          )}
 
           {q.is_manual && (
             <Chip label="수동" size="small" color={MARK_COLOR.manual} variant="outlined" sx={{ height: 18, fontSize: 10, flexShrink: 0 }} />
@@ -154,13 +156,13 @@ const QuestionCard = memo(
               noWrap
               /* 말줄임된 제목을 호버로 읽을 수 있게 전체 제목을 앞세운다 (REQ-D10).
                  2열(카드 ~192px)에서는 긴 제목이 매번 잘린다 — 종전 문구만으로는 읽을 방법이 없었다. */
-              title={fp ? displayTitle : `${displayTitle} · 더블클릭하여 수정`}
-              onDoubleClick={() => !fp && onStartEdit(q)}
+              title={fp || readOnly ? displayTitle : `${displayTitle} · 더블클릭하여 수정`}
+              onDoubleClick={() => !fp && !readOnly && onStartEdit(q)}
               sx={{
                 flex: 1, minWidth: 0, fontWeight: 600,
-                cursor: fp ? "default" : "text",
+                cursor: fp || readOnly ? "default" : "text",
                 borderRadius: 0.5, px: 0.5,
-                "&:hover": fp ? undefined : { bgcolor: "action.hover" },
+                "&:hover": fp || readOnly ? undefined : { bgcolor: "action.hover" },
               }}
             >
               {displayTitle}
@@ -188,7 +190,8 @@ const QuestionCard = memo(
     prev.q.title === next.q.title &&
     prev.isChecked === next.isChecked &&
     prev.isEditing === next.isEditing &&
-    prev.editingValue === next.editingValue,
+    prev.editingValue === next.editingValue &&
+    prev.readOnly === next.readOnly,
 );
 
 // 화면에 떠 있는 패널들의 "대기 삭제 확정" 함수 (REQ-B26). 재감지는 부모(work.jsx)에서 시작되므로,
@@ -210,6 +213,7 @@ export default function QuestionAnalysisPanel({
   pageInfo,
   refreshTrigger = 0,
   columns = 1,
+  readOnly = false, // 뷰어로 공유받은 분석 — 선택·삭제·제목 수정을 숨긴다 (REQ-28)
 }) {
   // ── 문항 목록 ───────────────────────────────────────────
   const [questions, setQuestions] = useState([]);
@@ -420,28 +424,32 @@ export default function QuestionAnalysisPanel({
 
         <Box sx={{ flex: 1 }} />
 
-        <Tooltip title="전체 선택/해제">
-          <span>
-            <Checkbox
+        {!readOnly && (
+          <>
+            <Tooltip title="전체 선택/해제">
+              <span>
+                <Checkbox
+                  size="small"
+                  checked={allChecked}
+                  onChange={toggleAll}
+                  disabled={allCheckable.length === 0}
+                  sx={{ p: 0.5 }}
+                />
+              </span>
+            </Tooltip>
+            <Button
               size="small"
-              checked={allChecked}
-              onChange={toggleAll}
-              disabled={allCheckable.length === 0}
-              sx={{ p: 0.5 }}
-            />
-          </span>
-        </Tooltip>
-        <Button
-          size="small"
-          variant="outlined"
-          color="error"
-          onClick={handleDeleteSelected}
-          disabled={checkedCount === 0}
-          startIcon={<Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />}
-          sx={{ flexShrink: 0, px: 1.25, fontSize: 12, whiteSpace: "nowrap" }}
-        >
-          삭제 {checkedCount > 0 && `(${checkedCount})`}
-        </Button>
+              variant="outlined"
+              color="error"
+              onClick={handleDeleteSelected}
+              disabled={checkedCount === 0}
+              startIcon={<Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />}
+              sx={{ flexShrink: 0, px: 1.25, fontSize: 12, whiteSpace: "nowrap" }}
+            >
+              삭제 {checkedCount > 0 && `(${checkedCount})`}
+            </Button>
+          </>
+        )}
       </Box>
 
       {error && <Alert severity="error" sx={{ borderRadius: 0, py: 0, fontSize: 12, flexShrink: 0 }}>{error}</Alert>}
@@ -459,9 +467,11 @@ export default function QuestionAnalysisPanel({
             <Typography variant="body2" textAlign="center" color="text.secondary">
               감지된 문항이 없습니다.
             </Typography>
-            <Typography variant="caption" textAlign="center" color="text.disabled">
-              미리보기에서 &quot;수동 추가&quot;로 직접 지정할 수 있습니다.
-            </Typography>
+            {!readOnly && (
+              <Typography variant="caption" textAlign="center" color="text.disabled">
+                미리보기에서 &quot;수동 추가&quot;로 직접 지정할 수 있습니다.
+              </Typography>
+            )}
           </Box>
         )}
 
@@ -490,6 +500,7 @@ export default function QuestionAnalysisPanel({
                 isChecked={checkedIds.has(q.question_id)}
                 isEditing={editingId === q.question_id}
                 editingValue={editingValue}
+                readOnly={readOnly}
                 onToggleCheck={toggleCheck}
                 onStartEdit={startEdit}
                 onCommitEdit={commitEdit}

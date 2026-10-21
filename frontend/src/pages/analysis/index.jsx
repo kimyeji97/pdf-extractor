@@ -21,6 +21,7 @@ import PageHeader from "components/PageHeader";
 // 파일 경로는 components/StatCards.jsx 그대로다 — 그 안의 주석 참조.
 import StatsBoard from "components/StatCards";
 import BookCard, { BOOK_CARD_W } from "components/BookCard";
+import ShareDialog from "components/ShareDialog";
 import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
@@ -28,6 +29,7 @@ import { useStatusEvents } from "contexts/NotificationContext";
 import { detectionBadge } from "utils/badges";
 import { resolveDocumentName, resolveFileSubtitle, stripExtension } from "utils/documentName";
 import { isEntryBlocked } from "utils/jobStatus";
+import { canEdit, isOwner, ROLE_LABEL } from "utils/jobRole";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
@@ -78,7 +80,7 @@ function UploadCard({ onClick }) {
 
 // 감지 상태 → 표지 위 배지 — 색·이름은 `utils/badges` 단일 정의 (REQ-F14)
 
-function JobCard({ job, onClick, onEdit, onDelete }) {
+function JobCard({ job, onClick, onEdit, onDelete, onShare }) {
   // 썸네일 URL은 결정적(deterministic)이라 /pages 호출 없이 직접 조립한다 (REQ-P02-02).
   // 카드 N개 = 전체 PDF N번 재다운로드+파싱이던 목록 로딩 병목 제거.
   const coverUrl = `${API_ROOT}/api/jobs/${job.job_id}/pages/0/thumbnail`;
@@ -100,7 +102,10 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
       coverUrl={coverUrl}
       title={resolveDocumentName(job)}
       caption={resolveFileSubtitle(job)}
-      subtitle={relativeTime(job.uploaded_at)}
+      // 공유받은 분석은 역할을 앞세운다 (REQ-28)
+      subtitle={isOwner(job)
+        ? relativeTime(job.uploaded_at)
+        : `공유받음 · ${ROLE_LABEL[job.my_role]} · ${relativeTime(job.uploaded_at)}`}
       tags={job.workbook_types || []}
       badge={badge}
       // 두께는 감지된 문항 수에 연동한다 (감지 전/실패는 가장 얇게)
@@ -109,26 +114,42 @@ function JobCard({ job, onClick, onEdit, onDelete }) {
       disabled={analyzing}
       loading={analyzing}
       onClick={() => onClick(job)}
+      // 편집은 편집자 이상, 공유·삭제는 소유자만 (REQ-28 — 막는 건 서버, 여기선 숨긴다)
       actions={
         <>
-          <Tooltip title="이름·유형 편집">
-            <IconButton
-              size="small"
-              onClick={(e) => { e.stopPropagation(); onEdit(job); }}
-              sx={actionSx}
-            >
-              <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 16 }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="삭제">
-            <IconButton
-              size="small"
-              onClick={(e) => { e.stopPropagation(); onDelete(job); }}
-              sx={{ ...actionSx, color: "error.main" }}
-            >
-              <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />
-            </IconButton>
-          </Tooltip>
+          {canEdit(job) && (
+            <Tooltip title="이름·유형 편집">
+              <IconButton
+                size="small"
+                onClick={(e) => { e.stopPropagation(); onEdit(job); }}
+                sx={actionSx}
+              >
+                <Icon icon="material-symbols:edit-outline-rounded" style={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {isOwner(job) && (
+            <Tooltip title="공유">
+              <IconButton
+                size="small"
+                onClick={(e) => { e.stopPropagation(); onShare(job); }}
+                sx={actionSx}
+              >
+                <Icon icon="material-symbols:share-outline" style={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {isOwner(job) && (
+            <Tooltip title="삭제">
+              <IconButton
+                size="small"
+                onClick={(e) => { e.stopPropagation(); onDelete(job); }}
+                sx={{ ...actionSx, color: "error.main" }}
+              >
+                <Icon icon="material-symbols:delete-outline-rounded" style={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          )}
         </>
       }
     />
@@ -208,6 +229,9 @@ export default function AnalysisFilePage() {
     setEditTypes((job.workbook_types || []).join(", "));
     setEditError("");
   };
+
+  // ── 공유 (REQ-28) ───────────────────────────────────
+  const [shareJob, setShareJob] = useState(null);
 
   // ── 삭제 (연관 저장물 전체) ────────────────────────────
   const [deleteJobTarget, setDeleteJob]   = useState(null);
@@ -403,6 +427,7 @@ export default function AnalysisFilePage() {
               onClick={handleCardClick}
               onEdit={openEdit}
               onDelete={setDeleteJob}
+              onShare={setShareJob}
             />
           ))
         )}
@@ -435,6 +460,8 @@ export default function AnalysisFilePage() {
       </Box>
       </Box>
       </Box>
+
+      <ShareDialog job={shareJob} open={Boolean(shareJob)} onClose={() => setShareJob(null)} />
 
       {/* ── 삭제 확인 다이얼로그 ───────────────────────── */}
       <Dialog

@@ -46,3 +46,6 @@ export const MARK_COLOR = {
 /** 상태를 말하지 않는 정보성 칩 — 채움형 상태 뱃지와 모양으로도 갈린다 */
 export const INFO_CHIP = { color: "secondary", variant: "outlined" };
 export const HIGH_INFO_CHIP = { color: "secondary", variant: "filled" };
+
+/** 편집 복원 때 지워졌거나 공유가 해제된 문항 (REQ-28) — 그대로 생성하면 조용히 빠진다 */
+export const MISSING_CHIP = { label: "삭제된 문항", color: "error", variant: "outlined" };

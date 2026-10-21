@@ -39,7 +39,10 @@ import {
   startExtractV2,
   getWorkbook,
   listTemplates,
+  getAllQuestions,
+  getJobInfo,
 } from "api/client";
+import { missingQuestionIds } from "utils/missingSelections";
 import { tintSx } from "theme/tint";
 import { useJobCompletion } from "hooks/useJobCompletion";
 import { INFO_CHIP } from "utils/badges";
@@ -99,6 +102,28 @@ export default function EditorPage() {
   });
   const resizingRef = useRef(null);
 
+  // 복원한 선택 중 지워졌거나 공유가 해제된 문항을 "삭제된 문항"으로 표시한다 (REQ-28).
+  // 예전엔 썸네일이 깨진 채 남고 재생성 때 에러 없이 빠졌다.
+  // 확실할 때만 판정한다 — 404 만 "접근 불가"(null)이고, 감지가 끝나지 않았거나(재감지 중엔 문항이 비어 온다)
+  // 다른 오류면 그 job 은 건너뛴다. 아니면 멀쩡한 문항을 빼라고 안내하게 된다(/review 28 회차 0)
+  const markMissing = useCallback(async (restored) => {
+    const jobIds = [...new Set(restored.map((b) => b.jobId))];
+    const entries = await Promise.all(jobIds.map(async (jid) => {
+      try {
+        const info = await getJobInfo(jid);
+        if (info.boundaries_status !== "DONE") return null;
+        const res = await getAllQuestions(jid);
+        return [jid, res.pages.flatMap((p) => p.questions.map((q) => q.question_id))];
+      } catch (e) {
+        return e.status === 404 ? [jid, null] : null;
+      }
+    }));
+    const known = Object.fromEntries(entries.filter(Boolean));
+    const missing = missingQuestionIds(restored.filter((b) => b.jobId in known), known);
+    if (missing.size === 0) return;
+    setBasket((prev) => prev.map((b) => (missing.has(b.questionId) ? { ...b, missing: true } : b)));
+  }, []);
+
   // REQ-20 복원 + 표지·각주·워터마크 목록 로드 — 서로 독립적이라 병렬 호출 (REQ-P02-06)
   useEffect(() => {
     Promise.all([
@@ -108,35 +133,35 @@ export default function EditorPage() {
       if (meta) {
         if (meta.layout) setLayout(meta.layout);
         if (meta.selections?.length) {
-          setBasket(
-            meta.selections.map((s, i) => ({
-              // question_id는 "{job_id}:{page}:{num}" 복합키(ADR-0002).
-              // 예전 저장분이라 없으면 같은 규칙으로 조립한다 —
-              // 파일별로 문항 번호가 겹치므로 번호만 쓰면 멀티 파일 문제집에서 키가 충돌한다.
-              questionId:
-                s.question_id ||
-                (s.manual_id
-                  ? `${s.job_id}:${s.page_num}:manual:${s.manual_id}`
-                  : `${s.job_id}:${s.page_num}:${s.question_num ?? i}`),
-              questionNum: s.question_num,
-              pageNum: s.page_num,
-              jobId: s.job_id,
-              workbookName: s.workbook_name || "",
-              sourceFilename: s.source_filename || "",
-              // 썸네일 URL은 결정적이라 저장할 필요 없이 여기서 조립한다.
-              // (저장된 selections에는 썸네일 필드가 없어 예전에는 null로 두었고,
-              //  그 탓에 생성 이력 → 편집 복원 시 이미지가 전부 비어 있었다)
-              thumbnailUrl: s.manual_id
-                ? `/api/jobs/${s.job_id}/pages/${s.page_num}/questions/manual/${s.manual_id}/thumbnail`
-                : `/api/jobs/${s.job_id}/pages/${s.page_num}/questions/${s.question_num}/thumbnail`,
-              isManual: Boolean(s.manual_id),
-              manualId: s.manual_id,
-              scale: s.scale ?? 1,
-              displayTitle:
-                s.label ||
-                questionDisplayName({ is_manual: Boolean(s.manual_id), question_num: s.question_num }),
-            })),
-          );
+          const restored = meta.selections.map((s, i) => ({
+            // question_id는 "{job_id}:{page}:{num}" 복합키(ADR-0002).
+            // 예전 저장분이라 없으면 같은 규칙으로 조립한다 —
+            // 파일별로 문항 번호가 겹치므로 번호만 쓰면 멀티 파일 문제집에서 키가 충돌한다.
+            questionId:
+              s.question_id ||
+              (s.manual_id
+                ? `${s.job_id}:${s.page_num}:manual:${s.manual_id}`
+                : `${s.job_id}:${s.page_num}:${s.question_num ?? i}`),
+            questionNum: s.question_num,
+            pageNum: s.page_num,
+            jobId: s.job_id,
+            workbookName: s.workbook_name || "",
+            sourceFilename: s.source_filename || "",
+            // 썸네일 URL은 결정적이라 저장할 필요 없이 여기서 조립한다.
+            // (저장된 selections에는 썸네일 필드가 없어 예전에는 null로 두었고,
+            //  그 탓에 생성 이력 → 편집 복원 시 이미지가 전부 비어 있었다)
+            thumbnailUrl: s.manual_id
+              ? `/api/jobs/${s.job_id}/pages/${s.page_num}/questions/manual/${s.manual_id}/thumbnail`
+              : `/api/jobs/${s.job_id}/pages/${s.page_num}/questions/${s.question_num}/thumbnail`,
+            isManual: Boolean(s.manual_id),
+            manualId: s.manual_id,
+            scale: s.scale ?? 1,
+            displayTitle:
+              s.label ||
+              questionDisplayName({ is_manual: Boolean(s.manual_id), question_num: s.question_num }),
+          }));
+          setBasket(restored);
+          markMissing(restored);
         }
       }
       setTemplates(templateData?.templates || []);

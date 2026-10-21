@@ -196,35 +196,41 @@ def _purge_expired_months(keys: list[str], cutoff: datetime) -> list[str]:
     return [k for k in keys if k.split("/", 1)[0] not in expired]
 
 
-def can_see(user: Optional[dict], job_id: Optional[str], owners: Optional[dict] = None) -> bool:
+def can_see(user: Optional[dict], job_id: Optional[str], viewers: Optional[dict] = None) -> bool:
     """
     이 사용자가 이 job 의 알림을 볼 수 있나 (REQ-B27). `user` 가 None 이면 내부 호출 — 거르지 않는다.
 
-    소유자는 알림 본문이 아니라 **job 상태의 owner_id** 로 판정한다 — 본문에 두면 거를 때 파일을 다 열어야 해
-    "평상시 GET 0회"(F09-09)가 깨진다. 상태 목록은 메모리 캐시(P06)라 싸다. 소유자 없는 job·지워진 job 은 admin 만.
+    받는 사람은 알림 본문이 아니라 **job 상태의 owner_id + 공유 인덱스** 로 판정한다(REQ-28) — 본문에 두면 거를 때
+    파일을 다 열어야 해 "평상시 GET 0회"(F09-09)가 깨진다. 상태 목록은 메모리 캐시(P06)라 싸다.
+    소유자 없는 job·지워진 job 은 admin 만(공유가 있어도 — 계약 #32).
     """
     if user is None or user.get("role") == "admin":
         return True
-    if owners is None:
-        owners = _owners()
-    return job_id is not None and owners.get(job_id) == user.get("user_id")
+    if viewers is None:
+        viewers = _viewers()
+    return job_id is not None and user.get("user_id") in viewers.get(job_id, ())
 
 
-def _owners() -> dict:
-    return {j.job_id: j.owner_id for j in storage.list_jobs() if j.owner_id}
+def _viewers() -> dict:
+    """job_id → 알림을 받는 user_id 집합(소유자 + 공유받은 사람)."""
+    shares = storage.get_shares()
+    return {
+        j.job_id: {j.owner_id, *(e["user_id"] for e in shares.get(j.job_id, []))}
+        for j in storage.list_jobs() if j.owner_id
+    }
 
 
 def _visible_dated(user: Optional[dict]) -> list:
     """보관 기간 안 · 이 사용자가 볼 수 있는 (시각, 키) — 최신순. 키 이름만 본다(파일 읽기 0회)."""
     cutoff = _cutoff()
     keys = _purge_expired_months(storage.list_notification_keys(), cutoff)
-    owners = _owners() if user is not None and user.get("role") != "admin" else None
+    viewers = _viewers() if user is not None and user.get("role") != "admin" else None
     dated = []
     for key in keys:
         ts = nkey.parse_stamp(key)
         if ts is None or ts < cutoff:
             continue
-        if not can_see(user, nkey.parse_job_id(key), owners):
+        if not can_see(user, nkey.parse_job_id(key), viewers):
             continue
         dated.append((ts, key))
     dated.sort(key=lambda p: p[0], reverse=True)

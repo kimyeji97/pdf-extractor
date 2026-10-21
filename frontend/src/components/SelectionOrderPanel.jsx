@@ -52,7 +52,7 @@ import IconButton from "@mui/material/IconButton";
 import { Icon } from "@iconify/react";
 
 import { spineColorOf } from "./BookCard";
-import { INFO_CHIP } from "utils/badges";
+import { INFO_CHIP, MISSING_CHIP } from "utils/badges";
 import { questionDisplayName } from "utils/questionName";
 
 const API_ROOT = (
@@ -175,6 +175,12 @@ const SortableItem = memo(function SortableItem({
         <Typography variant="caption" noWrap display="block" title={label}>
           {label}
         </Typography>
+        {/* 복원했는데 지워졌거나 공유가 해제된 문항 (REQ-28) — 그대로 생성하면 조용히 빠진다 */}
+        {item.missing && (
+          <Tooltip title="삭제됐거나 공유가 해제된 문항입니다. 제거하고 생성하세요.">
+            <Chip {...MISSING_CHIP} size="small" sx={{ height: 18, fontSize: 10, mt: 0.25 }} />
+          </Tooltip>
+        )}
         {/* 출처는 파일이 2개 이상 섞였을 때만 노출한다 — 단일 파일에서는
             모든 항목에 같은 이름이 반복돼 정보가 아니라 잡음이 된다. */}
         {sourceLabel && (

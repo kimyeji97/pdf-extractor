@@ -19,7 +19,7 @@ from app.models.schemas import (
     WorkbookMeta, WorkbookSelectionItem,
 )
 from app.routers.template import is_empty
-from app.services import auth_service, storage, pdf_service, notification_service
+from app.services import auth_service, storage, pdf_service, notification_service, share_service
 
 router = APIRouter()
 
@@ -175,13 +175,13 @@ def start_extract_v2(
     새 export_job_id를 생성하여 PENDING 상태로 저장 후 백그라운드 태스크 시작.
     req.layout 으로 그리드 레이아웃 지정 가능 (REQ-18).
     """
-    # selections 는 여러 job_id 를 섞을 수 있다(멀티소스) — 하나라도 본인 소유가
-    # 아니면 요청 전체를 거절한다(계획서 § 결정 "extract-v2 멀티소스 소유권").
+    # selections 는 여러 job_id 를 섞을 수 있다(멀티소스) — 하나라도 읽을 수 없으면(소유·공유 아님)
+    # 요청 전체를 거절한다(PLAN-B14 § 결정 "extract-v2 멀티소스 소유권" · REQ-28 뷰어 이상).
     for job_id in {s.job_id for s in req.selections}:
         source_job = storage.get_status(job_id)
         if source_job is None:
             raise HTTPException(status_code=404, detail="job을 찾을 수 없습니다.")
-        auth_service.ensure_owner_or_admin(current_user, source_job.owner_id)
+        share_service.ensure_role(current_user, source_job, share_service.VIEWER)
 
     # ⚠️ **job 생성보다 먼저 검증한다.** 거절인데 job 만 남으면 결과 목록에 영원히
     #    PENDING 인 유령이 쌓인다 (계획서 Phase 1 완료 기준).

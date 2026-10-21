@@ -288,9 +288,9 @@ export async function getJobInfo(jobId) {
   // apiFetch를 거치지 않는 raw fetch지만(계약 #26), /api/jobs/{id}는 REQ-27 Phase 2로
   // 보호 라우트가 됐다 — 헤더만 직접 붙인다(딤 처리·401 재시도는 그대로 없다).
   const res = await fetch(`${BASE_URL}/jobs/${jobId}`, { headers: _authHeaders() });
-  if (!res.ok) throw new Error("job 정보 조회 실패");
+  if (!res.ok) throw Object.assign(new Error("job 정보 조회 실패"), { status: res.status }); // 404 = 못 보는 job (REQ-28)
   return res.json();
-  // { job_id, filename, status, boundaries_status, total_question_count, ... }
+  // { job_id, filename, status, boundaries_status, total_question_count, my_role, ... }
 }
 
 /**
@@ -630,6 +630,45 @@ export async function bulkDeleteQuestions(jobId, pageNum, questions = [], manual
   if (res.status === 401 && (await refreshAccessToken())) res = await send();
   if (!res.ok) throw new Error("문항 삭제 실패");
   return res.json();
+}
+
+// ── 분석 결과 공유 (REQ-28) — 소유자 전용. 실패하면 서버 문구(없는 이메일 등)로 던진다 ──
+
+async function _shareRequest(url, options, fallback) {
+  const res = await apiFetch(url, options);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || fallback);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+/** GET /api/jobs/{jobId}/shares → { shares: [{ user_id, email, role }] } */
+export function listShares(jobId) {
+  return _shareRequest(`${BASE_URL}/jobs/${jobId}/shares`, undefined, "공유 목록 조회 실패");
+}
+
+/** POST /api/jobs/{jobId}/shares — role: "editor" | "viewer" */
+export function addShare(jobId, email, role) {
+  return _shareRequest(`${BASE_URL}/jobs/${jobId}/shares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, role }),
+  }, "공유 추가 실패");
+}
+
+/** PATCH /api/jobs/{jobId}/shares/{userId} */
+export function updateShare(jobId, userId, role) {
+  return _shareRequest(`${BASE_URL}/jobs/${jobId}/shares/${userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role }),
+  }, "역할 변경 실패");
+}
+
+/** DELETE /api/jobs/{jobId}/shares/{userId} */
+export function removeShare(jobId, userId) {
+  return _shareRequest(`${BASE_URL}/jobs/${jobId}/shares/${userId}`, { method: "DELETE" }, "공유 해제 실패");
 }
 
 /**

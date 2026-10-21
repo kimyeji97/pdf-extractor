@@ -17,6 +17,7 @@ R2 버킷 + R2_ROOT_PREFIX 조합으로 환경(dev/prod)을 구분한다.
   {root}/notifications/{YYYY-MM}/{ISO}-{job_id}.json
   {root}/notifications/read_cursor.json
 """
+import copy
 import json
 import logging
 import threading
@@ -671,6 +672,24 @@ def get_read_ids(user_id: str) -> list:
 
 def save_read_ids(user_id: str, ids: list) -> None:
     _put_json(_key("notification_reads", f"{user_id}.json"), {"ids": ids})
+
+
+# 공유 인덱스 (REQ-28) — local_storage_service 와 같은 모양.
+# 알림 필터가 SSE 이벤트마다 읽으므로 메모리에 둔다. 쓰는 곳이 API 프로세스(share_service) 하나라 캐시가 어긋나지 않는다
+_shares_cache: Optional[dict] = None
+
+
+def get_shares() -> dict:
+    global _shares_cache
+    if _shares_cache is None:
+        _shares_cache = _get_json_or_none(_key("shares", "index.json")) or {}
+    return copy.deepcopy(_shares_cache)
+
+
+def save_shares(data: dict) -> None:
+    global _shares_cache
+    _put_json(_key("shares", "index.json"), data)
+    _shares_cache = copy.deepcopy(data)
 
 
 def delete_job(job_id: str) -> None:
