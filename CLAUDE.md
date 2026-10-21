@@ -338,7 +338,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 ```
 
 2026-10-08 기준 각 prefix 다음 번호: `B30`(B29 = 메타 저장 실패 알림 🟡), `C13`(C12 = 운영 콘솔 가입 승인·차단·서버 on/off 🟡), `D14`(D13 = 브랜드 리뉴얼 ✅ 2026-10-08), `E03`, `F20`(F19 = 서버 다운 안내 🟡), `P07`, 숫자 `31`.
-(2026-09-30에 착수 대기 13건을 **B21·B22·F14·F15·C10·C11·P06**으로 예약했다 — 전부 미착수이고 REQ-28은 ⏸.
+(2026-09-30에 착수 대기 13건을 **B21·B22·F14·F15·C10·C11·P06**으로 예약했다 — REQ-28은 2026-10-21 ✅.
 예약분은 PROGRESS "미착수 — 번호만 부여된 것" 표가 단일 출처다. 번호는 완료돼도 재사용하지 않는다)
 
 ## 진행 현황
@@ -350,7 +350,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 - **현재 위치 (2026-10-01)**: REQ-27(로그인) 이후 dev 확인 중 나온 버그를 **B14~B20**으로 모두 닫았다 —
   마지막 B20은 HWP 출력 PDF의 숨은 번호 오탐과 문항 식별자 충돌(ADR-0006)이었다. 2026-09-30에 착수 대기 13건을
   B21·B22·F14·F15·C10·C11·P06으로 예약했고, **B21·B22·F14·F15(PR #26)와 C10(PR #27, 문항 원문 이름)을 dev 확인까지 끝냈다.**
-  진행 중인 REQ는 없다. 남은 예약 없음 — P06은 2026-10-02 완료(REQ-28 공유는 ⏸). C11(유제 감지)은 2026-10-01 기각 — 2026-10-06 오픈 후 실사용 케이스를 보고 재검토.
+  진행 중인 REQ는 없다. 남은 예약 없음 — P06은 2026-10-02 완료. REQ-28 공유는 2026-10-21 ✅(PR #49). C11(유제 감지)은 2026-10-01 기각 — 2026-10-06 오픈 후 실사용 케이스를 보고 재검토.
   **개별 REQ의 상태·완료일·PR 번호는 [`docs/PROGRESS.md`](docs/PROGRESS.md) 인덱스가 단일 출처다** —
   여기에 옮겨 적지 않는다(옛 이력을 이 절에 쌓다가 실제와 반대로 읽히는 문단이 됐다).
 - ⚠️ **REQ-29·30·F13의 잔여 위험** — ①**s3 스토리지 경로**: 자동 테스트는 계약 #24 격리로 항상
@@ -367,13 +367,13 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ⚠️ **prod 백엔드는 2026-10-05에 띄웠고(REQ-E02 ✅), 당분간(약 한 달) 사용자가 직접 켜고 끄며 월 비용을 본다** — 서비스 `pdf-extractor-backend-prod-svc` · 태스크 정의 `pdf-extractor-backend-prod:6` · 이미지 **`prod-8cd781b`(버전 태그 고정, `:latest` 금지 — 2026-10-13 C12 Phase 1·2 + 색상 정리 반영. rev 3(`prod-51acedb`, task role 없음)은 롤백용으로 활성 유지, rev 1·2·4·5 는 deregister — 직전 `prod-dfcc485` 이미지는 ECR에 남아 있다)** · task role **`pdf-extractor-ecs-task-role`**(`DescribeScheduledActions` 읽기만, REQ-F19) + env `SCHEDULE_RESOURCE_ID`=prod 서비스 · **켜고 끄기는 ECS 예약 작업 `on`(평일 15:00)·`off`(평일 23:00, Asia/Seoul)** — 운영 구간 API가 이걸 읽는다(시각을 바꾸면 배너·다운 화면이 따라온다) · 시크릿 `pdf-extractor/prod` · 로그 `/ecs/pdf-extractor-prod` · API `https://dailystudy-workbook-api.yejicraft-cf.com` · R2 `dailystudy`(prefix `pdf-extractor`). **`desired 0`이어도 장애가 아니다 — 켜고 끄는 건 사용자 몫이니 임의로 켜거나 끄지 말 것.** 상태는 `describe-services`로 직접 본다. prod 프론트는 2026-10-05 Worker **`dailystudy-workbook-prod`**(`wrangler.jsonc` `env.prod`, 커스텀 도메인 `https://dailystudy-workbook.yejicraft-cf.com`, Version `1b4b81a1`, 앱 코드 = `8cd781b`)로 배포됐다 — 2026-10-13 C12 Phase 1·2 + 색상 정리까지 갱신 — `frontend-deploy.sh prod`. 상세는 [PLAN-E02](docs/plans/PLAN-E02-prod-environment.md).
 
-⚠️ **dev 백엔드는 2026-10-13 main `289a3a3`(이미지 `c12-289a3a3` = `:latest` — `prod-8cd781b`와 같은 digest, 태스크 정의 **rev 9** = rev 8 + task role + `SCHEDULE_RESOURCE_ID`=**prod 서비스** — dev엔 예약이 없어 prod 예약을 읽기 전용으로 보여 준다)로 배포돼 있고, 배포 뒤 사용자 요청으로 `desired 0`으로 내렸다(2026-10-13).** (rev 8은 롤백용으로 활성) (F18은 프론트 전용이라 dev 백엔드 재배포가 필요 없었다. 실행 당시 태스크 digest `sha256:ffca2c03…` 가 ECR 과 일치함을 확인했다.)
+⚠️ **dev 백엔드는 2026-10-21 main `9c17599`(이미지 `28-9c17599` = `:latest`, REQ-28. 태스크 정의 **rev 9** = rev 8 + task role + `SCHEDULE_RESOURCE_ID`=**prod 서비스** — dev엔 예약이 없어 prod 예약을 읽기 전용으로 보여 준다)로 배포돼 있고, 배포 뒤 사용자 요청으로 `desired 0`으로 내렸다(2026-10-21).** (rev 8은 롤백용으로 활성) (F18은 프론트 전용이라 dev 백엔드 재배포가 필요 없었다. 실행 당시 태스크 digest `sha256:ffca2c03…` 가 ECR 과 일치함을 확인했다.)
 (F17은 `pdf_service`가 바뀌어 **백엔드 배포가 따라왔다** — B25처럼 프론트 전용이 아니었다. 실행 digest `04af8fb8…`가 ECR `f17-25ee3d2`와 일치함을 확인했다.)
 (**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
-⚠️ **dev 프론트는 2026-10-13 main `8cd781b` 빌드(Worker Version `187a3853`)다** — 실체는 Pages가 아니라
+⚠️ **dev 프론트는 2026-10-21 main `9c17599` 빌드(Worker Version `6143644a`)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
 "배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh dev` — 2026-10-05부터 `dev|prod` 인자 필수)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**
