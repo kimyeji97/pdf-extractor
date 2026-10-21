@@ -4,7 +4,7 @@
 상대는 이메일로 지정한다(PLAN-28 § 결정 "공유 대상 지정"). 없는 이메일이면 404 로 알린다 —
 가입 여부가 드러나는 건 소수 팀이라 감수했다.
 """
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from app.services import auth_service, share_service, storage
 
 router = APIRouter()
 
-ShareRole = Literal["editor", "viewer"]  # owner 는 공유로 줄 수 없다
+ShareRole = Literal["owner", "editor", "viewer"]  # owner 로 주면 공동 소유자(PLAN-28 Phase 6)
 
 
 class ShareCreate(BaseModel):
@@ -33,6 +33,7 @@ class ShareItem(BaseModel):
 
 
 class ShareListResponse(BaseModel):
+    owner: Optional[ShareItem] = None  # 업로더 — 인덱스 밖이라 해제·변경 대상이 아니다
     shares: list[ShareItem]
 
 
@@ -51,8 +52,9 @@ def _item(user_id: str, role: str) -> ShareItem:
 
 @router.get("/jobs/{job_id}/shares", response_model=ShareListResponse)
 def list_shares(job_id: str, current_user: dict = Depends(auth_service.get_current_user)):
-    _owned_job(job_id, current_user)
-    return ShareListResponse(shares=[_item(e["user_id"], e["role"]) for e in share_service.shares_of(job_id)])
+    job = _owned_job(job_id, current_user)
+    owner = _item(job.owner_id, share_service.OWNER) if job.owner_id else None
+    return ShareListResponse(owner=owner, shares=[_item(e["user_id"], e["role"]) for e in share_service.shares_of(job_id)])
 
 
 @router.post("/jobs/{job_id}/shares", response_model=ShareItem, status_code=201)
