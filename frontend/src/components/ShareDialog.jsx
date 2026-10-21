@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
+import Paper from "@mui/material/Paper";
 import TextField from "@mui/material/TextField";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
@@ -44,14 +41,14 @@ const renderRole = (r) => ROLE_LABEL[r];
 /** 한 사람 행 — 이니셜 아바타 · 이메일 · 오른쪽 컨트롤 */
 function PersonRow({ email, caption, children }) {
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}>
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, py: 0.75 }}>
       <Avatar
-        sx={(theme) => ({ width: 32, height: 32, fontSize: 14, fontWeight: 700, ...tintSx("primary")(theme) })}
+        sx={(theme) => ({ width: 28, height: 28, fontSize: 13, fontWeight: 700, ...tintSx("primary")(theme) })}
       >
         {(email || "?")[0].toUpperCase()}
       </Avatar>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="body2" noWrap>{email}</Typography>
+        <Typography variant="body2" noWrap title={email}>{email}</Typography>
         {caption && <Typography variant="caption" color="text.secondary">{caption}</Typography>}
       </Box>
       {children}
@@ -59,31 +56,48 @@ function PersonRow({ email, caption, children }) {
   );
 }
 
+const FixedRole = ({ role }) => (
+  <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>{ROLE_LABEL[role]}</Typography>
+);
+
 /**
- * 분석 결과 공유 (REQ-28) — 소유자(공동 소유자 포함)만 연다.
- * 상대는 이메일로 지정하고 기본 역할은 편집자다(생성 담당자가 미탐을 바로 고칠 수 있게, PLAN-28 § 결정).
- * 업로더는 맨 위 고정 행이다 — 인덱스 밖이라 해제·역할 변경 대상이 아니다(§ 결정 "업로더 보호").
+ * 분석 결과 공유 패널 (REQ-28) — 소유자(공동 소유자 포함)만 연다. 파일 이름은 옛 다이얼로그 그대로(계약 #28).
+ *
+ * 현황판 상세와 같은 오른쪽 패널이다(PLAN-28 § 결정 "공유 화면"). `jobs`가 공유 대상이고
+ * 패널이 열린 동안 목록 카드를 누르면 페이지가 여기에 더한다.
+ * - 1개면 사람 목록까지 — 업로더 고정 행, 내 행은 바꾸거나 해제할 수 없다
+ * - 2개 이상이면 추가만 — 분석마다 기존 API를 부르고 되는 것만 공유, 실패는 이름·이유로 보인다
  */
-export default function ShareDialog({ job, open, onClose }) {
+export default function ShareDialog({ jobs = [], open, onClose, onRemoveJob, myEmail = null }) {
   const [owner, setOwner] = useState(null);
   const [shares, setShares] = useState([]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("editor");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [result, setResult] = useState(null); // { total, failed: [{ name, message }] }
+
+  const single = jobs.length === 1 ? jobs[0] : null;
+  const singleId = single?.job_id;
 
   useEffect(() => {
-    if (!open || !job) return;
-    setEmail("");
-    setRole("editor");
+    setResult(null);
     setError("");
-    listShares(job.job_id)
+    setOwner(null);
+    setShares([]);
+    if (!open || !singleId) return undefined;
+    let alive = true;
+    listShares(singleId)
       .then((res) => {
+        if (!alive) return;
         setOwner(res.owner ?? null);
         setShares(res.shares);
       })
-      .catch((e) => setError(e.message));
-  }, [open, job]);
+      .catch((e) => alive && setError(e.message));
+    return () => { alive = false; };
+  }, [open, singleId]);
+
+  if (!open) return null;
 
   const run = async (fn) => {
     setBusy(true);
@@ -97,87 +111,160 @@ export default function ShareDialog({ job, open, onClose }) {
     }
   };
 
-  const handleAdd = () => run(async () => {
-    const added = await addShare(job.job_id, email.trim(), role);
-    setShares((prev) => [...prev.filter((s) => s.user_id !== added.user_id), added]);
-    setEmail("");
+  const handleShare = () => run(async () => {
+    const target = email.trim();
+    const failed = [];
+    let added = null;
+    for (const job of jobs) {
+      try {
+        added = await addShare(job.job_id, target, role);
+      } catch (e) {
+        failed.push({ name: resolveDocumentName(job), message: e.message });
+      }
+    }
+    if (single && added) {
+      setShares((prev) => [...prev.filter((s) => s.user_id !== added.user_id), added]);
+    }
+    if (failed.length < jobs.length) setEmail("");
+    setResult({ total: jobs.length, failed });
   });
 
   const handleRole = (userId, next) => run(async () => {
-    await updateShare(job.job_id, userId, next);
+    await updateShare(singleId, userId, next);
     setShares((prev) => prev.map((s) => (s.user_id === userId ? { ...s, role: next } : s)));
   });
 
   const handleRemove = (userId) => run(async () => {
-    await removeShare(job.job_id, userId);
+    await removeShare(singleId, userId);
     setShares((prev) => prev.filter((s) => s.user_id !== userId));
   });
 
+  const isMe = (e) => Boolean(myEmail) && e === myEmail;
+
   return (
-    <Dialog open={open} onClose={() => !busy && onClose()} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ pb: 0.5 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Icon icon="material-symbols:group-add-outline-rounded" style={{ fontSize: 22 }} />
-          분석 결과 공유
+    <Paper
+      data-testid="share-panel"
+      elevation={0}
+      sx={(theme) => ({
+        width: { xs: "100%", md: 340 },
+        maxHeight: { xs: "50%", md: "none" },
+        flexShrink: 0,
+        minHeight: 0,
+        borderRadius: 2,
+        p: 2,
+        boxShadow: theme.customShadows?.card,
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        overflowY: "auto",
+      })}
+    >
+      {/* 머리 — 현황판 상세와 같은 제목 + 닫기 */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Box sx={{ display: "flex", color: "primary.main" }}>
+          <Icon icon="material-symbols:group-add-outline-rounded" style={{ fontSize: 20 }} />
         </Box>
-        <Typography component="div" variant="body2" color="text.secondary" noWrap sx={{ mt: 0.5 }}>
-          {job && resolveDocumentName(job)}
+        <Typography variant="subtitle2" sx={{ flex: 1 }}>분석 결과 공유</Typography>
+        <IconButton size="small" aria-label="닫기" onClick={onClose} disabled={busy}>
+          <Icon icon="material-symbols:close-rounded" style={{ fontSize: 18 }} />
+        </IconButton>
+      </Box>
+
+      {/* 공유 대상 */}
+      <Box>
+        <Typography variant="caption" color="text.secondary">
+          공유할 분석 {jobs.length}개 · 목록에서 카드를 눌러 더하거나 뺍니다
         </Typography>
-      </DialogTitle>
+        <Box sx={{ mt: 0.75, display: "flex", flexDirection: "column", gap: 0.5 }}>
+          {jobs.map((job) => (
+            <Box
+              key={job.job_id}
+              sx={(theme) => ({
+                display: "flex", alignItems: "center", gap: 1, pl: 1.25, pr: 0.5, py: 0.5, borderRadius: 1,
+                ...tintSx("primary")(theme),
+              })}
+            >
+              <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>{resolveDocumentName(job)}</Typography>
+              {jobs.length > 1 && (
+                <IconButton size="small" aria-label="대상에서 빼기" onClick={() => onRemoveJob?.(job.job_id)} disabled={busy}>
+                  <Icon icon="material-symbols:close-rounded" style={{ fontSize: 14 }} />
+                </IconButton>
+              )}
+            </Box>
+          ))}
+        </Box>
+      </Box>
 
-      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "16px !important" }}>
-        {error && <Alert severity="error">{error}</Alert>}
-
-        <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
-          <TextField
-            size="small" fullWidth autoFocus
-            label="이메일"
-            placeholder="name@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && email.trim()) handleAdd(); }}
-            disabled={busy}
-          />
+      {/* 입력 */}
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <TextField
+          size="small" fullWidth autoFocus
+          label="이메일"
+          placeholder="name@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && email.trim() && jobs.length) handleShare(); }}
+          disabled={busy}
+        />
+        <Box sx={{ display: "flex", gap: 1 }}>
           <Select
             size="small" value={role} disabled={busy} data-testid="share-new-role"
             onChange={(e) => setRole(e.target.value)} renderValue={renderRole}
-            sx={{ minWidth: 104 }}
+            sx={{ flex: 1 }}
           >
             {roleItems}
           </Select>
-          <Button variant="contained" onClick={handleAdd} disabled={busy || !email.trim()} sx={{ flexShrink: 0, height: 40 }}>
-            추가
+          <Button variant="contained" onClick={handleShare} disabled={busy || !email.trim() || jobs.length === 0}>
+            공유
           </Button>
         </Box>
+      </Box>
 
+      {error && <Alert severity="error">{error}</Alert>}
+
+      {result && (jobs.length > 1 || result.failed.length > 0) && (
+        <Alert severity={result.failed.length ? "warning" : "success"}>
+          {result.total}개 중 {result.total - result.failed.length}개 공유됨
+          {result.failed.map((f) => (
+            <Typography key={f.name} variant="caption" component="div">{`${f.name} — ${f.message}`}</Typography>
+          ))}
+        </Alert>
+      )}
+
+      {/* 사람 목록 — 1개일 때만 */}
+      {single && (
         <Box>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-            접근할 수 있는 사람
-          </Typography>
+          <Typography variant="caption" color="text.secondary">접근할 수 있는 사람</Typography>
           {owner && (
-            <PersonRow email={owner.email} caption="업로더">
-              <Typography variant="body2" color="text.secondary" sx={{ px: 1.5 }}>{ROLE_LABEL.owner}</Typography>
+            <PersonRow email={owner.email} caption={isMe(owner.email) ? "업로더 · 나" : "업로더"}>
+              <FixedRole role="owner" />
             </PersonRow>
           )}
           {shares.map((s) => (
             <Box key={s.user_id}>
               <Divider />
-              <PersonRow email={s.email}>
-                <Select
-                  size="small" variant="standard" disableUnderline value={s.role} disabled={busy}
-                  onChange={(e) => handleRole(s.user_id, e.target.value)} renderValue={renderRole}
-                  sx={{ fontSize: 14, color: "text.secondary" }}
-                >
-                  {roleItems}
-                </Select>
-                <Tooltip title="공유 해제">
-                  <span>
-                    <IconButton size="small" aria-label="공유 해제" onClick={() => handleRemove(s.user_id)} disabled={busy}>
-                      <Icon icon="material-symbols:close-rounded" style={{ fontSize: 18 }} />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </PersonRow>
+              {isMe(s.email) ? (
+                <PersonRow email={s.email} caption="나">
+                  <FixedRole role={s.role} />
+                </PersonRow>
+              ) : (
+                <PersonRow email={s.email}>
+                  <Select
+                    size="small" variant="standard" disableUnderline value={s.role} disabled={busy}
+                    onChange={(e) => handleRole(s.user_id, e.target.value)} renderValue={renderRole}
+                    sx={{ fontSize: 14, color: "text.secondary" }}
+                  >
+                    {roleItems}
+                  </Select>
+                  <Tooltip title="공유 해제">
+                    <span>
+                      <IconButton size="small" aria-label="공유 해제" onClick={() => handleRemove(s.user_id)} disabled={busy}>
+                        <Icon icon="material-symbols:close-rounded" style={{ fontSize: 16 }} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </PersonRow>
+              )}
             </Box>
           ))}
           {shares.length === 0 && (
@@ -186,11 +273,7 @@ export default function ShareDialog({ job, open, onClose }) {
             </Typography>
           )}
         </Box>
-      </DialogContent>
-
-      <DialogActions sx={{ px: 3, pb: 2.5 }}>
-        <Button onClick={onClose} disabled={busy} variant="outlined" color="inherit">완료</Button>
-      </DialogActions>
-    </Dialog>
+      )}
+    </Paper>
   );
 }

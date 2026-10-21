@@ -68,6 +68,7 @@ function thicknessOf(count) {
  *   subtitle?: string,
  *   tags?: string[],
  *   badge?: { label: string, color?: string },
+ *   cornerBadge?: { label: string, color?: string, variant?: string },   // 표지 왼쪽 아래 (REQ-28 역할)
  *   questionCount?: number | null,
  *   colorKey?: string,
  *   disabled?: boolean,
@@ -84,6 +85,7 @@ export default function BookCard({
   subtitle,
   tags = [],
   badge,
+  cornerBadge,
   questionCount = null,
   colorKey,
   disabled = false,
@@ -233,6 +235,18 @@ export default function BookCard({
                     bgcolor: "background.paper",
                   }),
                 }}
+              />
+            </Box>
+          )}
+
+          {cornerBadge && (
+            <Box sx={{ position: "absolute", bottom: 6, left: SPINE_W + 8 }}>
+              <Chip
+                label={cornerBadge.label}
+                size="small"
+                color={cornerBadge.color ?? "default"}
+                variant={cornerBadge.variant ?? "outlined"}
+                sx={{ fontSize: 10, height: 18, bgcolor: "background.paper" }}
               />
             </Box>
           )}

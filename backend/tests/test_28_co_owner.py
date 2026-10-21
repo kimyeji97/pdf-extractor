@@ -89,3 +89,25 @@ def test_28_50_공동_소유자가_업로더_이메일로_공유하면_400(clien
     res = _post_share(client, job_id, b["access_token"], "28-50-uploader@example.com", role="viewer")
 
     assert res.status_code == 400
+
+
+# ── Phase 7: 본인 권한 ─────────────────────────────────────
+
+def test_28_53_공동_소유자가_자기_역할을_바꾸면_400(client, isolated_storage):
+    """근거: PLAN § 결정 — "서버도 자기 자신을 대상으로 한 역할 변경·해제를 400으로 막는다" """
+    _, b, job_id = _co_owned(client, isolated_storage, "53")
+
+    res = client.patch(
+        f"/api/jobs/{job_id}/shares/{b['user_id']}", json={"role": "viewer"}, headers=_headers(b["access_token"])
+    )
+
+    assert res.status_code == 400
+
+
+def test_28_54_공동_소유자가_자기를_해제하면_400(client, isolated_storage):
+    """근거: PLAN § 결정 — 상동"""
+    _, b, job_id = _co_owned(client, isolated_storage, "54")
+
+    res = client.delete(f"/api/jobs/{job_id}/shares/{b['user_id']}", headers=_headers(b["access_token"]))
+
+    assert res.status_code == 400

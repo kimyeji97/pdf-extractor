@@ -45,6 +45,12 @@ def _owned_job(job_id: str, current_user: dict):
     return job
 
 
+def _not_self(user_id: str, current_user: dict) -> None:
+    """자기 역할 변경·해제는 막는다 — 공동 소유자가 실수로 자기를 내리면 되돌릴 사람이 없다(PLAN-28 § 결정 "본인 권한")."""
+    if user_id == current_user.get("user_id"):
+        raise HTTPException(status_code=400, detail="본인의 권한은 바꿀 수 없습니다.")
+
+
 def _item(user_id: str, role: str) -> ShareItem:
     user = storage.get_user(user_id) or {}
     return ShareItem(user_id=user_id, email=user.get("email", ""), role=role)
@@ -76,6 +82,7 @@ def update_share(
     job_id: str, user_id: str, body: ShareUpdate, current_user: dict = Depends(auth_service.get_current_user)
 ):
     _owned_job(job_id, current_user)
+    _not_self(user_id, current_user)
     if not any(e["user_id"] == user_id for e in share_service.shares_of(job_id)):
         raise HTTPException(status_code=404, detail="공유 항목이 없습니다.")
     share_service.put_share(job_id, user_id, body.role)
@@ -85,6 +92,7 @@ def update_share(
 @router.delete("/jobs/{job_id}/shares/{user_id}", status_code=204)
 def delete_share(job_id: str, user_id: str, current_user: dict = Depends(auth_service.get_current_user)):
     _owned_job(job_id, current_user)
+    _not_self(user_id, current_user)
     if not share_service.remove_share(job_id, user_id):
         raise HTTPException(status_code=404, detail="공유 항목이 없습니다.")
     return Response(status_code=204)

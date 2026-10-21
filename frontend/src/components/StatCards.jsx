@@ -114,6 +114,8 @@ export default function StatsBoard({
   backgroundRefreshTrigger = 0,
   detailContainer = null,
   onSelectFile,
+  closeDetailSignal = 0,   // 바뀌면 상세를 닫는다 — 같은 자리에 공유 패널이 열릴 때 (REQ-28 Phase 7)
+  onDetailOpen,
 }) {
   const [stats, setStats] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -144,6 +146,12 @@ export default function StatsBoard({
     };
   }, [backgroundRefreshTrigger]);
 
+  useEffect(() => {
+    if (closeDetailSignal === 0) return;
+    setOpenField(null);
+    setDetail(null);
+  }, [closeDetailSignal]);
+
   const handleTileClick = (tile) => {
     if (!tile.clickable) return;
 
@@ -154,6 +162,7 @@ export default function StatsBoard({
     }
 
     setOpenField(tile.field);
+    onDetailOpen?.();
     setDetail(null);
     setDetailLoading(true);
     getStatsDetail(tile.field)

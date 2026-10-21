@@ -29,7 +29,7 @@ beforeEach(() => {
 const renderDialog = () =>
   render(
     <ThemeProvider>
-      <ShareDialog job={{ job_id: 'j1', filename: 'a.pdf' }} open onClose={() => {}} />
+      <ShareDialog jobs={[{ job_id: 'j1', filename: 'a.pdf' }]} open onClose={() => {}} />
     </ThemeProvider>,
   );
 
