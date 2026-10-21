@@ -40,6 +40,7 @@ import {
   getWorkbook,
   listTemplates,
   getAllQuestions,
+  getJobInfo,
 } from "api/client";
 import { missingQuestionIds } from "utils/missingSelections";
 import { tintSx } from "theme/tint";
@@ -102,14 +103,23 @@ export default function EditorPage() {
   const resizingRef = useRef(null);
 
   // 복원한 선택 중 지워졌거나 공유가 해제된 문항을 "삭제된 문항"으로 표시한다 (REQ-28).
-  // 예전엔 썸네일이 깨진 채 남고 재생성 때 에러 없이 빠졌다. 접근 못 하는 job 은 null 로 넘긴다
+  // 예전엔 썸네일이 깨진 채 남고 재생성 때 에러 없이 빠졌다.
+  // 확실할 때만 판정한다 — 404 만 "접근 불가"(null)이고, 감지가 끝나지 않았거나(재감지 중엔 문항이 비어 온다)
+  // 다른 오류면 그 job 은 건너뛴다. 아니면 멀쩡한 문항을 빼라고 안내하게 된다(/review 28 회차 0)
   const markMissing = useCallback(async (restored) => {
     const jobIds = [...new Set(restored.map((b) => b.jobId))];
-    const entries = await Promise.all(jobIds.map((jid) =>
-      getAllQuestions(jid)
-        .then((res) => [jid, res.pages.flatMap((p) => p.questions.map((q) => q.question_id))])
-        .catch(() => [jid, null])));
-    const missing = missingQuestionIds(restored, Object.fromEntries(entries));
+    const entries = await Promise.all(jobIds.map(async (jid) => {
+      try {
+        const info = await getJobInfo(jid);
+        if (info.boundaries_status !== "DONE") return null;
+        const res = await getAllQuestions(jid);
+        return [jid, res.pages.flatMap((p) => p.questions.map((q) => q.question_id))];
+      } catch (e) {
+        return e.status === 404 ? [jid, null] : null;
+      }
+    }));
+    const known = Object.fromEntries(entries.filter(Boolean));
+    const missing = missingQuestionIds(restored.filter((b) => b.jobId in known), known);
     if (missing.size === 0) return;
     setBasket((prev) => prev.map((b) => (missing.has(b.questionId) ? { ...b, missing: true } : b)));
   }, []);

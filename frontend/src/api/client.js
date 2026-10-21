@@ -288,9 +288,9 @@ export async function getJobInfo(jobId) {
   // apiFetch를 거치지 않는 raw fetch지만(계약 #26), /api/jobs/{id}는 REQ-27 Phase 2로
   // 보호 라우트가 됐다 — 헤더만 직접 붙인다(딤 처리·401 재시도는 그대로 없다).
   const res = await fetch(`${BASE_URL}/jobs/${jobId}`, { headers: _authHeaders() });
-  if (!res.ok) throw new Error("job 정보 조회 실패");
+  if (!res.ok) throw Object.assign(new Error("job 정보 조회 실패"), { status: res.status }); // 404 = 못 보는 job (REQ-28)
   return res.json();
-  // { job_id, filename, status, boundaries_status, total_question_count, ... }
+  // { job_id, filename, status, boundaries_status, total_question_count, my_role, ... }
 }
 
 /**
