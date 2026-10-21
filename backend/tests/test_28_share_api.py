@@ -105,10 +105,10 @@ def test_28_24_해제하면_상대_목록에서_빠진다(client, isolated_stora
     assert job_id not in ids
 
 
-def test_28_25_역할에_owner를_보내면_422(client, isolated_storage):
-    """근거: PLAN § 범위 — 공유로 주는 역할은 편집자·뷰어뿐(§ 결정 "공유할 때 역할을 고른다")"""
+def test_28_25_역할에_3종_밖의_값을_보내면_422(client, isolated_storage):
+    """근거: PLAN § 범위 — "역할 3종: 소유자 · 편집자 · 뷰어" (Phase 6에서 owner 가 허용돼 값만 바꿈)"""
     a, _, job_id = _stage(client, isolated_storage, "25")
 
-    res = _post_share(client, job_id, a["access_token"], "28-25-target@example.com", role="owner")
+    res = _post_share(client, job_id, a["access_token"], "28-25-target@example.com", role="admin")
 
     assert res.status_code == 422

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
@@ -26,10 +27,11 @@ import usePaginatedList from "hooks/usePaginatedList";
 import useDebouncedValue from "hooks/useDebouncedValue";
 import { useNotificationRefresh } from "hooks/useNotificationRefresh";
 import { useStatusEvents } from "contexts/NotificationContext";
-import { detectionBadge } from "utils/badges";
+import { detectionBadge, ROLE_CHIP } from "utils/badges";
 import { resolveDocumentName, resolveFileSubtitle, stripExtension } from "utils/documentName";
 import { isEntryBlocked } from "utils/jobStatus";
-import { canEdit, isOwner, ROLE_LABEL } from "utils/jobRole";
+import { canEdit, isOwner } from "utils/jobRole";
+import { useAuth } from "contexts/AuthContext";
 import { listJobs, requestUploadUrl, uploadPdf, updateJobMeta, deleteJob } from "api/client";
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/api$/, "");
@@ -80,7 +82,7 @@ function UploadCard({ onClick }) {
 
 // 감지 상태 → 표지 위 배지 — 색·이름은 `utils/badges` 단일 정의 (REQ-F14)
 
-function JobCard({ job, onClick, onEdit, onDelete, onShare }) {
+function JobCard({ job, onClick, onEdit, onDelete, onShare, selected = false }) {
   // 썸네일 URL은 결정적(deterministic)이라 /pages 호출 없이 직접 조립한다 (REQ-P02-02).
   // 카드 N개 = 전체 PDF N번 재다운로드+파싱이던 목록 로딩 병목 제거.
   const coverUrl = `${API_ROOT}/api/jobs/${job.job_id}/pages/0/thumbnail`;
@@ -102,10 +104,12 @@ function JobCard({ job, onClick, onEdit, onDelete, onShare }) {
       coverUrl={coverUrl}
       title={resolveDocumentName(job)}
       caption={resolveFileSubtitle(job)}
-      // 공유받은 분석은 역할을 앞세운다 (REQ-28)
+      // 역할은 표지 칩으로, 편집자·뷰어로 받은 분석은 부제에 "공유받음"을 남긴다 (REQ-28 Phase 7)
       subtitle={isOwner(job)
         ? relativeTime(job.uploaded_at)
-        : `공유받음 · ${ROLE_LABEL[job.my_role]} · ${relativeTime(job.uploaded_at)}`}
+        : `공유받음 · ${relativeTime(job.uploaded_at)}`}
+      cornerBadge={ROLE_CHIP[job.my_role ?? "owner"]}
+      selected={selected}
       tags={job.workbook_types || []}
       badge={badge}
       // 두께는 감지된 문항 수에 연동한다 (감지 전/실패는 가장 얇게)
@@ -231,7 +235,19 @@ export default function AnalysisFilePage() {
   };
 
   // ── 공유 (REQ-28) ───────────────────────────────────
-  const [shareJob, setShareJob] = useState(null);
+  // 공유 패널 (REQ-28 Phase 7) — 현황판 상세 자리에 열린다. 열려 있는 동안 카드 클릭 = 공유 대상 고르기
+  const [shareJobs, setShareJobs] = useState([]);
+  const [statsCloseSignal, setStatsCloseSignal] = useState(0);
+  const sharing = shareJobs.length > 0;
+  const myEmail = useAuth()?.userEmail ?? null;
+  const openShare = (job) => {
+    setStatsCloseSignal((n) => n + 1);
+    setShareJobs([job]);
+  };
+  const toggleShareJob = (job) =>
+    setShareJobs((prev) => (prev.some((j) => j.job_id === job.job_id)
+      ? prev.filter((j) => j.job_id !== job.job_id)
+      : [...prev, job]));
 
   // ── 삭제 (연관 저장물 전체) ────────────────────────────
   const [deleteJobTarget, setDeleteJob]   = useState(null);
@@ -275,6 +291,10 @@ export default function AnalysisFilePage() {
   };
 
   const handleCardClick = (job) => {
+    if (sharing) {
+      if (isOwner(job)) toggleShareJob(job); // 공유 대상은 소유자인 분석만
+      return;
+    }
     navigate(`/analysis/${job.job_id}`);
   };
 
@@ -330,6 +350,8 @@ export default function AnalysisFilePage() {
         refreshTrigger={statsTrigger}
         backgroundRefreshTrigger={bgStatsTrigger}
         detailContainer={detailHost}
+        closeDetailSignal={statsCloseSignal}
+        onDetailOpen={() => setShareJobs([])}
         onSelectFile={(jobId, page) =>
           navigate(page ? `/analysis/${jobId}?page=${page}` : `/analysis/${jobId}`)
         }
@@ -427,7 +449,8 @@ export default function AnalysisFilePage() {
               onClick={handleCardClick}
               onEdit={openEdit}
               onDelete={setDeleteJob}
-              onShare={setShareJob}
+              onShare={openShare}
+              selected={shareJobs.some((j) => j.job_id === job.job_id)}
             />
           ))
         )}
@@ -461,7 +484,16 @@ export default function AnalysisFilePage() {
       </Box>
       </Box>
 
-      <ShareDialog job={shareJob} open={Boolean(shareJob)} onClose={() => setShareJob(null)} />
+      {detailHost && createPortal(
+        <ShareDialog
+          jobs={shareJobs}
+          open={sharing}
+          onClose={() => setShareJobs([])}
+          onRemoveJob={(id) => setShareJobs((prev) => prev.filter((j) => j.job_id !== id))}
+          myEmail={myEmail}
+        />,
+        detailHost,
+      )}
 
       {/* ── 삭제 확인 다이얼로그 ───────────────────────── */}
       <Dialog

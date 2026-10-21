@@ -49,3 +49,10 @@ export const HIGH_INFO_CHIP = { color: "secondary", variant: "filled" };
 
 /** 편집 복원 때 지워졌거나 공유가 해제된 문항 (REQ-28) — 그대로 생성하면 조용히 빠진다 */
 export const MISSING_CHIP = { label: "삭제된 문항", color: "error", variant: "outlined" };
+
+/** 목록 카드의 내 역할 (REQ-28 Phase 7) — 표지 왼쪽 아래. 테두리형이라 상태 배지(채움형)와 모양으로 갈린다 */
+export const ROLE_CHIP = {
+  owner: { label: "소유자", color: "primary", variant: "outlined" },
+  editor: { label: "편집자", color: "info", variant: "outlined" },
+  viewer: { label: "뷰어", color: "default", variant: "outlined" },
+};
