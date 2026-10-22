@@ -5,7 +5,7 @@
 - **결론 ①** 현재 dev 사양(0.5 vCPU / 1GB)은 오픈 기준 사용량 피크에서 **OOM으로 죽는다**
 - **결론 ②** 운영 **최소 1 vCPU / 2GB, 권장 2 vCPU / 4GB**
 - **결론 ③** 사양만으로는 목표("모든 API 1s 미만")를 못 맞춘다 — **Cloudflare Tunnel 지연**과 **데이터 비례 API**(현황판 계열)는 사양과 무관
-- 측정 원본·판단 경위: [`docs/PROGRESS.md`](../PROGRESS.md) 2026-10-01 · 계획서 [`PLAN-P06`](../plans/PLAN-P06-api-latency-during-analysis.md)
+- 측정 원본·판단 경위: [`docs/PROGRESS.md`](../PROGRESS.md) 2026-10-01 · 계획서 [`PLAN-P06`](../plans/archive/PLAN-P06-api-latency-during-analysis.md)
 
 ---
 

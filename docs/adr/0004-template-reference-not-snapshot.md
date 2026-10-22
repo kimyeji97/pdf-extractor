@@ -59,7 +59,7 @@ REQ-30에서 표지·각주·워터마크를 묶은 "템플릿" 엔티티를 도
 
 dangling은 이 결정에 딸린 비용이므로 두 겹으로 닫는다 — 자산 삭제 시 참조 검사 후 차단
 (사용자가 명시적으로 강제 삭제를 고를 수 있다), 생성 요청 시점에 참조 검증 후 400.
-상세는 [PLAN-30](../plans/PLAN-30-template-entity.md) `## 결정`.
+상세는 [PLAN-30](../plans/archive/PLAN-30-template-entity.md) `## 결정`.
 
 **Rationale:**
 
@@ -119,5 +119,5 @@ dangling은 이 결정에 딸린 비용이므로 두 겹으로 닫는다 — 자
 - 자산 삭제 경로가 템플릿 전수 스캔을 하게 된다(개수가 적어 비용은 무시 가능하나, 스토리지
   백엔드 양쪽에 목록 조회가 생긴다)
 
-> 관련: [PLAN-30](../plans/PLAN-30-template-entity.md) · REQ-29(각주·워터마크 CRUD) ·
+> 관련: [PLAN-30](../plans/archive/PLAN-30-template-entity.md) · REQ-29(각주·워터마크 CRUD) ·
 > 계약 #23(필드의 **존재 여부**가 저장 주체를 가른다 — `template_id`에 기본값을 채우면 안 되는 이유)

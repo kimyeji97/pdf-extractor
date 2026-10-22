@@ -1,6 +1,6 @@
 # ADR-0005 · 인증은 세션 쿠키가 아니라 JWT(access+refresh)로 한다
 
-> 상태: 채택 · 날짜: 2026-09-14 · 출처: [PLAN-27-login-registration](../plans/PLAN-27-login-registration.md)
+> 상태: 채택 · 날짜: 2026-09-14 · 출처: [PLAN-27-login-registration](../plans/archive/PLAN-27-login-registration.md)
 
 ## 맥락
 

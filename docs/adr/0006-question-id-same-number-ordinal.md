@@ -1,6 +1,6 @@
 # ADR-0006 · 문항 식별자에 "같은 쪽·같은 번호 안 순번 k"를 항상 붙인다
 
-> 상태: 채택 · 날짜: 2026-09-29 · 출처: [PLAN-B20-invisible-number-and-id-collision](../plans/PLAN-B20-invisible-number-and-id-collision.md) · 대체: [ADR-0002](0002-question-id-composite-key.md)
+> 상태: 채택 · 날짜: 2026-09-29 · 출처: [PLAN-B20-invisible-number-and-id-collision](../plans/archive/PLAN-B20-invisible-number-and-id-collision.md) · 대체: [ADR-0002](0002-question-id-composite-key.md)
 
 ## 맥락
 

@@ -23,12 +23,12 @@
 - [x] F09 Phase 6 지연 상한 → **P04 실측으로 해소, ≤ 2s(SSE와 동일)**
 
 ### 2. 후속 작업 ✅ 2026-08-28 완료 (완료 REQ에서 파생된 것 + 1단계 결정에서 생긴 코드 작업)
-- [x] **REQ-C09** ✅ 2026-08-28 (PR #4 main 머지 `91a911a`) 알림 경로 후속 묶음 — 아래 4건 ([계획서](plans/PLAN-C09-notification-followups.md), 2026-08-28)
+- [x] **REQ-C09** ✅ 2026-08-28 (PR #4 main 머지 `91a911a`) 알림 경로 후속 묶음 — 아래 4건 ([계획서](plans/archive/PLAN-C09-notification-followups.md), 2026-08-28)
   - [x] F09: 재감지·생성 실패 문구를 알림 `message`로 대체 (소)
   - [x] F09: `useNotificationRefresh`에 `kind` 옵션 — 분석 목록 `detection`·생성 이력 `export`만 재조회 (소)
   - [x] P04: 계약 #26 회귀 케이스 — 스트림 이벤트 뒤 `GlobalDim`이 DOM에 없음 (테스트만, 소)
   - [x] P04: `: connected` 선발송 — edge가 첫 바이트까지 헤더를 붙잡아 `EventSource`가 최대 30s CONNECTING (백엔드, 소)
-- [x] **REQ-P05** ✅ 2026-08-28 (PR #5 main 머지 `6fba551`) 알림 전달 지연 ([계획서](plans/PLAN-P05-notification-latency.md), 2026-08-28 · 목표 뱃지 ≤ 5s · GET ≤ 1.5s)
+- [x] **REQ-P05** ✅ 2026-08-28 (PR #5 main 머지 `6fba551`) 알림 전달 지연 ([계획서](plans/archive/PLAN-P05-notification-latency.md), 2026-08-28 · 목표 뱃지 ≤ 5s · GET ≤ 1.5s)
   - [x] 감지 완료 알림을 프리워밍 앞으로 — 재감지·최초 감지 두 경로 (중)
   - [x] 첫 진입 피드 GET 3.79s → 건별 읽기 병렬화 (소~중)
   - [x] 콜드 태스크 `onopen` ~31s — 조사 결과 **재현 안 됨**(1004·269·344ms), 원인은 edge 상태로 추정·재현 조건 불명
@@ -37,14 +37,14 @@
 ### 3. 화면 기능 — D09 → F10 → D10 → 아래 "신규 항목"
 - [x] **REQ-D09** 생성 이력 화면 개편 — 목록을 문항 분석과 동일 UI로 + 클릭 시 아코디언 미리보기 (중) — ✅ 2026-09-03
 - [x] **REQ-F10** 생성 이력 검색 — `list_workbooks` 서버 검색 선행(페이지네이션, P03-03과 같은 이유) (소~중) — ✅ 2026-09-03
-- [x] **REQ-D10** 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존, [계획서](plans/PLAN-D10-question-grid-columns.md) 배경 절에 명시) (소) — ✅ 2026-09-03 (PR #8 main 머지 `48e445d`. 오탐 배지 육안은 다음 dev 배포 후)
+- [x] **REQ-D10** 문항 목록 n×n 바둑판 배열 — 임계 420px 초과 시에만 열 수 증가(D01과 공존, [계획서](plans/archive/PLAN-D10-question-grid-columns.md) 배경 절에 명시) (소) — ✅ 2026-09-03 (PR #8 main 머지 `48e445d`. 오탐 배지 육안은 다음 dev 배포 후)
 - [x] 신규 항목 — 2026-09-03 번호 부여·순서 확정: **REQ-D11 → REQ-B12 → REQ-F12 → REQ-29 → REQ-30** (테마는 REQ-30 뒤 재정의, 번호 보류). 아래 "신규 항목" 절
       → **5개 전부 완료(2026-09-04 ~ 09-13).** 남은 것은 번호 보류 중인 테마 항목뿐이고,
       REQ-30이 생겼으므로 이제 "템플릿 속성으로 흡수할지"를 판단할 수 있다
 
 ### 4. 서버 영역 버그 (문항 추출 여백) — ✅ 완료 (2026-09-21)
 - [x] **REQ-B13** 문항 추출 여백 — 두 줄이 같은 원인이라 한 REQ로 묶었다
-      ([계획서](plans/PLAN-B13-crop-margin-uniform.md), 2026-09-13)
+      ([계획서](plans/archive/PLAN-B13-crop-margin-uniform.md), 2026-09-13)
   - [x] 문항 추출 시 하단 여백 불일치 — Phase 1 완료(고정 10pt + 마지막 문항 규칙 통일)
   - [x] 문항 추출 시 좌/우/상 여백 통일 — Phase 1 완료(네 변 모두 10pt, 상수 하나 공유)
   - [x] Phase 2 완료(2026-09-21) — 기출 PDF 4종·문항 1,141개 실측. 오탐 개수 사실상
@@ -74,7 +74,7 @@
       유지)라 문제가 없었다. **해결**: `:latest` + `JWT_SECRET_KEY`로 rev 4를 등록해 최신 리비전으로 만들고(1번과 묶음),
       rev 3은 deregister해서 콘솔 기본값이 프로브를 가리키지 않게 한다
 - [x] **밀린 dev 프론트 재배포** ✅ 2026-09-28 (REQ-27 백엔드 배포에 딸려 사용자가 `wrangler deploy`, 로그인 화면 확인)
-- [x] **→ REQ-E02** ✅ 2026-10-05([계획서](plans/PLAN-E02-prod-environment.md) — 리뷰 TODO 4건은 루트 `TODO.md`) · prod 환경 분리 — **사양 근거: [perf-infra-capacity.md](infra/perf-infra-capacity.md)**(최소 1 vCPU/2GB · 권장 2 vCPU/4GB, 2026-10-01 실측) (현재 dev 하나 — 백엔드 desired 0 토글 운영, 프론트 wrangler 수동 배포)
+- [x] **→ REQ-E02** ✅ 2026-10-05([계획서](plans/archive/PLAN-E02-prod-environment.md) — 리뷰 TODO 4건은 루트 `TODO.md`) · prod 환경 분리 — **사양 근거: [perf-infra-capacity.md](infra/perf-infra-capacity.md)**(최소 1 vCPU/2GB · 권장 2 vCPU/4GB, 2026-10-01 실측) (현재 dev 하나 — 백엔드 desired 0 토글 운영, 프론트 wrangler 수동 배포)
 - [ ] 프론트 자동 배포(CI/CD) / 백엔드 배포 파이프라인 — 현재 `.github/workflows` 없음. 프론트는
       main push 시 빌드(`VITE_API_BASE_URL` 주입) + `wrangler deploy`, Cloudflare API 토큰 secret 필요
 - [ ] **전체 인프라 구성 이해** (2026-09-28) — Cloudflare(DNS·Workers·Tunnel·R2) ↔ AWS(ECR·ECS Fargate·
@@ -84,7 +84,7 @@
 - ❌ REQ-E01 감지 진행률 스트리밍 — 차후, P04(SSE) 위에 재검토 가능
 
 ### 7. dev 확인 중 발견 (2026-09-28, B17·B18 배포 `c17f884` 후 — B17 Phase 4를 막고 있음)
-- [x] **분석 실패 파일 상세 화면이 "Failed to fetch"** (🔴 먼저) → **REQ-B19로 번호 부여**([계획서](plans/PLAN-B19-lookup-path-sync-detection.md)) — 2026-09-29 Phase 1·2 완료, PR #22 main 머지(`46c464e`). ✅ Phase 3 dev 확인 완료 — **B19 완료** — 시작 시 FAILED로 바뀐 `내신마스터`(212쪽, job `5065d74a…`)
+- [x] **분석 실패 파일 상세 화면이 "Failed to fetch"** (🔴 먼저) → **REQ-B19로 번호 부여**([계획서](plans/archive/PLAN-B19-lookup-path-sync-detection.md)) — 2026-09-29 Phase 1·2 완료, PR #22 main 머지(`46c464e`). ✅ Phase 3 dev 확인 완료 — **B19 완료** — 시작 시 FAILED로 바뀐 `내신마스터`(212쪽, job `5065d74a…`)
       상세 진입 시 `/api/jobs/{id}/questions`·`/pages/0/questions`가 **30초 뒤 504**(`TimeoutMiddleware`, 백엔드 로그 확인),
       브라우저엔 CORS 에러로 보임. 그래서 재감지 버튼까지 못 가 **재감지 테스트 불가**.
       **원인(코드·로그 확인)**: FAILED job은 경계 캐시가 없어 두 엔드포인트가 **요청 안에서 동기 감지**로 폴백한다
@@ -93,7 +93,7 @@
       (PLAN-B17 § 범위 — 제외 "요청 경로 안의 동기 감지"). 방향 후보: FAILED/캐시 없음이면 조회에서 감지하지 말고
       빈 결과 + 재감지 유도 · 폴백도 세마포어 안으로 · 백그라운드로 넘기기 — `/workplan`에서 결정.
       ⚠️ 504에 CORS 헤더가 없던 것은 계약 #8(미들웨어 순서)이 지켜져 있는데도 난 현상이라 **원인 미확인** — 같이 볼 것
-- [x] **→ REQ-P06** ✅ 2026-10-02([계획서](plans/PLAN-P06-api-latency-during-analysis.md) — 현황판 API 캐시 · 감지·썸네일 렌더링 자식 프로세스 · 2 vCPU/4GB, 터널 경유 모든 API p90 < 1s) · **API 전반이 느림** — 목록 화면 `/api/stats` 9.06s · `/api/jobs` 5.64s · `/api/notifications` 3.04s.
+- [x] **→ REQ-P06** ✅ 2026-10-02([계획서](plans/archive/PLAN-P06-api-latency-during-analysis.md) — 현황판 API 캐시 · 감지·썸네일 렌더링 자식 프로세스 · 2 vCPU/4GB, 터널 경유 모든 API p90 < 1s) · **API 전반이 느림** — 목록 화면 `/api/stats` 9.06s · `/api/jobs` 5.64s · `/api/notifications` 3.04s.
       **추정(미검증)**: 위 항목의 폭주한 동기 감지가 0.5 vCPU를 점유한 시점과 겹친다(로그상 504 직후 stats 응답).
       위 항목을 고친 뒤 재측정해서 여전히 느리면 별도 원인(stats 집계·R2 왕복 등)을 조사
       → 2026-09-29 B19 배포 후 `/api/stats` 0.87~0.98s(9.06s → 약 1/10). `/api/jobs`·`/api/notifications`는 미측정(인증 필요)
@@ -119,7 +119,7 @@
 - [x] **→ REQ-C10**(2026-10-01 ✅, PR #27) · **감지 문항 이름을 원문으로 표시** — "문항 1" 대신 원문("유형 01" 등). 화면 표시 이름일 뿐 식별자는 아니다.
       B20에서 분리(2026-09-29 사용자 결정). 계약 #12(프론트·PDF 라벨 동기화)와 엮이는지 확인할 것
 
-### 9. REQ-B19 미결 이관 (2026-09-29 — B19 종결 시 넘김, [계획서](plans/PLAN-B19-lookup-path-sync-detection.md) § 미결 질문)
+### 9. REQ-B19 미결 이관 (2026-09-29 — B19 종결 시 넘김, [계획서](plans/archive/PLAN-B19-lookup-path-sync-detection.md) § 미결 질문)
 - [x] **→ REQ-B22** · **FAILED 파일 상세 안내 문구** — 조회가 캐시 없으면 빈 결과라 FAILED 파일은 "문항 0개"로만 보인다(2026-09-29 dev 확인 때도 그랬다).
       "감지 실패, 재감지하세요" 같은 안내를 넣을지. 진입 차단 모달 `reason`에는 processing·조회 실패 둘뿐이다. §8 UX 항목과 묶어 볼 만하다
 - [x] **→ REQ-B22** · **`DONE`인데 경계 캐시가 없는 job** — 캐시를 지운 경우 등. 이제 조용히 0문항이 된다. 실데이터에 있는지 확인 안 함
@@ -132,7 +132,7 @@
       **단의 마지막 문항 7번은 선지 바로 아래에서 딱 맞게** 잘린다. B13(네 변 10pt·마지막 문항 규칙 통일)으로 닫았던 증상이 재발한 모양.
       **추정(미검증)**: 하단 조임(`_calc_tight_y_bottom`)이 이 문항에서 안 걸리고 다음 문항 시작까지 늘어났거나,
       B16이 y_bottom에 넣은 그래픽(`rects·curves·lines`) 중 이 PDF의 장식이 걸러지지 않았다. Red는 B16 실측 무대(기출 4종)에 **포함돼 있었다** — B16 실측은 main 대비 y_bottom 증가 92건만 확인했으므로, 이 문항이 그 92건에 드는지·B16 이전에도 같았는지부터 볼 것
-- [x] **→ REQ-B23**([계획서](plans/PLAN-B23-status-poll-401.md), 2026-09-30 ✅ 완료) · **결과 PDF 상태 조회(`GET /api/status/{job_id}`)가 401 "인증이 필요합니다."** (2026-09-30 추가) — 생성 화면에서 PDF 생성 후 폴링이 401.
+- [x] **→ REQ-B23**([계획서](plans/archive/PLAN-B23-status-poll-401.md), 2026-09-30 ✅ 완료) · **결과 PDF 상태 조회(`GET /api/status/{job_id}`)가 401 "인증이 필요합니다."** (2026-09-30 추가) — 생성 화면에서 PDF 생성 후 폴링이 401.
       **원인(코드 확인)**: 백엔드 `get_status`는 `get_current_user`를 요구하는데(`extract.py:60`), 프론트 `getStatus`는 계약 #26 raw fetch라
       `_authHeaders()`를 안 붙인다(`client.js:310`). 계약 #31과 같은 계열 — REQ-27 Phase 4에서 `getJobInfo`·`uploadCover`·`uploadWatermark`만 고치고 이것을 놓쳤다.
       호출처 3곳: `editor/index.jsx:86`(생성 폴링) · `history/index.jsx:145·163`(결과 화면). 다른 raw fetch(`listNotifications` 등)도 같이 전수 확인할 것
@@ -141,7 +141,7 @@
 
 ## 신규 항목 (2026-08-28 사용자 작성 — 3단계 마지막에 이 순서로)
 
-[x] **REQ-D11** 메뉴 이름 변경 + 경로 변경 (1순위, 소) — ✅ 2026-09-04 [계획서](plans/PLAN-D11-menu-rename.md) · Phase 1·2 완료, PR #9 main 머지 `1fc5bac`. 다음은 REQ-B12
+[x] **REQ-D11** 메뉴 이름 변경 + 경로 변경 (1순위, 소) — ✅ 2026-09-04 [계획서](plans/archive/PLAN-D11-menu-rename.md) · Phase 1·2 완료, PR #9 main 머지 `1fc5bac`. 다음은 REQ-B12
   - 분석 (as-is 문항 분석)
   - 생성 (as-is: 문제집 생성)
   - 결과 (as-is: 생성 이력)
@@ -161,14 +161,14 @@
     ㉰둘 다(그러면 REQ 두 개로 쪼개야 한다). **어느 것인지부터 정할 것.**
   - 💡 재개 시 자산: **REQ-F13이 렌더 상수(각주 글자 크기·여백·색, 워터마크 크기·투명도)를
     `pdf_service` 단일 출처로 모아 API로 내려주는 구조를 만들어 뒀다.** ㉮ 방향이면 그 위에
-    얹으면 된다 — 프론트에 복제하지 않는다는 결정([PLAN-F13](plans/PLAN-F13-preview-template-rendering.md) § 결정)도 함께.
-[x] **REQ-29** 표지 등록하는 것 처럼 각주나 워터마크도 등록하면 좋을 듯. (4순위, 중 — **REQ-30의 선행**. 옛 "REQ-30 선행" 표기는 반대 방향 오기였다) — ✅ 2026-09-11 [계획서](plans/PLAN-29-footnote-watermark-registration.md) · Phase 1·2 완료 28/28, PR #12 main 머지 2026-09-13 `e0da607`. 다음은 REQ-30
-[x] **REQ-30** 템플릿 관리에서 표지,각주,워터마크 등 등록된 걸 조합해서 개인만의 템플릿으로 만들고 (5순위, 중~대 — REQ-29 뒤) — ✅ 2026-09-13 [계획서](plans/PLAN-30-template-entity.md) · [ADR-0004](adr/0004-template-reference-not-snapshot.md) · Phase 1·2 완료 41/41, PR #13 main 머지 `e1e4a7f`. **다음은 아래 테마 항목**
+    얹으면 된다 — 프론트에 복제하지 않는다는 결정([PLAN-F13](plans/archive/PLAN-F13-preview-template-rendering.md) § 결정)도 함께.
+[x] **REQ-29** 표지 등록하는 것 처럼 각주나 워터마크도 등록하면 좋을 듯. (4순위, 중 — **REQ-30의 선행**. 옛 "REQ-30 선행" 표기는 반대 방향 오기였다) — ✅ 2026-09-11 [계획서](plans/archive/PLAN-29-footnote-watermark-registration.md) · Phase 1·2 완료 28/28, PR #12 main 머지 2026-09-13 `e0da607`. 다음은 REQ-30
+[x] **REQ-30** 템플릿 관리에서 표지,각주,워터마크 등 등록된 걸 조합해서 개인만의 템플릿으로 만들고 (5순위, 중~대 — REQ-29 뒤) — ✅ 2026-09-13 [계획서](plans/archive/PLAN-30-template-entity.md) · [ADR-0004](adr/0004-template-reference-not-snapshot.md) · Phase 1·2 완료 41/41, PR #13 main 머지 `e1e4a7f`. **다음은 아래 테마 항목**
   - 이걸 문제집 생성에서 사용할 수 있게 하면 좋을 듯.
   - 지금은 문제집 생성에서 '표지'를 선택하는데, '템플릿'을 선택하는 거지
 [x] 좌측 상단에 '문제집 검색' 입력란 제거 — ✅ REQ-D09 Phase 4로 완료(2026-09-03)
-[x] **REQ-B12** 벨 알림을 클릭하면, 분석으로 넘어가는데 문서 이름이 관리명이 아님. (job-id 인 듯) (2순위, 소) — ✅ 2026-09-07 [계획서](plans/PLAN-B12-work-entry-name.md) · Phase 1 완료 7/7, PR #10 main 머지. D10 Phase 2에서 본 "URL 직접 진입이 목록으로 돌아감"은 같은 원인이 아닌 것으로 판명, **Phase 2 재현 시도 6회 전부 미재현으로 종결**
-[x] **REQ-F12** 문항분석 현황판 정보 변경 (3순위, 중 — **목록 화면**으로 확정) — ✅ 2026-09-09 [계획서](plans/PLAN-F12-detection-stats-dashboard.md) · Phase 1~3 완료 40/40, PR #11 main 머지 `d1ad297`
+[x] **REQ-B12** 벨 알림을 클릭하면, 분석으로 넘어가는데 문서 이름이 관리명이 아님. (job-id 인 듯) (2순위, 소) — ✅ 2026-09-07 [계획서](plans/archive/PLAN-B12-work-entry-name.md) · Phase 1 완료 7/7, PR #10 main 머지. D10 Phase 2에서 본 "URL 직접 진입이 목록으로 돌아감"은 같은 원인이 아닌 것으로 판명, **Phase 2 재현 시도 6회 전부 미재현으로 종결**
+[x] **REQ-F12** 문항분석 현황판 정보 변경 (3순위, 중 — **목록 화면**으로 확정) — ✅ 2026-09-09 [계획서](plans/archive/PLAN-F12-detection-stats-dashboard.md) · Phase 1~3 완료 40/40, PR #11 main 머지 `d1ad297`
   - 오탐지 문항 개수 (클릭: 오탐지 문항이 존재하는 페이지 리스트가 나오고 클릭하면 이동)
   - 수동 설정 문항 개수 (클릭: 수동 문항이 존재하는 페이지 리스트가 나오고 클릭하면 이동)
   - 분석 정확도 (전체 문항수 - (오탐지 문항수+ 수동 문항수)의 비율)
