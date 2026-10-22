@@ -12,6 +12,7 @@ import { Icon } from "@iconify/react";
 /**
  * 튜토리얼 슬라이드 모달 (REQ-F20). 첫 화면 노출(`TutorialGate`)과 다시 보기(`TutorialMenu`)가 같이 쓴다.
  * 본 기록은 부르는 쪽이 정한다 — `onDismiss`가 없으면 [다시 보지 않기]를 안 보여 준다.
+ * 끝까지 보고 누른 [확인]은 `onDismiss`로 간다. X·배경 클릭·Esc는 `onClose`다 (PLAN-F20 § 결정 "끝까지 본 경우").
  * 다른 튜토리얼로 바꿀 땐 `key`를 바꿔 슬라이드 위치를 처음으로 돌린다.
  */
 export default function TutorialDialog({ tutorial, onClose, onDismiss }) {
@@ -46,7 +47,7 @@ export default function TutorialDialog({ tutorial, onClose, onDismiss }) {
         {onDismiss && <Button color="inherit" onClick={onDismiss} sx={{ mr: "auto" }}>다시 보지 않기</Button>}
         {step > 0 && <Button onClick={() => setStep(step - 1)}>이전</Button>}
         {last
-          ? <Button variant="contained" onClick={onClose}>확인</Button>
+          ? <Button variant="contained" onClick={onDismiss ?? onClose}>확인</Button>
           : <Button variant="contained" onClick={() => setStep(step + 1)}>다음</Button>}
       </DialogActions>
     </Dialog>

@@ -1,7 +1,7 @@
 /**
  * REQ-F20 Phase 1 — 튜토리얼 틀 (첫 화면 노출 · 슬라이드 · 닫기 · 다시 보지 않기)
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-01~11)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-01~11, F20-22)
  *
  * 무대는 `ProfileMenu.test.jsx`와 같다 — AuthProvider + ThemeProvider, 로그인 상태는 localStorage로 심는다.
  * "새로고침"은 unmount 후 다시 render, "새 브라우저 세션"은 거기에 sessionStorage.clear()를 더한 것으로 본다.
@@ -179,5 +179,20 @@ describe('저장소 실패', () => {
     click('다시 보지 않기');
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+describe('끝까지 본 경우 (Phase 3)', () => {
+  it('[F20-22] 마지막 슬라이드 [확인] 뒤 새 세션에서도 안 뜬다', async () => {
+    const { unmount } = renderGate();
+    await screen.findByText('첫 튜토리얼');
+    click('다음');
+    click('확인');
+    unmount();
+    sessionStorage.clear();
+
+    renderGate();
+
+    expect(screen.queryByText('첫 튜토리얼')).toBeNull();
   });
 });

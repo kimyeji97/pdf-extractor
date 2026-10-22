@@ -1,7 +1,7 @@
 /**
  * REQ-F20 Phase 2 — 헤더 도움말 버튼과 다시 보기 목록
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-14~15)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-14~15, F20-23)
  *
  * 무대는 `TutorialGate.test.jsx`와 같다. F20-15는 Gate의 [다시 보지 않기]로 먼저 끄고 메뉴에서 다시 연다 —
  * 실제 흐름을 밟으므로 저장 키 이름을 몰라도 된다.
@@ -75,5 +75,21 @@ describe('다시 보기 목록', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: '첫 튜토리얼' }));
 
     expect(within(await screen.findByRole('dialog')).getByText('본문 하나')).toBeInTheDocument();
+  });
+});
+
+describe('다시 보기는 본 기록을 바꾸지 않는다 (Phase 3)', () => {
+  it('[F20-23] 다시 연 튜토리얼을 [확인]으로 닫아도 본 기록이 안 바뀌어 새 세션에 그대로 뜬다', async () => {
+    const { unmount } = renderWith(<TutorialMenu tutorials={[T2]} />);
+    openMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: '둘째 튜토리얼' }));
+    await screen.findByText('둘째 본문');
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    unmount();
+    sessionStorage.clear();
+
+    renderWith(<TutorialGate tutorials={[T2]} />);
+
+    expect(await screen.findByText('둘째 본문')).toBeInTheDocument();
   });
 });

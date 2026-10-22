@@ -1,7 +1,7 @@
 /**
  * REQ-F20 Phase 1·3 — 튜토리얼 정의 목록과 콘텐츠
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-12, F20-17~20)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-12, F20-17~20, F20-24~25)
  *
  * F20-20은 테스트가 frontend/ 에서 돈다는 전제로 `public${image}` 를 본다 (tutorialSlot.test.js 의 readFileSync 와 같은 전제)
  */
@@ -49,5 +49,17 @@ describe('튜토리얼 콘텐츠 (Phase 3)', () => {
       .map((s) => s.image ?? `(없음) ${s.title}`);
 
     expect(missing).toEqual([]);
+  });
+});
+
+describe('공유 문구가 실제 동작과 맞다 (Phase 3 리뷰 회차 0)', () => {
+  const shareText = () => (TUTORIALS.find((t) => t.id === 'share')?.slides ?? []).map((s) => s.body).join(' ');
+
+  it('[F20-24] 공유 문구가 역할 칩이 모든 카드에 붙는다고 설명한다', () => {
+    expect(shareText()).toContain('모든 카드');
+  });
+
+  it('[F20-25] 공유 문구가 패널에 더해지는 건 내가 소유자인 카드라고 설명한다', () => {
+    expect(shareText()).toContain('소유자인');
   });
 });
