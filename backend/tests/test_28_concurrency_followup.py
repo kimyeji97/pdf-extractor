@@ -130,3 +130,37 @@ def test_28_69_썸네일_준비_중_바뀐_수동_문항_수가_남는다(make_j
     browse_router._run_refresh_detection("28-69-job")
 
     assert storage.get_status("28-69-job").manual_count == 1
+
+
+def _detect_then_deleted(job_id):
+    from app.services import storage
+
+    def _detect(pdf_path):
+        storage.delete_job(job_id)
+        return []
+
+    return _detect
+
+
+def test_28_70_재감지_도중_지운_job에는_감지_알림을_보내지_않는다(make_job, fake_pdf, monkeypatch):
+    """근거: PLAN § 결정 — "지워진 job이면 완료·실패 알림을 보내지 않고 이 재감지가 남긴 캐시를 지운다" """
+    make_job("28-70-job")
+    browse_router = _stub_refresh(monkeypatch, detect=_detect_then_deleted("28-70-job"))
+    sent = []
+    monkeypatch.setattr(browse_router.notification_service, "emit_detection", lambda job: sent.append(job.job_id))
+
+    browse_router._run_refresh_detection("28-70-job")
+
+    assert sent == []
+
+
+def test_28_71_재감지_도중_지운_job의_경계_캐시가_남지_않는다(make_job, fake_pdf, monkeypatch):
+    """근거: PLAN § 결정 — 상동"""
+    from app.services import storage
+
+    make_job("28-71-job")
+    browse_router = _stub_refresh(monkeypatch, detect=_detect_then_deleted("28-71-job"))
+
+    browse_router._run_refresh_detection("28-71-job")
+
+    assert storage.get_boundaries_cache("28-71-job") is None
