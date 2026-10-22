@@ -111,3 +111,12 @@ def test_28_54_공동_소유자가_자기를_해제하면_400(client, isolated_s
     res = client.delete(f"/api/jobs/{job_id}/shares/{b['user_id']}", headers=_headers(b["access_token"]))
 
     assert res.status_code == 400
+
+
+def test_28_62_공동_소유자가_자기_이메일로_공유하면_400(client, isolated_storage):
+    """근거: PLAN § 결정 — "서버도 자기 자신을 대상으로 한 역할 변경·해제를 400으로 막는다" (리뷰 회차 2 (b) — POST 로 덮어쓰는 길)"""
+    _, b, job_id = _co_owned(client, isolated_storage, "62")
+
+    res = _post_share(client, job_id, b["access_token"], "28-62-coowner@example.com", role="viewer")
+
+    assert res.status_code == 400
