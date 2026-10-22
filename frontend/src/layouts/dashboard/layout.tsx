@@ -10,6 +10,7 @@ import { useTheme } from '@mui/material/styles';
 import ColorSchemeMenu from 'components/ColorSchemeMenu';
 import NotificationBell from 'components/NotificationBell';
 import ProfileMenu from 'components/ProfileMenu';
+import TutorialGate from 'components/TutorialGate';
 
 import { NavMobile, NavDesktop } from './nav';
 import { navData } from './nav-config';
@@ -127,6 +128,7 @@ export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery 
       ]}
     >
       {renderMain()}
+      <TutorialGate />
     </LayoutSection>
   );
 }
