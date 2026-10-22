@@ -86,3 +86,47 @@ def test_28_67_역할_변경_도중_해제가_끼어들면_되살아나지_않�
         worker.join(5)
 
     assert json.loads(index.read_text(encoding="utf-8")).get("28-67-job", []) == []
+
+
+def _stub_refresh(monkeypatch, *, detect=None, prewarm=None):
+    from app.routers import browse as browse_router
+
+    monkeypatch.setattr(browse_router, "detect_question_boundaries", detect or (lambda pdf_path: []))
+    monkeypatch.setattr(browse_router.thumbnail_service, "get_page_info", lambda b: [{"width": 595, "height": 842}])
+    monkeypatch.setattr(browse_router.prewarm_service, "prewarm_all_thumbnails", prewarm or (lambda *a, **kw: None))
+    return browse_router
+
+
+def test_28_68_재감지_도중_지운_job은_되살아나지_않는다(make_job, fake_pdf, monkeypatch):
+    """근거: PLAN § 결정 — "다시 읽었는데 상태가 없으면(그 사이 삭제) 쓰지 않는다" """
+    from app.services import storage
+
+    make_job("28-68-job")
+
+    def _detect_then_deleted(pdf_path):
+        storage.delete_job("28-68-job")
+        return []
+
+    browse_router = _stub_refresh(monkeypatch, detect=_detect_then_deleted)
+
+    browse_router._run_refresh_detection("28-68-job")
+
+    assert storage.get_status("28-68-job") is None
+
+
+def test_28_69_썸네일_준비_중_바뀐_수동_문항_수가_남는다(make_job, fake_pdf, monkeypatch):
+    """근거: PLAN § 결정 — "성공 경로가 저장했으면 마무리에서 다시 쓰지 않는다" """
+    from app.services import storage
+
+    make_job("28-69-job")
+
+    def _prewarm_while_manual_added(*args, **kwargs):
+        job = storage.get_status("28-69-job")
+        job.manual_count = 1
+        storage.put_status(job)
+
+    browse_router = _stub_refresh(monkeypatch, prewarm=_prewarm_while_manual_added)
+
+    browse_router._run_refresh_detection("28-69-job")
+
+    assert storage.get_status("28-69-job").manual_count == 1

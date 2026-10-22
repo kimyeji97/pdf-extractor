@@ -442,7 +442,9 @@ _DETECTION_FIELDS = (
 def _save_detection(job) -> None:
     """재감지 결과만 쓴다 — 최신 상태를 다시 읽어 감지 필드만 옮기고, 같은 job 쓰기와 같은 잠금 안에서."""
     with contextmanager(_edit_lock)(job.job_id):
-        current = storage.get_status(job.job_id) or job
+        current = storage.get_status(job.job_id)
+        if current is None:
+            return  # 그 사이 삭제됐다 — 쓰면 지운 job 이 되살아난다(리뷰 회차 4)
         for field in _DETECTION_FIELDS:
             setattr(current, field, getattr(job, field))
         storage.put_status(current)
@@ -542,7 +544,9 @@ def _refresh_detection_body(job_id: str, job) -> None:
         job.error = str(e)
 
     finally:
-        _save_detection(job)
+        # 성공 경로는 이미 저장했다 — 다시 쓰면 프리워밍 동안 바뀐 수동 문항 수를 감지 전 값으로 되돌린다(리뷰 회차 4)
+        if not notified:
+            _save_detection(job)
 
         # 완료 알림 (REQ-F09). 재감지는 백그라운드 경로이므로 알림 대상이다.
         # 아래 list_all_questions·list_questions 의 지연 감지에는 붙이지 않는다 —
