@@ -146,6 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/archive/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/archive/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/archive/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
+| REQ-F20 | 튜토리얼 — 로그인 후 첫 화면에 안 본 튜토리얼 슬라이드 모달, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 1/3 — 브랜치 `feat/F20-tutorial`(`078616f`) · 케이스 13/13 |
 | REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/archive/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/archive/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/archive/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
@@ -271,6 +272,15 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-22
+
+### REQ-F20 — 튜토리얼 (🟡 Phase 1/3)
+- 결정은 계획서 결정 표에 있다. 요지만:
+  - 슬라이드 모달. 스포트라이트 투어는 화면을 고칠 때마다 깨지고 의존성이 늘어 기각
+  - 본 기록은 브라우저 저장소(이메일별). 다시 보지 않기는 localStorage, 그냥 닫기는 sessionStorage. 서버 저장은 기기 간 유지 대신 API·저장소가 늘어 기각(사용자 선택)
+  - 그림은 스크린샷, 다크 모드용은 따로 두지 않는다
+- 함정: 샘플 문구에 옛 메뉴 이름 "문항 분석"을 쓰자 D11-02(옛 이름 소스 스캔)가 깨졌다. 튜토리얼 문구도 제품 소스라 스캔 대상이다. Phase 3 콘텐츠도 지금 메뉴 이름(분석·생성·결과·템플릿 관리)으로 쓴다
+- 저장소 접근 실패 테스트(F20-09)는 인증 키 2개만 통과시킨다. AuthProvider 초기화가 같은 `Storage.prototype.getItem`을 쓰기 때문
+- 테스트: F20 13/13 · 프론트 전체 468 통과 · 빌드 OK · 표 ID 13 = 코드 ID 13 · 근거 인용 10건 모두 본문에 있음
 
 ### REQ-28 — 분석 결과 공유 (✅ 리뷰 회차 3)
 - 리뷰 회차 2 (b) 수정: 공동 소유자가 공유 추가에 자기 이메일을 넣으면 `put_share`가 기존 항목을 덮어써 자기 역할이 내려갔다. 본인 차단을 역할 변경·해제에만 걸어 둔 탓 → 추가에도 `_not_self`. 패널은 내 행에 컨트롤을 안 보여서 직접 입력할 때만 타던 길이다
