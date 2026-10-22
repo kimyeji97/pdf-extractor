@@ -73,6 +73,7 @@ def add_share(job_id: str, body: ShareCreate, current_user: dict = Depends(auth_
         raise HTTPException(status_code=404, detail="가입된 계정이 없는 이메일입니다.")
     if target["user_id"] == job.owner_id:
         raise HTTPException(status_code=400, detail="소유자에게는 공유할 수 없습니다.")
+    _not_self(target["user_id"], current_user)  # 자기 이메일로 덮어써 역할을 내리는 길도 막는다(리뷰 회차 2)
     share_service.put_share(job_id, target["user_id"], body.role)
     return _item(target["user_id"], body.role)
 
@@ -83,9 +84,8 @@ def update_share(
 ):
     _owned_job(job_id, current_user)
     _not_self(user_id, current_user)
-    if not any(e["user_id"] == user_id for e in share_service.shares_of(job_id)):
+    if not share_service.update_share(job_id, user_id, body.role):
         raise HTTPException(status_code=404, detail="공유 항목이 없습니다.")
-    share_service.put_share(job_id, user_id, body.role)
     return _item(user_id, body.role)
 
 
