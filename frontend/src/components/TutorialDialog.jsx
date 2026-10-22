@@ -28,6 +28,14 @@ export default function TutorialDialog({ tutorial, onClose, onDismiss }) {
         </IconButton>
       </DialogTitle>
       <DialogContent>
+        {slide.image && (
+          <Box
+            component="img"
+            src={slide.image}
+            alt={slide.title}
+            sx={{ display: "block", width: "100%", mb: 2, borderRadius: 1, border: 1, borderColor: "divider" }}
+          />
+        )}
         <Typography variant="subtitle1" sx={{ mb: 1 }}>{slide.title}</Typography>
         <Typography variant="body2" color="text.secondary">{slide.body}</Typography>
         <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 2 }}>

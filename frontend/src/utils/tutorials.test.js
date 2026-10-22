@@ -1,8 +1,12 @@
 /**
- * REQ-F20 Phase 1 — 튜토리얼 정의 목록
+ * REQ-F20 Phase 1·3 — 튜토리얼 정의 목록과 콘텐츠
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-12)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-12, F20-17~20)
+ *
+ * F20-20은 테스트가 frontend/ 에서 돈다는 전제로 `public${image}` 를 본다 (tutorialSlot.test.js 의 readFileSync 와 같은 전제)
  */
+import { existsSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { TUTORIALS } from 'utils/tutorials';
@@ -17,5 +21,33 @@ describe('튜토리얼 정의 목록', () => {
     ];
 
     expect(problems).toEqual([]);
+  });
+});
+
+describe('튜토리얼 콘텐츠 (Phase 3)', () => {
+  const byId = (id) => TUTORIALS.find((t) => t.id === id);
+
+  it('[F20-17] 기본 흐름(welcome)과 공유(share) 두 개다', () => {
+    expect(TUTORIALS.map((t) => t.id)).toEqual(['welcome', 'share']);
+  });
+
+  it('[F20-18] 기본 흐름 슬라이드 제목이 업로드·감지·선택·생성 순서다', () => {
+    const titles = (byId('welcome')?.slides ?? []).map((s) => s.title).join(' / ');
+
+    expect(titles).toMatch(/업로드.*감지.*선택.*생성/);
+  });
+
+  it('[F20-19] 공유 튜토리얼이 공유받은 쪽 역할(편집자·뷰어)을 설명한다', () => {
+    const text = (byId('share')?.slides ?? []).map((s) => `${s.title} ${s.body}`).join(' ');
+
+    expect(['편집자', '뷰어'].filter((role) => !text.includes(role))).toEqual([]);
+  });
+
+  it('[F20-20] 모든 슬라이드에 스크린샷 경로가 있고 public 아래에 파일이 있다', () => {
+    const missing = TUTORIALS.flatMap((t) => t.slides)
+      .filter((s) => !s.image || !existsSync(`public${s.image}`))
+      .map((s) => s.image ?? `(없음) ${s.title}`);
+
+    expect(missing).toEqual([]);
   });
 });
