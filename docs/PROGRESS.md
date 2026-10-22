@@ -146,7 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/archive/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/archive/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/archive/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
-| REQ-F20 | 튜토리얼 — 로그인 후 첫 화면에 안 본 튜토리얼 슬라이드 모달, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 2/3 — 브랜치 `feat/F20-tutorial`(`2aa8239`) · 케이스 16/16 |
+| REQ-F20 | 튜토리얼 — 로그인 후 첫 화면에 안 본 튜토리얼 슬라이드 모달, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 3/3 구현·리뷰 끝(`3a9e1fe`) · 케이스 25/25 · 리뷰 회차 1 @ `3a9e1fe` (b·c 0, 감수 1) · **dev 육안 남음**(dev 프론트에 브랜치 배포 필요) |
 | REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/archive/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/archive/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/archive/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
@@ -273,7 +273,32 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 
 ## 2026-10-22
 
-### REQ-F20 — 튜토리얼 (🟡 Phase 2/3)
+### REQ-F20 — 튜토리얼 (🟡 Phase 3 구현·리뷰 끝, dev 육안 남음)
+- Phase 3: 기본 흐름 4장·공유 3장. 스크린샷은 dev에서 테스트 계정 test@test.com으로 찍었다(사용자 지정). 로컬은 PDF 뷰어 401(F16 TODO)과 빈약한 테스트 데이터로 못 썼다
+  - 공유 화면을 찍으려고 이 계정으로 기출 PDF 2개 업로드·문제집 1개 생성(dev 데이터)
+  - dev 프론트가 `ac502ca`라 스크린샷 헤더에 ? 버튼이 없다(nit)
+- dev 공유 버그(소유자 역할 공유 실패, 오류가 [object Object])는 코드가 아니라 **배포 누락**이었다. dev 태스크가 `28-9c17599`(Phase 5)로 떠 있었다
+  - 원인: ECS는 배포를 만들 때 `:latest`를 digest로 고정한다. 10-22에 이미지만 푸시하고 desired만 바꿔 옛 digest로 떴다. 어제 기록한 "dev `28-ac502ca`"는 실제로 돈 적이 없다
+  - `--force-new-deployment` 후 `ba0034dd…`(= `28-ac502ca`) 확인. 422 배열 detail이 [object Object]로 찍히는 표시 문제는 TODO로 남겼다
+- 리뷰 회차 0 @ `cdb17bf`: (b) 2 · (c) 2 · nit 3 → 회차 1 @ `3a9e1fe`: 수정 3건 닫힘
+  - 끝까지 본 경우를 계획서가 안 정해서 [확인]이 그냥 닫기로 기록됐다 → 마지막 [확인]은 다시 보지 않기와 같이(사용자 결정). X·배경·Esc는 그냥 닫기
+  - 공유 문구가 실제와 달랐다(역할 칩은 모든 카드, 패널 추가는 내 소유 카드만). 문구는 화면 코드와 짝이라 화면을 바꾸면 튜토리얼 문구도 본다
+- 리뷰: F20 @ 3a9e1fe — (b) 0 · (c) 0 · nit 2 (직전 수정 3건 닫힘 · 감수 1 유지)
+  - 직전 (b): [frontend/src/utils/tutorials.js:45,51] 공유 튜토리얼 문구가 실제 동작과 다르다 · 실측
+    - 방안: A 문구 2곳 수정 (tutorials.js 2줄) · TODO · 감수 — 추천 A
+    - 결정: A → 닫힘 (3a9e1fe)
+  - 직전 (b): [frontend/src/components/TutorialGate.jsx:42,24] 저장소 실패 경계가 getItem·setItem만 덮는다 · 가설
+    - 방안: A 저장소 접근을 함수 안 try로 옮기고 읽기 실패 시 쓰지 않기 (+5줄 · TutorialGate.jsx) · TODO · 감수(AuthContext 초기화가 같은 접근에서 먼저 죽는다) — 추천 감수
+    - 결정: 감수
+  - 직전 (c): [frontend/src/components/TutorialDialog.jsx:24,50] 마지막 슬라이드 [확인]이 그냥 닫기로 기록돼 다 본 사람에게도 새 세션마다 다시 뜬다 · 실측
+    - 방안: A 마지막 [확인]은 다시 보지 않기로 기록 (계획서 결정 추가 + 1줄) · B 지금대로 · TODO — 추천 A
+    - 결정: A → 닫힘 (3a9e1fe, 계획서 결정 표)
+  - 직전 (c): [frontend/src/components/TutorialMenu.jsx:14] 미결 "다시 연 튜토리얼을 닫으면 본 기록을 바꾸나"를 코드가 정했다 · 실측
+    - 방안: A 지금 동작으로 계획서 확정 (/workplan, 문서만) · TODO · 감수 — 추천 A
+    - 결정: A → 닫힘 (계획서 결정 표, F20-23)
+- 테스트: F20 25/25 · 프론트 전체 480 · 빌드 OK · 표 ID 25 = 코드 ID 25 · 근거 인용 모두 본문에 있음
+- Phase 3는 체크하지 않았다. 완료 기준의 "dev에서 육안 확인"이 남았다
+
 - Phase 2: 헤더 ? 버튼(알림 벨 왼쪽) → 튜토리얼 목록 → 고르면 모달. 모달을 `TutorialDialog`로 떼어 첫 화면 노출과 다시 보기가 같이 쓴다
 - 다시 보기는 본 기록을 읽지도 쓰지도 않는다. 그래서 다시 보기 모달엔 [다시 보지 않기]가 없다. 닫을 때 기록을 바꿀지는 계획서 미결로 남겼다(Phase 2 `/testgen`에서 나옴, 완료 기준 밖)
 - 테스트: F20 16/16 · 프론트 전체 471 · 빌드 OK · 표 ID 16 = 코드 ID 16 · 근거 인용 12건 모두 본문에 있음

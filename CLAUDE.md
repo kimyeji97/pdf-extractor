@@ -314,7 +314,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 | `C` | 보완 기능 (Complement) | REQ-C01~C12 |
 | `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D13 |
 | `E` | 실험·인프라성 기능 (Enhancement) | REQ-E01~E02 |
-| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F19 |
+| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F20 |
 | `P` | 성능 (Performance) | REQ-P01~P06 |
 
 기능 대분류 참고: REQ-01~09(핵심), REQ-10~15(v2), REQ-16~26(v3), REQ-27~28(계정·공유), REQ-29~30(템플릿).
