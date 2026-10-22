@@ -1,14 +1,6 @@
 import { useState } from "react";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import IconButton from "@mui/material/IconButton";
-import Typography from "@mui/material/Typography";
-import { Icon } from "@iconify/react";
 
+import TutorialDialog from "components/TutorialDialog";
 import { useAuth } from "contexts/AuthContext";
 import { TUTORIALS } from "utils/tutorials";
 
@@ -41,7 +33,6 @@ function addId(storage, key, id) {
 export default function TutorialGate({ tutorials = TUTORIALS }) {
   const userEmail = useAuth()?.userEmail;
   const [handled, setHandled] = useState([]); // 이번 마운트에서 닫은 것 — 저장 실패해도 다시 안 뜨게
-  const [step, setStep] = useState(0);
 
   if (!userEmail) return null;
 
@@ -53,39 +44,17 @@ export default function TutorialGate({ tutorials = TUTORIALS }) {
   const current = tutorials.find((t) => !seen.has(t.id));
   if (!current) return null;
 
-  const slide = current.slides[step] ?? current.slides[0];
-  const last = step >= current.slides.length - 1;
-
   const finish = (storage, key) => {
     addId(storage, key, current.id);
     setHandled((prev) => [...prev, current.id]);
-    setStep(0);
   };
-  const close = () => finish(sessionStorage, closedKey(userEmail));
-  const dismiss = () => finish(localStorage, dismissedKey(userEmail));
 
   return (
-    <Dialog open onClose={close} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <Box sx={{ flex: 1 }}>{current.title}</Box>
-        <IconButton size="small" aria-label="닫기" onClick={close}>
-          <Icon icon="material-symbols:close-rounded" style={{ fontSize: 18 }} />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent>
-        <Typography variant="subtitle1" sx={{ mb: 1 }}>{slide.title}</Typography>
-        <Typography variant="body2" color="text.secondary">{slide.body}</Typography>
-        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 2 }}>
-          {step + 1} / {current.slides.length}
-        </Typography>
-      </DialogContent>
-      <DialogActions>
-        <Button color="inherit" onClick={dismiss} sx={{ mr: "auto" }}>다시 보지 않기</Button>
-        {step > 0 && <Button onClick={() => setStep(step - 1)}>이전</Button>}
-        {last
-          ? <Button variant="contained" onClick={close}>확인</Button>
-          : <Button variant="contained" onClick={() => setStep(step + 1)}>다음</Button>}
-      </DialogActions>
-    </Dialog>
+    <TutorialDialog
+      key={current.id}
+      tutorial={current}
+      onClose={() => finish(sessionStorage, closedKey(userEmail))}
+      onDismiss={() => finish(localStorage, dismissedKey(userEmail))}
+    />
   );
 }

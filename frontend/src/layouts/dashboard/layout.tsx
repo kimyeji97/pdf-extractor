@@ -11,6 +11,7 @@ import ColorSchemeMenu from 'components/ColorSchemeMenu';
 import NotificationBell from 'components/NotificationBell';
 import ProfileMenu from 'components/ProfileMenu';
 import TutorialGate from 'components/TutorialGate';
+import TutorialMenu from 'components/TutorialMenu';
 
 import { NavMobile, NavDesktop } from './nav';
 import { navData } from './nav-config';
@@ -67,6 +68,7 @@ export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery 
       ),
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
+          <TutorialMenu />
           <NotificationBell />
           <ColorSchemeMenu />
           <ProfileMenu />

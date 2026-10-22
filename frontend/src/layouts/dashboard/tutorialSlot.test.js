@@ -1,7 +1,7 @@
 /**
- * REQ-F20 Phase 1 — 튜토리얼 배선 (소스 스캔)
+ * REQ-F20 Phase 1·2 — 튜토리얼 배선 (소스 스캔)
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-13)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-13, F20-16)
  *
  * 로그인 화면에 뜨지 않게 로그인한 레이아웃 안에 둔다. 컴포넌트 동작은 `TutorialGate.test.jsx`가 본다.
  */
@@ -17,5 +17,13 @@ describe('튜토리얼 배선 (Phase 1)', () => {
     const code = stripComments(readFileSync('src/layouts/dashboard/layout.tsx', 'utf-8'));
 
     expect(code).toMatch(/<TutorialGate\s*\/>/);
+  });
+});
+
+describe('튜토리얼 배선 (Phase 2)', () => {
+  it('[F20-16] 헤더에 TutorialMenu가 연결돼 있다', () => {
+    const code = stripComments(readFileSync('src/layouts/dashboard/layout.tsx', 'utf-8'));
+
+    expect(code).toMatch(/<TutorialMenu\s*\/>/);
   });
 });
