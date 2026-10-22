@@ -72,6 +72,18 @@ def put_share(job_id: str, user_id: str, role: str) -> None:
         storage.save_shares(data)
 
 
+def update_share(job_id: str, user_id: str, role: str) -> bool:
+    """이미 있는 항목의 역할만 바꾼다. 없으면 False — 확인과 쓰기를 한 잠금 안에서 해야 동시 해제가 되살아나지 않는다."""
+    with _index_lock:
+        data = storage.get_shares()
+        entries = data.get(job_id, [])
+        if not any(e["user_id"] == user_id for e in entries):
+            return False
+        data[job_id] = [{**e, "role": role} if e["user_id"] == user_id else e for e in entries]
+        storage.save_shares(data)
+        return True
+
+
 def remove_share(job_id: str, user_id: str) -> bool:
     with _index_lock:
         data = storage.get_shares()

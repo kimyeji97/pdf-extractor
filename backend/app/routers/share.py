@@ -84,9 +84,8 @@ def update_share(
 ):
     _owned_job(job_id, current_user)
     _not_self(user_id, current_user)
-    if not any(e["user_id"] == user_id for e in share_service.shares_of(job_id)):
+    if not share_service.update_share(job_id, user_id, body.role):
         raise HTTPException(status_code=404, detail="공유 항목이 없습니다.")
-    share_service.put_share(job_id, user_id, body.role)
     return _item(user_id, body.role)
 
 

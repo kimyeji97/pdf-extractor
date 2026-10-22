@@ -8,16 +8,18 @@
  *
  * @param {{ boundaries_status?: string, error?: string|null }|null} job 진입 가드가 읽은 jobInfo
  * @param {number|null} autoCount 자동 감지 문항 수(수동 제외). 아직 모르면 null
+ * @param {boolean} canRefresh 재감지 버튼이 있는 사람(소유자)인가 — 아니면 소유자에게 요청하라고 안내한다(REQ-28 Phase 8)
  * @returns {{ message: string, detail: string|null }|null}
  */
-export function detectionNotice(job, autoCount) {
+export function detectionNotice(job, autoCount, canRefresh = true) {
   const status = job?.boundaries_status;
+  const ask = canRefresh ? "재감지해 주세요." : "소유자에게 재감지를 요청하세요.";
   if (status === "FAILED") {
     // 서버 error 는 대부분 예외 원문이라 본문으로 쓰지 않고 아래 작은 글씨로만 (2026-09-30 결정)
-    return { message: "문항 감지에 실패했습니다. 재감지해 주세요.", detail: job.error || null };
+    return { message: `문항 감지에 실패했습니다. ${ask}`, detail: job.error || null };
   }
   if (status === "DONE" && autoCount === 0) {
-    return { message: "감지된 문항이 없습니다. 필요하면 재감지해 주세요.", detail: null };
+    return { message: `감지된 문항이 없습니다. 필요하면 ${ask}`, detail: null };
   }
   return null;
 }

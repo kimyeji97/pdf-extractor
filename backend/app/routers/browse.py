@@ -20,6 +20,7 @@ POST   /api/jobs/{job_id}/pages/{n}/questions/bulk-delete                - 자�
 GET    /api/jobs/{job_id}/pages/{n}/questions/manual/{mid}/thumbnail     - 수동 문항 썸네일
 """
 import dataclasses
+from contextlib import contextmanager
 import tempfile
 import threading
 import uuid
@@ -329,7 +330,11 @@ def get_job(job_id: str, current_user: dict = Depends(auth_service.get_current_u
 
 
 @router.delete("/jobs/{job_id}", status_code=204)
-def delete_job(job_id: str, current_user: dict = Depends(auth_service.get_current_user)):
+def delete_job(
+    job_id: str,
+    current_user: dict = Depends(auth_service.get_current_user),
+    _lock: None = Depends(_edit_lock),  # 진행 중 편집이 지운 파일을 되살리지 않게 (REQ-28 Phase 8)
+):
     """
     job과 연관된 저장물을 전부 삭제한다.
 
@@ -426,6 +431,23 @@ def refresh_job_questions(
     return RefreshResponse(job_id=job_id, boundaries_status=BoundariesStatus.QUEUED)
 
 
+# 재감지가 쓰는 필드 — 나머지(이름·유형 등)는 감지 도중 편집자가 바꿨을 수 있어 건드리지 않는다 (REQ-28 Phase 8)
+_DETECTION_FIELDS = (
+    "boundaries_status", "error", "total_question_count", "questions_per_page", "total_pages",
+    "false_positive_count", "manual_count", "undetected_page_count",
+    "false_positive_pages", "manual_pages", "undetected_pages",
+)
+
+
+def _save_detection(job) -> None:
+    """재감지 결과만 쓴다 — 최신 상태를 다시 읽어 감지 필드만 옮기고, 같은 job 쓰기와 같은 잠금 안에서."""
+    with contextmanager(_edit_lock)(job.job_id):
+        current = storage.get_status(job.job_id) or job
+        for field in _DETECTION_FIELDS:
+            setattr(current, field, getattr(job, field))
+        storage.put_status(current)
+
+
 def _run_refresh_detection(job_id: str) -> None:
     """
     백그라운드 태스크: 캐시 초기화 후 전체 PDF 재감지.
@@ -443,7 +465,7 @@ def _run_refresh_detection(job_id: str) -> None:
     # 동시 분석 한도(REQ-B17) — 최초 감지와 같은 슬롯을 나눠 쓴다. 대기 중엔 QUEUED(요청 시점에 이미 찍힘)
     with analysis_slots.slots:
         job.boundaries_status = BoundariesStatus.PROCESSING
-        storage.put_status(job)
+        _save_detection(job)
         notification_service.emit_status(job)
         _refresh_detection_body(job_id, job)
 
@@ -498,7 +520,7 @@ def _refresh_detection_body(job_id: str, job) -> None:
 
         # DONE 상태를 먼저 저장해 프론트가 즉시 재감지 완료를 확인하게 한 뒤,
         # 썸네일 프리워밍(REQ-P03-01)을 이어서 실행한다 (실패해도 감지 결과엔 영향 없음)
-        storage.put_status(job)
+        _save_detection(job)
 
         # 완료 알림은 **프리워밍보다 먼저** 보낸다 (REQ-P05). 프리워밍은 실패해도 온디맨드로
         # 폴백되는 최적화인데, 뒤에 두면 그것이 끝날 때까지 완료 통지가 붙잡힌다(실측 ~6s).
@@ -520,7 +542,7 @@ def _refresh_detection_body(job_id: str, job) -> None:
         job.error = str(e)
 
     finally:
-        storage.put_status(job)
+        _save_detection(job)
 
         # 완료 알림 (REQ-F09). 재감지는 백그라운드 경로이므로 알림 대상이다.
         # 아래 list_all_questions·list_questions 의 지연 감지에는 붙이지 않는다 —

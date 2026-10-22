@@ -182,7 +182,7 @@ export default function AnalysisWorkPage() {
   // 경계 캐시가 없어 문항이 0개로만 보이던 FAILED·DONE 파일 안내 (REQ-B22). 재감지 중엔 숨긴다
   const notice = refreshing
     ? null
-    : detectionNotice(detectedAfterRefresh ? { boundaries_status: "DONE" } : jobInfo, autoCount);
+    : detectionNotice(detectedAfterRefresh ? { boundaries_status: "DONE" } : jobInfo, autoCount, owner);
 
   useEffect(() => {
     setPdfUrlLoading(guardLoading);
