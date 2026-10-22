@@ -1,17 +1,19 @@
 /**
- * REQ-F20 Phase 1 — 튜토리얼 틀 (첫 화면 노출 · 슬라이드 · 닫기 · 다시 보지 않기)
+ * REQ-F20 Phase 4 — 첫 진입 때 튜토리얼 화면으로 보내기
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-01~11, F20-22)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-26~32)
  *
- * 무대는 `ProfileMenu.test.jsx`와 같다 — AuthProvider + ThemeProvider, 로그인 상태는 localStorage로 심는다.
- * "새로고침"은 unmount 후 다시 render, "새 브라우저 세션"은 거기에 sessionStorage.clear()를 더한 것으로 본다.
+ * 무대는 AuthProvider + ThemeProvider + MemoryRouter. 이동은 `Probe`가 찍는 현재 경로로 본다.
+ * "새 브라우저 세션"은 unmount 뒤 sessionStorage.clear(), 다시 보지 않기 기록은 튜토리얼 화면의 실제 흐름으로 만든다 —
  * 저장 키 이름은 구현 몫이라 테스트는 키를 직접 보지 않는다.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TutorialGate from 'components/TutorialGate';
 import { AuthProvider } from 'contexts/AuthContext';
+import TutorialsPage from 'pages/tutorials';
 import { ThemeProvider } from 'theme/theme-provider';
 
 vi.mock('api/client', () => ({
@@ -20,33 +22,44 @@ vi.mock('api/client', () => ({
   logout: vi.fn(),
 }));
 
-const T1 = {
-  id: 't1',
-  title: '첫 튜토리얼',
-  slides: [
-    { title: '슬라이드 하나', body: '본문 하나' },
-    { title: '슬라이드 둘', body: '본문 둘' },
-  ],
-};
-const T2 = { id: 't2', title: '둘째 튜토리얼', slides: [{ title: '둘째 슬라이드', body: '둘째 본문' }] };
+const T1 = { id: 't1', title: '첫 튜토리얼', slides: [{ title: '슬라이드 하나', body: '본문 하나' }] };
+
+function Probe() {
+  const l = useLocation();
+  return <div data-testid="loc">{l.pathname + l.search}</div>;
+}
+
+const stage = (children, entry = '/') =>
+  render(
+    <AuthProvider>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={[entry]}>
+          {children}
+          <Probe />
+        </MemoryRouter>
+      </ThemeProvider>
+    </AuthProvider>,
+  );
+
+const renderGate = (tutorials = [T1]) => stage(<TutorialGate tutorials={tutorials} />);
+const loc = () => screen.getByTestId('loc').textContent;
+const settle = () => act(async () => {});
 
 const loginAs = (email) => {
   localStorage.setItem('access_token', 'tok');
   localStorage.setItem('user_email', email);
 };
 
-const renderGate = (tutorials = [T1]) =>
-  render(
-    <AuthProvider>
-      <ThemeProvider>
-        <TutorialGate tutorials={tutorials} />
-      </ThemeProvider>
-    </AuthProvider>,
-  );
+/** 자동 모드 튜토리얼 화면에서 [다시 보지 않기]로 T1을 끈다 */
+async function dismissT1() {
+  const { unmount } = stage(<TutorialsPage tutorials={[T1]} />, '/tutorials?auto=1');
+  await screen.findByText('본문 하나');
+  fireEvent.click(screen.getByRole('button', { name: '다시 보지 않기' }));
+  await settle();
+  unmount();
+  sessionStorage.clear();
+}
 
-const click = (name) => fireEvent.click(screen.getByRole('button', { name }));
-
-// 인증 키는 AuthProvider 초기화에 필요하다 — 그 둘만 통과시키고 나머지 저장소 접근을 실패시킨다
 const AUTH_KEYS = ['access_token', 'user_email'];
 
 beforeEach(() => {
@@ -61,103 +74,63 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-describe('첫 화면 노출', () => {
-  it('[F20-01] 로그인 상태에서 안 본 튜토리얼이 모달로 뜬다', async () => {
+describe('첫 진입 이동', () => {
+  it('[F20-26] 안 본 묶음이 있으면 첫 진입 때 /tutorials?auto=1 로 보낸다', async () => {
     renderGate();
 
-    expect(await screen.findByText('첫 튜토리얼')).toBeInTheDocument();
+    await waitFor(() => expect(loc()).toBe('/tutorials?auto=1'));
   });
 
-  it('[F20-08] 안 본 것이 2개면 첫째를 닫은 뒤 둘째가 뜬다', async () => {
-    renderGate([T1, T2]);
-    await screen.findByText('첫 튜토리얼');
-
-    click('닫기');
-
-    expect(await screen.findByText('둘째 튜토리얼')).toBeInTheDocument();
-  });
-
-  it('[F20-11] 로그인 안 한 상태(이메일 없음)에선 안 뜬다', () => {
-    localStorage.clear();
-    renderGate();
-
-    expect(screen.queryByText('첫 튜토리얼')).toBeNull();
-  });
-});
-
-describe('슬라이드', () => {
-  it('[F20-02] [다음]을 누르면 두 번째 슬라이드로 간다', async () => {
-    renderGate();
-    await screen.findByText('첫 튜토리얼');
-
-    click('다음');
-
-    expect(screen.getByText('본문 둘')).toBeInTheDocument();
-  });
-
-  it('[F20-03] [이전]을 누르면 첫 슬라이드로 돌아간다', async () => {
-    renderGate();
-    await screen.findByText('첫 튜토리얼');
-    click('다음');
-
-    click('이전');
-
-    expect(screen.getByText('본문 하나')).toBeInTheDocument();
-  });
-});
-
-describe('닫기 · 다시 보지 않기', () => {
-  it('[F20-04] [닫기] 뒤 다시 마운트(새로고침)하면 안 뜬다', async () => {
-    const { unmount } = renderGate();
-    await screen.findByText('첫 튜토리얼');
-    click('닫기');
-    unmount();
+  it('[F20-27] 같은 세션에서 다시 마운트해도 다시 보내지 않는다', async () => {
+    const first = renderGate();
+    await waitFor(() => expect(loc()).toBe('/tutorials?auto=1'));
+    first.unmount();
 
     renderGate();
+    await settle();
 
-    expect(screen.queryByText('첫 튜토리얼')).toBeNull();
+    expect(loc()).toBe('/');
   });
 
-  it('[F20-05] [닫기] 뒤 새 세션에서 마운트하면 다시 뜬다', async () => {
-    const { unmount } = renderGate();
-    await screen.findByText('첫 튜토리얼');
-    click('닫기');
-    unmount();
+  it('[F20-28] 새 세션이면 다시 보낸다', async () => {
+    const first = renderGate();
+    await waitFor(() => expect(loc()).toBe('/tutorials?auto=1'));
+    first.unmount();
     sessionStorage.clear();
 
     renderGate();
 
-    expect(await screen.findByText('첫 튜토리얼')).toBeInTheDocument();
+    await waitFor(() => expect(loc()).toBe('/tutorials?auto=1'));
   });
 
-  it('[F20-06] [다시 보지 않기] 뒤 새 세션에서도 안 뜬다', async () => {
-    const { unmount } = renderGate();
-    await screen.findByText('첫 튜토리얼');
-    click('다시 보지 않기');
-    unmount();
-    sessionStorage.clear();
+  it('[F20-29] 모든 묶음이 기록돼 있으면 보내지 않는다', async () => {
+    await dismissT1();
 
     renderGate();
+    await settle();
 
-    expect(screen.queryByText('첫 튜토리얼')).toBeNull();
+    expect(loc()).toBe('/');
   });
 
-  it('[F20-07] A 계정이 끈 튜토리얼이 B 계정에는 뜬다', async () => {
-    const { unmount } = renderGate();
-    await screen.findByText('첫 튜토리얼');
-    click('다시 보지 않기');
-    unmount();
-    sessionStorage.clear();
+  it('[F20-30] 다른 이메일은 그 계정 기준으로 판단한다', async () => {
+    await dismissT1();
     loginAs('b@test.local');
 
     renderGate();
 
-    expect(await screen.findByText('첫 튜토리얼')).toBeInTheDocument();
+    await waitFor(() => expect(loc()).toBe('/tutorials?auto=1'));
   });
-});
 
-describe('저장소 실패', () => {
-  it('[F20-09] 저장소 읽기가 예외를 던지면 안 본 것으로 보고 띄운다', async () => {
+  it('[F20-31] 로그인 안 했으면 보내지 않는다', async () => {
+    localStorage.clear();
+
+    renderGate();
+    await settle();
+
+    expect(loc()).toBe('/');
+  });
+
+  it('[F20-32] 저장소 읽기가 예외여도 안 죽고 보낸다', async () => {
     const original = Storage.prototype.getItem;
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function getItem(key) {
       if (AUTH_KEYS.includes(key)) return original.call(this, key);
@@ -166,33 +139,6 @@ describe('저장소 실패', () => {
 
     renderGate();
 
-    expect(await screen.findByText('첫 튜토리얼')).toBeInTheDocument();
-  });
-
-  it('[F20-10] 저장소 쓰기가 예외를 던져도 [다시 보지 않기]로 모달이 닫힌다', async () => {
-    renderGate();
-    await screen.findByText('첫 튜토리얼');
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('storage denied');
-    });
-
-    click('다시 보지 않기');
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  });
-});
-
-describe('끝까지 본 경우 (Phase 3)', () => {
-  it('[F20-22] 마지막 슬라이드 [확인] 뒤 새 세션에서도 안 뜬다', async () => {
-    const { unmount } = renderGate();
-    await screen.findByText('첫 튜토리얼');
-    click('다음');
-    click('확인');
-    unmount();
-    sessionStorage.clear();
-
-    renderGate();
-
-    expect(screen.queryByText('첫 튜토리얼')).toBeNull();
+    await waitFor(() => expect(loc()).toBe('/tutorials?auto=1'));
   });
 });
