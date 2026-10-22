@@ -146,7 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/archive/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/archive/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/archive/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
-| REQ-F20 | 튜토리얼 — 로그인 후 첫 화면에 안 본 튜토리얼 슬라이드 모달, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 3/3 구현·리뷰 끝(`3a9e1fe`) · 케이스 25/25 · 리뷰 회차 1 @ `3a9e1fe` (b·c 0, 감수 1) · **dev 육안 남음**(dev 프론트에 브랜치 배포 필요) |
+| REQ-F20 | 튜토리얼 — 로그인 후 첫 화면에 안 본 튜토리얼 슬라이드 모달, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 4 테스트만(구현 전, red) — Phase 3은 로컬 육안 뒤 재설계로 대체 · 브랜치 `feat/F20-tutorial` · 리뷰 회차 1 @ `3a9e1fe` |
 | REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/archive/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/archive/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/archive/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
@@ -273,7 +273,17 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 
 ## 2026-10-22
 
-### REQ-F20 — 튜토리얼 (🟡 Phase 3 구현·리뷰 끝, dev 육안 남음)
+### REQ-F20 — 튜토리얼 (🟡 재설계: Phase 4 테스트만, 구현 전)
+- 로컬 육안 뒤 재설계(사용자 요청). Phase 3(기본 흐름·공유 2개)은 완료가 아니라 **대체**다. dev 육안은 하지 않는다
+  - 모달은 스크린샷이 작아 알아보기 어려웠다 → 전용 화면 `/tutorials`(왼쪽 목차, 오른쪽 큰 슬라이드). 거의 전체 화면 모달은 기각
+  - 메뉴 소개가 아니라 기능 설명이 필요하다 → 화면별 6묶음(분석·생성·결과·템플릿 관리·공유·알림과 튜토리얼), 요청 기능 13개를 슬라이드로 배치
+  - 자동 노출은 안 본 묶음 전부를 차례로(사용자 선택, "시작하기 1개만"은 기각). 첫 진입 때 세션당 한 번 화면으로 보낸다
+  - 스크린샷은 화면 전체 + 설명 대상에 빨간 테두리
+- Phase 4 `/testgen`: F20-26~45 20건. 모달 전제 케이스 16건(F20-01~11·14·15·21~23)은 표에서 `대체`로 바꾸고 테스트 코드를 지웠다. `/testrun`은 `대체` 행을 누락으로 세지 않는다
+- 미결 1건: 자동 모드에서 안 본 묶음을 다 끝내면 어디로 가나
+- 커밋: 테스트는 구현 전(red)이지만 사용자 요청으로 `test(F20)` 커밋·푸시했다. 다음은 `/implement F20 4`
+
+### REQ-F20 — 튜토리얼 (Phase 3 구현·리뷰 끝 시점 기록)
 - Phase 3: 기본 흐름 4장·공유 3장. 스크린샷은 dev에서 테스트 계정 test@test.com으로 찍었다(사용자 지정). 로컬은 PDF 뷰어 401(F16 TODO)과 빈약한 테스트 데이터로 못 썼다
   - 공유 화면을 찍으려고 이 계정으로 기출 PDF 2개 업로드·문제집 1개 생성(dev 데이터)
   - dev 프론트가 `ac502ca`라 스크린샷 헤더에 ? 버튼이 없다(nit)
