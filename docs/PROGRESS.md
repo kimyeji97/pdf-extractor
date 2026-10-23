@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-22
+> 최종 갱신: 2026-10-23
 
 ## 요구사항 인덱스
 
@@ -146,7 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/archive/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/archive/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/archive/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
-| REQ-F20 | 튜토리얼 — 로그인 후 첫 화면에 안 본 튜토리얼 슬라이드 모달, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 4 테스트만(구현 전, red) — Phase 3은 로컬 육안 뒤 재설계로 대체 · 브랜치 `feat/F20-tutorial` · 리뷰 회차 1 @ `3a9e1fe` |
+| REQ-F20 | 튜토리얼 — 첫 진입 때 안 본 묶음을 전용 화면(`/tutorials`)으로 보여 주기, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 4/5 — 전용 화면 `2912ac7` · 다음 Phase 5 콘텐츠 6묶음 · 브랜치 `feat/F20-tutorial` |
 | REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/archive/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/archive/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/archive/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
@@ -270,6 +270,18 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-10-23
+
+### REQ-F20 — 튜토리얼 (🟡 Phase 4 전용 화면)
+- 미결 "자동 모드에서 다 보면 어디로" → 튜토리얼 화면에 머물며 다 봤다고 알린다(사용자 선택). 분석 화면 이동은 기각. `/implement` 착수 전에 물었다
+- 모달(`TutorialDialog`)은 지웠다. 쓰는 곳이 전용 화면 하나로 모였다
+- 그냥 닫기 기록(`tutorial_closed:*`, sessionStorage)은 없앴다. 결정 표의 "화면을 떠나는 것이 그냥 닫기"라서 세션당 한 번 보냈다는 표시(`tutorial_redirected:*`)가 그 자리를 맡는다. 다시 보지 않기 키 `tutorial_dismissed:*`는 그대로라 이미 끈 사람에게 다시 안 뜬다
+- `TutorialGate`의 이동 effect는 `userEmail`만 의존한다. `navigate`까지 넣으면 이동마다 effect가 다시 돌고, 세션 저장이 막힌 브라우저에선 같은 화면으로 계속 보낸다
+- 구현이 정한 것 1건(계획서 미결로 올림): 자동 모드에서 목차를 누르면 `?auto`가 빠져 다시 보기가 된다. 케이스 없음
+- 테스트: F20 29/29 · 표 ID 29 = 코드 ID 29(대체 16행 제외) · 근거 인용 모두 본문에 있음 · 빌드 OK
+  - 프론트 전체 482/484. 실패 F17-17·20은 Node 20에 `fs.globSync`가 없어서다(기존 환경 문제, 10-21 기록과 같다)
+- 리뷰는 Phase 5 뒤에 한다
 
 ## 2026-10-22
 
