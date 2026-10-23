@@ -8,6 +8,7 @@ const paths = {
   create: '/create',
   results: '/results',
   templates: '/templates',
+  tutorials: '/tutorials',
   login: '/login',
   signup: '/signup',
   unavailable: '/unavailable',

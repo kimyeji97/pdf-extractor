@@ -14,6 +14,7 @@ const AnalysisWorkPage = lazy(() => import('pages/analysis/work'));
 const EditorPage       = lazy(() => import('pages/editor'));
 const HistoryPage      = lazy(() => import('pages/history'));
 const FormatPage       = lazy(() => import('pages/format'));
+const TutorialsPage    = lazy(() => import('pages/tutorials'));
 const LoginPage        = lazy(() => import('pages/login'));
 const SignupPage       = lazy(() => import('pages/signup'));
 
@@ -67,6 +68,7 @@ export const routes: RouteObject[] = [
           { path: paths.create,          element: <EditorPage /> },
           { path: paths.results,         element: <HistoryPage /> },
           { path: paths.templates,       element: <FormatPage /> },
+          { path: paths.tutorials,       element: <TutorialsPage /> },
         ],
       },
     ],
