@@ -146,7 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/archive/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/archive/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/archive/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
-| REQ-F20 | 튜토리얼 — 첫 진입 때 안 본 묶음을 전용 화면(`/tutorials`)으로 보여 주기, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 5/5 구현 — 리뷰 회차 3 @ `14f1fc5` 게이트 통과 · 사람 육안 남음 · 브랜치 `feat/F20-tutorial` |
+| REQ-F20 | 튜토리얼 — 첫 진입 때 안 본 묶음을 전용 화면(`/tutorials`)으로 보여 주기, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 6/6 구현 — 리뷰 회차 4 @ `65208f2` 게이트 통과 · dev 배포·사람 육안(Phase 5·6) 남음 · 브랜치 `feat/F20-tutorial` |
 | REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/archive/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/archive/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/archive/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
@@ -272,6 +272,22 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-23
+
+### REQ-F20 — 튜토리얼 (🟡 Phase 6 dev 육안 피드백 반영, 사람 육안 남음)
+- Phase 5 dev 육안에서 피드백 5건이 나와 Phase 6을 새로 만들었다: 사이드바 숨김과 로고 · 설명 목록화 · 다시 보기 묶음 경계 이동 · 촬영 스크립트 · 재촬영. Phase 5 육안은 Phase 6 dev 육안과 함께 본다
+- 결정(계획서 결정 표에 옮김): 튜토리얼 화면은 작업공간 선택까지 사이드바 전체를 숨기고 좁은 화면 햄버거도 숨긴다 · 다시 보기의 맨 끝 [다음]은 비활성(분석 화면 이동 기각) · 생성 장면은 2쪽 4개 + 3쪽 앞 2개로 6단 한 장을 채운다
+- 촬영 스크립트를 레포 `scripts/tutorial/`에 뒀다. 임시 폴더 스크립트는 세션과 함께 사라지고, 테두리 모양이 묶음마다 달라진다. 비밀번호는 저장하지 않고 찍을 때 받는다
+- 계약 #44 승격: 본 기록이 묶음 id 단위라 기존 묶음에 장만 끼우면 이미 본 사람에게 에러 없이 안 뜬다. 신기능은 새 묶음, 화면이 크게 바뀌면 id를 올린다
+- 테스트 결함(65208f2): F20-54는 사이드바 메뉴를 link 역할로 찾았는데 실제는 button 역할이었다. 같은 이유로 F20-51은 구현 전부터 통과하는 빈 케이스였다
+- 커밋 형태: Phase 6 코드는 처음에 `wip` 커밋으로 올라갔다. 사용자 요청으로 메시지만 `feat`로 고쳐 강제 푸시했다(트리 동일, 옛 sha 9fdb001·8d3df76). 리뷰 회차 4의 sha도 새 sha로 바꿨다
+- 테스트: F20 44/44(Phase 6 12/12) · 표 ID 44 = 코드 ID 44(대체 행 제외). `/checkpoint`에서 `vitest -t 'F20-'`를 다시 돌려 확인했다
+- 리뷰: F20 @ 65208f2 — (b) 0 · (c) 0 · nit 3 (직전 수정 결정 없음 · 직전 감수 2건 유지)
+  - 직전 (b): [frontend/src/pages/tutorials/index.jsx:104] Phase 5 커밋이 Phase 4 화면 파일을 고쳤다(그림 높이 상한 1줄) · 실측 — 결정: 감수 (회차 2)
+  - 직전 (b): [frontend/src/components/TutorialGate.jsx] 저장소 실패 경계 · 가설 — 결정: 감수 (회차 1)
+  - nit: 촬영 스크립트가 생성 장면 체크박스를 인덱스 4~9로 고른다. dev 1쪽 문항 수가 바뀌면 에러 없이 다른 6문항을 찍는다. analysis-5·create-2~4는 앞 장면 상태에 기대 혼자 찍으면 실패한다(exit 1) (scripts/tutorial/shoot.mjs)
+  - nit: `pl: bare ? 0 : …`는 bare일 때 걸리지 않는 죽은 분기다 (frontend/src/layouts/dashboard/layout.tsx)
+  - nit: 헤더 로고 width 180 고정이라 360px 폭에서 오른쪽 버튼이 잘릴 수 있다(가설). `/tutorials/`(끝 슬래시)는 사이드바가 보인다 (frontend/src/layouts/dashboard/layout.tsx)
+- 리뷰 게이트: 마지막 코드 커밋 `65208f2` = 회차 4 sha · 열린 (b)·(c) 없음 → 통과. Phase 5·6 완료 기준의 dev 배포·사람 육안이 남아 🟡
 
 ### REQ-F20 — 튜토리얼 (🟡 Phase 5 구현·리뷰 회차 3, 사람 육안 남음)
 - Phase 5 콘텐츠: 화면별 6묶음 18장. 범위 포함의 화살표 하나가 한 장이다(사용자 선택, "기능 13개" 기록과 어긋나 물었다)

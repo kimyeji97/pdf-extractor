@@ -715,6 +715,13 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     presigned 에 `Authorization` 을 붙이면 400 이다(실측 — F16 리뷰 회차 1에서 주 경로가 깨졌다).
     **`client.js` 밖에 raw fetch 를 만들면 그 파일에 맞는 가드를 직접 둘 것** — B23-03 은 거기까지 안 본다.
 
+44. **튜토리얼(`frontend/src/utils/tutorials.js`)은 묶음 id 단위로 "본 기록"이 남는다** — 기존 묶음에 장만 끼우면 그 묶음을
+    이미 본 사용자에게는 **에러 없이 안 뜬다.** 신기능은 새 묶음(새 id)으로 더하고, 화면이 크게 바뀌면 그 묶음 id를 올린다
+    (`create` → `create-2`). id를 이유 없이 바꾸면 반대로 다 본 사람에게 다시 뜬다.
+    스크린샷은 **dev에서 test@test.com으로** 찍는다(실사용자 이메일·파일명이 안 찍히게). 비밀번호는 어디에도 저장하지 않고 **찍을 때 사용자에게 묻는다.**
+    dev 백엔드는 **찍는 동안만 켜고 끝나면 바로 `desired 0`**. 촬영은 레포 `scripts/tutorial/` 스크립트로 한다 — 장면과 빨간 테두리가 한 벌이다.
+    튜토리얼 문구는 화면 동작과 짝이라 그 화면을 바꾸는 REQ는 문구와 그림도 다시 본다. (REQ-F20)
+
 ### 배포 (prod)
 
 37. **prod 태스크 정의의 backend 이미지는 버전 태그로 고정한다 — `:latest` 금지** — dev는 `:latest`라 `backend-build.sh`가
