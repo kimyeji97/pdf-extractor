@@ -146,7 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/archive/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/archive/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/archive/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
-| REQ-F20 | 튜토리얼 — 첫 진입 때 안 본 묶음을 전용 화면(`/tutorials`)으로 보여 주기, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 4/5 — 전용 화면 `2912ac7` · 다음 Phase 5 콘텐츠 6묶음 · 브랜치 `feat/F20-tutorial` |
+| REQ-F20 | 튜토리얼 — 첫 진입 때 안 본 묶음을 전용 화면(`/tutorials`)으로 보여 주기, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | — | 🟡 Phase 5/5 구현 — 리뷰 회차 3 @ `14f1fc5` 게이트 통과 · 사람 육안 남음 · 브랜치 `feat/F20-tutorial` |
 | REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/archive/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/archive/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/archive/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
@@ -272,6 +272,35 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 # 로그
 
 ## 2026-10-23
+
+### REQ-F20 — 튜토리얼 (🟡 Phase 5 구현·리뷰 회차 3, 사람 육안 남음)
+- Phase 5 콘텐츠: 화면별 6묶음 18장. 범위 포함의 화살표 하나가 한 장이다(사용자 선택, "기능 13개" 기록과 어긋나 물었다)
+  - 문구는 화면 코드에서 버튼 이름 그대로 옮겼다. 계획서와 실제가 달랐던 곳: 현황판 타일은 6개, 재편집 버튼은 "편집으로 불러오기", 레이아웃은 템플릿과 따로 고른다
+  - 기본 흐름(`welcome`) 묶음은 지웠다. 공유 묶음 id `share`는 유지해 F20-19·24·25 공유 문구 케이스를 그대로 쓴다
+- 스크린샷: dev test@test.com, 1440×860, 설명 대상에 빨간 테두리. 테두리는 조상 `overflow:hidden`에 잘리지 않게 body 위 고정 박스로 그렸다
+  - dev 프론트(`ac502ca`)엔 ? 버튼이 없어 마지막 1장만 브랜치 프론트를 로컬로 띄워 찍었다. localhost 오리진은 dev API CORS에 막혀 격리 Chrome `--disable-web-security`로 찍었다
+  - dev 데이터를 바꿨다(test 계정): 각주 "반 이름"·템플릿 "기본 템플릿" 생성, `student@test.com` 가입(승인 대기)과 "2026 2학기 중3 심화대비" 뷰어 공유. 공유 목록 장면에 실사용자 이메일이 안 찍히게 하려고
+  - dev 백엔드는 찍는 동안만 desired 1, 끝나고 0
+- 육안으로 튜토리얼 화면 설명 글이 860px 높이에서 밀려 그림 높이에 상한을 뒀다(Phase 4 파일, 리뷰 회차 2에서 감수)
+- 리뷰 회차 2 결정: 자동 모드를 다 보면 화면에 머문다 · 목차는 묶음·슬라이드 모두 다시 보기 · 깊은 링크로 들어와도 보낸다. 계획서 결정 표에 옮겼다
+- 함정(실측): `/tutorials?auto=1` ↔ `/tutorials`처럼 쿼리만 바뀌는 이동은 다시 마운트되지 않는다. `SuspenseOutlet` key가 pathname이라 자동 모드를 다 본 뒤 ? 버튼이 "모두 봤습니다"에 머물렀다 → 모드를 key로 쓰는 래퍼. 목차에서 고른 자리는 이동 state로 넘긴다
+- 테스트: F20 32/32 · 표 ID 32 = 코드 ID 32(대체 18행 제외) · 근거 인용 모두 본문에 있음 · 빌드 OK · 프론트 전체 485/487(F17-17·20은 Node 20 환경 문제)
+- 리뷰: F20 @ 14f1fc5 — (b) 0 · (c) 0 · nit 2 (직전 수정 결정 3건 닫힘 · 직전 감수 2건 유지)
+  - 직전 (b): [frontend/src/pages/tutorials/index.jsx:31,35] `?auto`만 바뀌면 다시 마운트되지 않아 자동 모드를 다 본 뒤 ? 버튼이 다시 보기를 못 연다 · 실측
+    - 방안: A auto 값을 key로 쓰는 래퍼로 다시 마운트 (+약 5줄 · pages/tutorials/index.jsx) · TODO · 감수 — 추천 A
+    - 결정: A → 닫힘 (14f1fc5)
+  - 직전 (b): [frontend/src/pages/tutorials/index.jsx:104] Phase 5 커밋이 Phase 4 화면 파일을 고쳤다(그림 높이 상한 1줄) · 실측
+    - 결정: 감수 (회차 2)
+  - 직전 (c): [frontend/src/pages/tutorials/index.jsx:50,73] 자동 모드에서 목차의 슬라이드 클릭은 자동 모드를 유지해 본 것으로 기록될 수 있다 · 가설(코드 추적)
+    - 방안: A 묶음·슬라이드 클릭 모두 다시 보기로 (계획서 결정 + 1줄) · B 지금 동작 확정 · TODO · 감수 — 추천 A
+    - 결정: A → 닫힘 (14f1fc5, 계획서 결정 표 "자동 모드에서 목차 클릭")
+  - 직전 (c): [frontend/src/components/TutorialGate.jsx:18,23] 깊은 링크로 처음 들어와도 튜토리얼로 보낸다 · 가설(코드 추적)
+    - 방안: A 모든 경로에서 보낸다고 계획서에 확정 · B `/`에서만 보내기 · TODO — 추천 A
+    - 결정: A → 닫힘 (계획서 결정 표 "첫 진입 경로")
+  - 직전 (b): [frontend/src/components/TutorialGate.jsx] 저장소 실패 경계 · 가설 — 결정: 감수 (회차 1, 유지)
+  - nit: `picked`(이동 state)를 검증 없이 쓴다. 묶음이 바뀐 뒤 남은 history state로 새로고침하면 "모두 봤습니다"가 뜬다 (pages/tutorials/index.jsx:45)
+  - nit: 주석 "자동 모드에서 목차로 고른 자리"는 다시 보기 초기값으로만 읽힌다 (pages/tutorials/index.jsx:37)
+- 리뷰 게이트: 마지막 코드 커밋 `14f1fc5` = 회차 3 sha · 수정 결정 전부 닫힘 · 나머지 감수 → 통과. 그래도 Phase 5 완료 기준의 사람 육안이 남아 🟡(사용자 선택)
 
 ### REQ-F20 — 튜토리얼 (🟡 Phase 4 전용 화면)
 - 미결 "자동 모드에서 다 보면 어디로" → 튜토리얼 화면에 머물며 다 봤다고 알린다(사용자 선택). 분석 화면 이동은 기각. `/implement` 착수 전에 물었다
