@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import { Icon } from "@iconify/react";
 
 import Box from "@mui/material/Box";
@@ -20,19 +20,29 @@ import { markSeen, seenIds } from "utils/tutorialSeen";
  * `?auto=1`은 자동 모드다(`TutorialGate`가 보낸다). 안 본 묶음을 차례로 보여 주고,
  * 다시 보지 않기와 마지막 슬라이드 넘김을 본 기록으로 남긴다. 다 보면 이 화면에 머문다(2026-10-23 사용자 결정).
  * 그 밖(? 버튼)은 다시 보기다. 본 기록을 읽지도 쓰지도 않고 [다시 보지 않기]도 없다.
- * 목차에서 고르는 것은 사용자가 직접 고른 다시 보기라 자동 모드를 끝낸다.
+ * 목차에서 고르는 것(묶음·슬라이드 모두)은 사용자가 직접 고른 다시 보기라 자동 모드를 끝낸다.
+ *
+ * `?auto`만 바뀌는 이동은 라우트가 같아 다시 마운트되지 않는다(`SuspenseOutlet` key = pathname).
+ * 그래서 모드를 key로 써서 다시 마운트한다 — 안 하면 자동 모드를 다 본 뒤 ? 버튼이 "모두 봤습니다"에 머문다(리뷰 회차 2).
  */
-export default function TutorialsPage({ tutorials = TUTORIALS }) {
-  const userEmail = useAuth()?.userEmail;
-  const [searchParams, setSearchParams] = useSearchParams();
+export default function TutorialsPage(props) {
+  const [searchParams] = useSearchParams();
   const auto = searchParams.get("auto") === "1";
+  return <TutorialsView key={auto ? "auto" : "replay"} auto={auto} {...props} />;
+}
+
+function TutorialsView({ auto, tutorials = TUTORIALS }) {
+  const userEmail = useAuth()?.userEmail;
+  const [, setSearchParams] = useSearchParams();
+  const picked = useLocation().state?.tutorialPick; // 자동 모드에서 목차로 고른 자리 — 다시 마운트 뒤 그 자리에서 시작
 
   // 자동 모드에서 볼 묶음 — 들어온 순간의 기록으로 한 번 정한다
   const [queue] = useState(() => {
     const seen = new Set(userEmail ? seenIds(userEmail) : []);
     return tutorials.filter((t) => !seen.has(t.id)).map((t) => t.id);
   });
-  const [current, setCurrent] = useState(() => ({ id: auto ? (queue[0] ?? null) : tutorials[0]?.id, step: 0 }));
+  const [current, setCurrent] = useState(() =>
+    auto ? { id: queue[0] ?? null, step: 0 } : (picked ?? { id: tutorials[0]?.id, step: 0 }));
 
   const tutorial = tutorials.find((t) => t.id === current.id);
   const slide = tutorial?.slides[current.step];
@@ -47,9 +57,9 @@ export default function TutorialsPage({ tutorials = TUTORIALS }) {
     go(nextInQueue ?? null);
   };
 
-  const pick = (id) => {
-    if (auto) setSearchParams({}, { replace: true });
-    go(id);
+  const pick = (id, step = 0) => {
+    if (auto) setSearchParams({}, { replace: true, state: { tutorialPick: { id, step } } });
+    else go(id, step);
   };
 
   return (
@@ -70,7 +80,7 @@ export default function TutorialsPage({ tutorials = TUTORIALS }) {
                 </ListItemButton>
                 {t.id === current.id &&
                   t.slides.map((s, i) => (
-                    <ListItemButton key={i} sx={{ pl: 4 }} onClick={() => go(t.id, i)}>
+                    <ListItemButton key={i} sx={{ pl: 4 }} onClick={() => pick(t.id, i)}>
                       <Typography
                         variant="body2"
                         color={i === current.step ? "primary.main" : "text.secondary"}

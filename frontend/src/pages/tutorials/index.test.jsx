@@ -1,17 +1,19 @@
 /**
  * REQ-F20 Phase 4 — 전용 튜토리얼 화면 (`/tutorials`)
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-33~43)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-33~43, F20-47~50)
  *
  * `?auto=1`이면 자동 모드(안 본 묶음을 차례로, 본 기록을 남긴다), 없으면 다시 보기(기록을 안 바꾼다).
- * 왼쪽 목차의 묶음 항목은 묶음 제목을 이름으로 가진 버튼이다.
+ * 왼쪽 목차의 묶음 항목은 묶음 제목을, 슬라이드 항목은 슬라이드 제목을 이름으로 가진 버튼이다.
+ * F20-47·48은 페이지를 라우터 없이 직접 렌더한다 — `?auto`가 바뀔 때 다시 마운트하는 일은 페이지 모듈이 맡는다(리뷰 회차 2 결정 A).
  * 기록이 남았는지는 새 세션에서 `TutorialGate`가 보내는지로 본다 — 저장 키 이름은 구현 몫이다.
  */
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TutorialGate from 'components/TutorialGate';
+import TutorialMenu from 'components/TutorialMenu';
 import { AuthProvider } from 'contexts/AuthContext';
 import TutorialsPage from 'pages/tutorials';
 import { ThemeProvider } from 'theme/theme-provider';
@@ -35,6 +37,12 @@ const T2 = { id: 't2', title: '둘째 튜토리얼', slides: [{ title: '둘째 �
 function Probe() {
   const l = useLocation();
   return <div data-testid="loc">{l.pathname + l.search}</div>;
+}
+
+/** 테스트에서 `?auto=1`로 옮겨 가는 버튼 */
+function GoAuto() {
+  const navigate = useNavigate();
+  return <button type="button" onClick={() => navigate('/tutorials?auto=1')}>자동으로</button>;
 }
 
 const stage = (children, entry) =>
@@ -182,3 +190,57 @@ describe('다시 보기', () => {
   });
 });
 
+describe('모드 전환 (리뷰 회차 2)', () => {
+  /** 마지막 장의 진행 버튼이 있으면 누른다 — 자동 모드면 [확인]·[다음], 다시 보기면 비활성 [다음] */
+  const finishIfPossible = async () => {
+    const btn = screen.queryByRole('button', { name: '확인' }) ?? screen.queryByRole('button', { name: '다음' });
+    if (btn && !btn.disabled) fireEvent.click(btn);
+    await settle();
+  };
+
+  it('[F20-47] 자동 모드를 다 본 뒤 ? 버튼을 누르면 다시 보기 첫 묶음 첫 슬라이드가 보인다', async () => {
+    stage(<><TutorialMenu /><TutorialsPage tutorials={[T1]} /></>, '/tutorials?auto=1');
+    await screen.findByText('본문 하나');
+    click('다음');
+    click('확인');
+    await settle();
+
+    click('튜토리얼');
+
+    expect(await screen.findByText('본문 하나')).toBeInTheDocument();
+  });
+
+  it('[F20-48] 다시 보기에서 2장째를 보다가 ?auto=1로 이동하면 안 본 묶음 첫 슬라이드부터 보인다', async () => {
+    stage(<><GoAuto /><TutorialsPage tutorials={[T1, T2]} /></>, '/tutorials');
+    await screen.findByText('본문 하나');
+    click('다음');
+    await screen.findByText('본문 둘');
+
+    click('자동으로');
+
+    expect(await screen.findByText('본문 하나')).toBeInTheDocument();
+  });
+
+  it('[F20-49] 자동 모드에서 목차의 슬라이드를 누른 뒤 끝까지 넘겨도 본 기록이 바뀌지 않는다', async () => {
+    const { unmount } = renderAuto([T1]);
+    await screen.findByText('본문 하나');
+
+    click('슬라이드 둘');
+    await screen.findByText('본문 둘');
+    await finishIfPossible();
+
+    expect(await gateRedirectsInNewSession(unmount, [T1])).toBe(true);
+  });
+
+  it('[F20-50] 자동 모드에서 목차의 묶음을 누른 뒤 끝까지 넘겨도 본 기록이 바뀌지 않는다', async () => {
+    const { unmount } = renderAuto([T1]);
+    await screen.findByText('본문 하나');
+
+    click('첫 튜토리얼');
+    click('다음');
+    await screen.findByText('본문 둘');
+    await finishIfPossible();
+
+    expect(await gateRedirectsInNewSession(unmount, [T1])).toBe(true);
+  });
+});
