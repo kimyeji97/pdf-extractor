@@ -31,12 +31,14 @@ const renderAt = (path) =>
   );
 
 const MENU = ['분석', '생성', '결과', '템플릿 관리'];
+// jsdom 폭(1024)은 사이드바가 보이는 lg(1200)보다 좁아 NavDesktop이 display:none이다 — 접근성 트리에서 빠지므로 hidden까지 본다
+const menuItem = (name) => screen.queryByRole('link', { name, hidden: true });
 
 describe('튜토리얼 화면 셸 (Phase 6)', () => {
   it('[F20-51] /tutorials 에서 사이드바 메뉴가 DOM에 없다', () => {
     renderAt('/tutorials');
 
-    expect(MENU.filter((name) => screen.queryByRole('link', { name }))).toEqual([]);
+    expect(MENU.filter((name) => menuItem(name))).toEqual([]);
   });
 
   it('[F20-52] /tutorials 에서 작업공간 선택도 없다', () => {
@@ -56,6 +58,6 @@ describe('튜토리얼 화면 셸 (Phase 6)', () => {
   it('[F20-54] 다른 화면에서는 사이드바 메뉴가 그대로 있다', () => {
     renderAt('/');
 
-    expect(MENU.filter((name) => !screen.queryByRole('link', { name }))).toEqual([]);
+    expect(MENU.filter((name) => !menuItem(name))).toEqual([]);
   });
 });
