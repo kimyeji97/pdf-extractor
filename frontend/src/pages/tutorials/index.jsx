@@ -51,6 +51,12 @@ function TutorialsView({ auto, tutorials = TUTORIALS }) {
 
   const go = (id, step = 0) => setCurrent({ id, step });
 
+  // 다시 보기는 묶음 경계를 넘는다 — 묶음 끝 [다음]은 다음 묶음 첫 장, 묶음 첫 장 [이전]은 앞 묶음 마지막 장 (Phase 6)
+  const index = tutorials.findIndex((t) => t.id === current.id);
+  const nextBundle = tutorials[index + 1];
+  const prevBundle = index > 0 ? tutorials[index - 1] : undefined;
+  const goPrev = () => (current.step > 0 ? go(tutorial.id, current.step - 1) : go(prevBundle.id, prevBundle.slides.length - 1));
+
   // 자동 모드에서 이 묶음을 끝낸다 — 기록하고 다음 안 본 묶음으로, 없으면 다 봤다는 안내
   const finish = () => {
     if (userEmail) markSeen(userEmail, tutorial.id);
@@ -115,18 +121,22 @@ function TutorialsView({ auto, tutorials = TUTORIALS }) {
                   />
                 )}
                 <Typography variant="h6" sx={{ mb: 1 }}>{slide.title}</Typography>
-                <Typography variant="body1" color="text.secondary">{slide.body}</Typography>
+                <Box component="ul" sx={{ m: 0, pl: 2.5, color: "text.secondary", typography: "body1" }}>
+                  {slide.body.map((line, i) => (
+                    <Box component="li" key={i} sx={{ mb: 0.5 }}>{line}</Box>
+                  ))}
+                </Box>
               </Box>
               <Box sx={{ display: "flex", gap: 1, px: 3, py: 1.5, borderTop: 1, borderColor: "divider", flexShrink: 0 }}>
                 {auto && <Button color="inherit" onClick={finish}>다시 보지 않기</Button>}
                 <Box sx={{ flex: 1 }} />
-                {current.step > 0 && <Button onClick={() => go(tutorial.id, current.step - 1)}>이전</Button>}
+                {(current.step > 0 || (!auto && prevBundle)) && <Button onClick={goPrev}>이전</Button>}
                 {!last ? (
                   <Button variant="contained" onClick={() => go(tutorial.id, current.step + 1)}>다음</Button>
                 ) : auto ? (
                   <Button variant="contained" onClick={finish}>{nextInQueue ? "다음" : "확인"}</Button>
                 ) : (
-                  <Button variant="contained" disabled>다음</Button>
+                  <Button variant="contained" disabled={!nextBundle} onClick={() => go(nextBundle.id)}>다음</Button>
                 )}
               </Box>
             </>

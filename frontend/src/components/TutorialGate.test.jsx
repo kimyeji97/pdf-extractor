@@ -22,7 +22,7 @@ vi.mock('api/client', () => ({
   logout: vi.fn(),
 }));
 
-const T1 = { id: 't1', title: '첫 튜토리얼', slides: [{ title: '슬라이드 하나', body: '본문 하나' }] };
+const T1 = { id: 't1', title: '첫 튜토리얼', slides: [{ title: '슬라이드 하나', body: ['본문 하나'] }] };
 
 function Probe() {
   const l = useLocation();

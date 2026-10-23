@@ -1,0 +1,12 @@
+{
+  "name": "tutorial-shots",
+  "private": true,
+  "description": "튜토리얼 스크린샷 촬영 (REQ-F20). frontend 의존성과 분리한다",
+  "type": "module",
+  "scripts": {
+    "shoot": "node shoot.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.47.2"
+  }
+}

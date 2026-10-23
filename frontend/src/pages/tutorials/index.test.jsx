@@ -1,7 +1,8 @@
 /**
  * REQ-F20 Phase 4 — 전용 튜토리얼 화면 (`/tutorials`)
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-33~43, F20-47~50)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-33~43, F20-47~50, F20-56~61)
+ * 슬라이드 body는 줄 목록(문자열 배열)이다 (Phase 6). Phase 4 케이스의 fixture도 배열로 바꿨고 단언은 그대로다.
  *
  * `?auto=1`이면 자동 모드(안 본 묶음을 차례로, 본 기록을 남긴다), 없으면 다시 보기(기록을 안 바꾼다).
  * 왼쪽 목차의 묶음 항목은 묶음 제목을, 슬라이드 항목은 슬라이드 제목을 이름으로 가진 버튼이다.
@@ -28,11 +29,11 @@ const T1 = {
   id: 't1',
   title: '첫 튜토리얼',
   slides: [
-    { title: '슬라이드 하나', body: '본문 하나', image: '/tutorials/sample.png' },
-    { title: '슬라이드 둘', body: '본문 둘' },
+    { title: '슬라이드 하나', body: ['본문 하나'], image: '/tutorials/sample.png' },
+    { title: '슬라이드 둘', body: ['본문 둘'] },
   ],
 };
-const T2 = { id: 't2', title: '둘째 튜토리얼', slides: [{ title: '둘째 슬라이드', body: '둘째 본문' }] };
+const T2 = { id: 't2', title: '둘째 튜토리얼', slides: [{ title: '둘째 슬라이드', body: ['둘째 본문'] }] };
 
 function Probe() {
   const l = useLocation();
@@ -242,5 +243,65 @@ describe('모드 전환 (리뷰 회차 2)', () => {
     await finishIfPossible();
 
     expect(await gateRedirectsInNewSession(unmount, [T1])).toBe(true);
+  });
+});
+
+describe('설명 목록과 묶음 경계 (Phase 6)', () => {
+  const T3 = { id: 't3', title: '셋째 튜토리얼', slides: [{ title: '목록 슬라이드', body: ['줄 하나', '줄 둘'] }] };
+
+  it('[F20-56] 설명 줄마다 목록 항목으로 그린다', async () => {
+    renderReplay([T3]);
+    await screen.findByText('줄 하나');
+
+    expect(['줄 하나', '줄 둘'].map((line) => screen.getByText(line).closest('li')?.textContent)).toEqual(['줄 하나', '줄 둘']);
+  });
+
+  it('[F20-57] 다시 보기에서 묶음 마지막 장의 [다음]은 다음 묶음 첫 장으로 간다', async () => {
+    renderReplay();
+    await screen.findByText('본문 하나');
+    click('다음');
+    await screen.findByText('본문 둘');
+
+    click('다음');
+
+    expect(await screen.findByText('둘째 본문')).toBeInTheDocument();
+  });
+
+  it('[F20-58] 다시 보기에서 묶음 첫 장의 [이전]은 앞 묶음 마지막 장으로 간다', async () => {
+    renderReplay();
+    await screen.findByText('본문 하나');
+    click('둘째 튜토리얼');
+    await screen.findByText('둘째 본문');
+
+    click('이전');
+
+    expect(await screen.findByText('본문 둘')).toBeInTheDocument();
+  });
+
+  it('[F20-59] 다시 보기에서 맨 끝 장의 [다음]은 비활성이다', async () => {
+    renderReplay();
+    await screen.findByText('본문 하나');
+    click('둘째 튜토리얼');
+    await screen.findByText('둘째 본문');
+
+    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
+  });
+
+  it('[F20-60] 다시 보기에서 맨 첫 장엔 [이전]이 없다', async () => {
+    renderReplay();
+    await screen.findByText('본문 하나');
+
+    expect(screen.queryByRole('button', { name: '이전' })).toBeNull();
+  });
+
+  it('[F20-61] 다시 보기로 묶음을 넘어 끝까지 가도 본 기록이 바뀌지 않는다', async () => {
+    const { unmount } = renderReplay([T1, T2]);
+    await screen.findByText('본문 하나');
+    click('다음');
+    click('다음');
+    await screen.findByText('둘째 본문');
+    await settle();
+
+    expect(await gateRedirectsInNewSession(unmount, [T1, T2])).toBe(true);
   });
 });
