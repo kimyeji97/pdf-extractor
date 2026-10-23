@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 import PageHeader from "components/PageHeader";
 import { WorkCanvas, CardRow, PanelCard, PanelCardHeader } from "components/WorkCanvas";
 import { useAuth } from "contexts/AuthContext";
+import { tintBg } from "theme/tint";
 import { TUTORIALS } from "utils/tutorials";
 import { markSeen, seenIds } from "utils/tutorialSeen";
 
@@ -19,7 +20,7 @@ import { markSeen, seenIds } from "utils/tutorialSeen";
  *
  * `?auto=1`은 자동 모드다(`TutorialGate`가 보낸다). 안 본 묶음을 차례로 보여 주고,
  * 다시 보지 않기와 마지막 슬라이드 넘김을 본 기록으로 남긴다. 다 보면 이 화면에 머문다(2026-10-23 사용자 결정).
- * 그 밖(? 버튼)은 다시 보기다. 본 기록을 읽지도 쓰지도 않고 [다시 보지 않기]도 없다.
+ * 그 밖(? 버튼)은 다시 보기다. 끝까지 넘겨도 기록하지 않고, 안 본 묶음의 [다시 보지 않기]로만 기록한다(Phase 7).
  * 목차에서 고르는 것(묶음·슬라이드 모두)은 사용자가 직접 고른 다시 보기라 자동 모드를 끝낸다.
  *
  * `?auto`만 바뀌는 이동은 라우트가 같아 다시 마운트되지 않는다(`SuspenseOutlet` key = pathname).
@@ -37,10 +38,8 @@ function TutorialsView({ auto, tutorials = TUTORIALS }) {
   const picked = useLocation().state?.tutorialPick; // 자동 모드에서 목차로 고른 자리 — 다시 마운트 뒤 그 자리에서 시작
 
   // 자동 모드에서 볼 묶음 — 들어온 순간의 기록으로 한 번 정한다
-  const [queue] = useState(() => {
-    const seen = new Set(userEmail ? seenIds(userEmail) : []);
-    return tutorials.filter((t) => !seen.has(t.id)).map((t) => t.id);
-  });
+  const [seen, setSeen] = useState(() => new Set(userEmail ? seenIds(userEmail) : []));
+  const [queue] = useState(() => tutorials.filter((t) => !seen.has(t.id)).map((t) => t.id));
   const [current, setCurrent] = useState(() =>
     auto ? { id: queue[0] ?? null, step: 0 } : (picked ?? { id: tutorials[0]?.id, step: 0 }));
 
@@ -57,10 +56,14 @@ function TutorialsView({ auto, tutorials = TUTORIALS }) {
   const prevBundle = index > 0 ? tutorials[index - 1] : undefined;
   const goPrev = () => (current.step > 0 ? go(tutorial.id, current.step - 1) : go(prevBundle.id, prevBundle.slides.length - 1));
 
-  // 자동 모드에서 이 묶음을 끝낸다 — 기록하고 다음 안 본 묶음으로, 없으면 다 봤다는 안내
+  // 이 묶음을 끝낸다 — 기록하고 다음 안 본 묶음으로, 없으면 다 봤다는 안내.
+  // 자동 모드는 들어올 때 정한 순서, 다시 보기는 목차 순서로 지금 묶음 뒤부터 돌아서 찾는다 (Phase 7)
   const finish = () => {
     if (userEmail) markSeen(userEmail, tutorial.id);
-    go(nextInQueue ?? null);
+    const nextSeen = new Set(seen).add(tutorial.id);
+    setSeen(nextSeen);
+    const rest = [...tutorials.slice(index + 1), ...tutorials.slice(0, index)];
+    go(auto ? (nextInQueue ?? null) : (rest.find((t) => !nextSeen.has(t.id))?.id ?? null));
   };
 
   const pick = (id, step = 0) => {
@@ -81,14 +84,26 @@ function TutorialsView({ auto, tutorials = TUTORIALS }) {
           <List dense sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
             {tutorials.map((t) => (
               <Box key={t.id}>
-                <ListItemButton selected={t.id === current.id} onClick={() => pick(t.id)}>
-                  <Typography variant="body2" fontWeight={600}>{t.title}</Typography>
+                {/* 1뎁스 현재 묶음은 굵은 글자만, 선택 배경은 2뎁스 현재 장에만 — 두 단계가 겹치지 않게 (Phase 7) */}
+                <ListItemButton onClick={() => pick(t.id)}>
+                  <Typography variant="body2" fontWeight={t.id === current.id ? 700 : 500}>{t.title}</Typography>
                 </ListItemButton>
                 {t.id === current.id &&
                   t.slides.map((s, i) => (
-                    <ListItemButton key={i} sx={{ pl: 4 }} onClick={() => pick(t.id, i)}>
+                    <ListItemButton
+                      key={i}
+                      selected={i === current.step}
+                      onClick={() => pick(t.id, i)}
+                      sx={(theme) => ({
+                        pl: 4,
+                        borderLeft: 3,
+                        borderColor: i === current.step ? "primary.main" : "transparent",
+                        "&.Mui-selected, &.Mui-selected:hover": { bgcolor: tintBg("primary")(theme) },
+                      })}
+                    >
                       <Typography
                         variant="body2"
+                        fontWeight={i === current.step ? 700 : 400}
                         color={i === current.step ? "primary.main" : "text.secondary"}
                       >
                         {s.title}
@@ -128,7 +143,7 @@ function TutorialsView({ auto, tutorials = TUTORIALS }) {
                 </Box>
               </Box>
               <Box sx={{ display: "flex", gap: 1, px: 3, py: 1.5, borderTop: 1, borderColor: "divider", flexShrink: 0 }}>
-                {auto && <Button color="inherit" onClick={finish}>다시 보지 않기</Button>}
+                {!seen.has(tutorial.id) && <Button color="inherit" onClick={finish}>다시 보지 않기</Button>}
                 <Box sx={{ flex: 1 }} />
                 {(current.step > 0 || (!auto && prevBundle)) && <Button onClick={goPrev}>이전</Button>}
                 {!last ? (
