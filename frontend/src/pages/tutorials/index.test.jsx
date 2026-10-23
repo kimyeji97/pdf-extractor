@@ -1,7 +1,7 @@
 /**
  * REQ-F20 Phase 4 — 전용 튜토리얼 화면 (`/tutorials`)
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-33~43, F20-47~50, F20-56~61)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-33~43, F20-47~50, F20-56~61, F20-63~69. F20-42는 Phase 7에서 F20-64로 대체)
  * 슬라이드 body는 줄 목록(문자열 배열)이다 (Phase 6). Phase 4 케이스의 fixture도 배열로 바꿨고 단언은 그대로다.
  *
  * `?auto=1`이면 자동 모드(안 본 묶음을 차례로, 본 기록을 남긴다), 없으면 다시 보기(기록을 안 바꾼다).
@@ -18,6 +18,7 @@ import TutorialMenu from 'components/TutorialMenu';
 import { AuthProvider } from 'contexts/AuthContext';
 import TutorialsPage from 'pages/tutorials';
 import { ThemeProvider } from 'theme/theme-provider';
+import { markSeen } from 'utils/tutorialSeen';
 
 vi.mock('api/client', () => ({
   login: vi.fn(),
@@ -183,12 +184,6 @@ describe('다시 보기', () => {
     expect(await gateRedirectsInNewSession(unmount, [T1])).toBe(true);
   });
 
-  it('[F20-42] [다시 보지 않기] 버튼이 없다', async () => {
-    renderReplay();
-    await screen.findByText('본문 하나');
-
-    expect(screen.queryByRole('button', { name: '다시 보지 않기' })).toBeNull();
-  });
 });
 
 describe('모드 전환 (리뷰 회차 2)', () => {
@@ -303,5 +298,71 @@ describe('설명 목록과 묶음 경계 (Phase 6)', () => {
     await settle();
 
     expect(await gateRedirectsInNewSession(unmount, [T1, T2])).toBe(true);
+  });
+});
+
+describe('다시 보기의 [다시 보지 않기]와 목차 강조 (Phase 7)', () => {
+  const T3 = { id: 't3', title: '셋째 튜토리얼', slides: [{ title: '셋째 슬라이드', body: ['셋째 본문'] }] };
+
+  it('[F20-63] 다시 보기에서 안 본 묶음엔 [다시 보지 않기]가 보인다', async () => {
+    renderReplay();
+    await screen.findByText('본문 하나');
+
+    expect(screen.getByRole('button', { name: '다시 보지 않기' })).toBeInTheDocument();
+  });
+
+  it('[F20-64] 다시 보기에서 이미 본 묶음엔 [다시 보지 않기]가 없다', async () => {
+    markSeen('a@test.local', 't1');
+    renderReplay();
+    await screen.findByText('본문 하나');
+
+    expect(screen.queryByRole('button', { name: '다시 보지 않기' })).toBeNull();
+  });
+
+  it('[F20-65] 다시 보기에서 누르면 그 묶음은 새 세션에서 보내지 않는다', async () => {
+    const { unmount } = renderReplay();
+    await screen.findByText('본문 하나');
+    click('다시 보지 않기');
+    await settle();
+
+    expect(await gateRedirectsInNewSession(unmount, [T1])).toBe(false);
+  });
+
+  it('[F20-66] 다시 보기에서 누르면 다른 묶음은 기록하지 않는다', async () => {
+    const { unmount } = renderReplay();
+    await screen.findByText('본문 하나');
+    click('다시 보지 않기');
+    await settle();
+
+    expect(await gateRedirectsInNewSession(unmount, [T2])).toBe(true);
+  });
+
+  it('[F20-67] 다시 보기에서 누르면 다음 안 본 묶음 첫 장으로 간다', async () => {
+    markSeen('a@test.local', 't2');
+    renderReplay([T1, T2, T3]);
+    await screen.findByText('본문 하나');
+
+    click('다시 보지 않기');
+
+    expect(await screen.findByText('셋째 본문')).toBeInTheDocument();
+  });
+
+  it('[F20-68] 다시 보기에서 누른 뒤 안 본 묶음이 없으면 모두 봤다고 알린다', async () => {
+    markSeen('a@test.local', 't2');
+    renderReplay();
+    await screen.findByText('본문 하나');
+
+    click('다시 보지 않기');
+
+    expect(await screen.findByText(/안 본 튜토리얼을 모두 봤습니다/)).toBeInTheDocument();
+  });
+
+  it('[F20-69] 목차는 현재 장(2뎁스)만 선택으로 표시하고 현재 묶음(1뎁스)은 선택 표시하지 않는다', async () => {
+    renderReplay();
+    await screen.findByText('본문 하나');
+
+    expect(screen.getByRole('button', { name: '슬라이드 하나' })).toHaveClass('Mui-selected');
+    expect(screen.getByRole('button', { name: '슬라이드 둘' })).not.toHaveClass('Mui-selected');
+    expect(screen.getByRole('button', { name: '첫 튜토리얼' })).not.toHaveClass('Mui-selected');
   });
 });
