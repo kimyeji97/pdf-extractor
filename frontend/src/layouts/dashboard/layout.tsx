@@ -2,17 +2,22 @@ import type { Breakpoint } from '@mui/material/styles';
 
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
+import { useLocation } from 'react-router';
 
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import { useTheme } from '@mui/material/styles';
 
+import Logo from 'components/common/Logo';
 import ColorSchemeMenu from 'components/ColorSchemeMenu';
 import NotificationBell from 'components/NotificationBell';
 import ProfileMenu from 'components/ProfileMenu';
+import TutorialGate from 'components/TutorialGate';
+import TutorialMenu from 'components/TutorialMenu';
 
 import { NavMobile, NavDesktop } from './nav';
 import { navData } from './nav-config';
+import paths from 'routes/paths';
 import { dashboardLayoutVars } from './css-vars';
 import { layoutClasses } from '../core/classes';
 import { MainSection } from '../core/main-section';
@@ -50,10 +55,14 @@ export type DashboardLayoutProps = LayoutBaseProps & {
 export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery = 'lg' }: DashboardLayoutProps) {
   const theme = useTheme();
   const [navOpen, setNavOpen] = useState(false);
+  // 튜토리얼 화면은 슬라이드를 넓게 보이려고 사이드바(햄버거 포함)를 빼고 로고만 헤더에 둔다 (REQ-F20 Phase 6)
+  const bare = useLocation().pathname === paths.tutorials;
 
   const renderHeader = () => {
     const headerSlots: HeaderSectionProps['slots'] = {
-      leftArea: (
+      leftArea: bare ? (
+        <Logo height={26} sx={{ width: 180, flexShrink: 0 }} />
+      ) : (
         <>
           <IconButton
             onClick={() => setNavOpen(true)}
@@ -66,6 +75,7 @@ export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery 
       ),
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
+          <TutorialMenu />
           <NotificationBell />
           <ColorSchemeMenu />
           <ProfileMenu />
@@ -100,7 +110,7 @@ export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery 
   return (
     <LayoutSection
       headerSection={renderHeader()}
-      sidebarSection={<NavDesktop data={navData} layoutQuery={layoutQuery} />}
+      sidebarSection={bare ? null : <NavDesktop data={navData} layoutQuery={layoutQuery} />}
       footerSection={null}
       cssVars={{ ...dashboardLayoutVars(theme), ...cssVars }}
       sx={[
@@ -115,7 +125,7 @@ export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery 
             minHeight: 0,
             overflow: 'hidden',
             [theme.breakpoints.up(layoutQuery)]: {
-              pl: 'var(--layout-nav-vertical-width)',
+              pl: bare ? 0 : 'var(--layout-nav-vertical-width)',
               transition: theme.transitions.create(['padding-left'], {
                 easing: 'var(--layout-transition-easing)',
                 duration: 'var(--layout-transition-duration)',
@@ -127,6 +137,7 @@ export function DashboardLayout({ sx, cssVars, children, slotProps, layoutQuery 
       ]}
     >
       {renderMain()}
+      <TutorialGate />
     </LayoutSection>
   );
 }

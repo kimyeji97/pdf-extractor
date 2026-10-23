@@ -314,7 +314,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 | `C` | 보완 기능 (Complement) | REQ-C01~C12 |
 | `D` | 디자인·레이아웃 변경 (Design) | REQ-D01~D13 |
 | `E` | 실험·인프라성 기능 (Enhancement) | REQ-E01~E02 |
-| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F19 |
+| `F` | 프론트 UX 개선 (Frontend) | REQ-F01~F20 |
 | `P` | 성능 (Performance) | REQ-P01~P06 |
 
 기능 대분류 참고: REQ-01~09(핵심), REQ-10~15(v2), REQ-16~26(v3), REQ-27~28(계정·공유), REQ-29~30(템플릿).
@@ -337,7 +337,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 { ls docs/specs/; cat docs/PROGRESS.md; } | grep -oE 'REQ-[A-Z]?[0-9]+' | sort -u
 ```
 
-2026-10-08 기준 각 prefix 다음 번호: `B30`(B29 = 메타 저장 실패 알림 🟡), `C13`(C12 = 운영 콘솔 가입 승인·차단·서버 on/off 🟡), `D14`(D13 = 브랜드 리뉴얼 ✅ 2026-10-08), `E03`, `F20`(F19 = 서버 다운 안내 🟡), `P07`, 숫자 `31`.
+2026-10-08 기준 각 prefix 다음 번호: `B30`(B29 = 메타 저장 실패 알림 🟡), `C13`(C12 = 운영 콘솔 가입 승인·차단·서버 on/off 🟡), `D14`(D13 = 브랜드 리뉴얼 ✅ 2026-10-08), `E03`, `F21`(F20 = 튜토리얼 🟡), `P07`, 숫자 `31`.
 (2026-09-30에 착수 대기 13건을 **B21·B22·F14·F15·C10·C11·P06**으로 예약했다 — REQ-28은 2026-10-22 ✅.
 예약분은 PROGRESS "미착수 — 번호만 부여된 것" 표가 단일 출처다. 번호는 완료돼도 재사용하지 않는다)
 
@@ -373,7 +373,7 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
-⚠️ **dev 프론트는 2026-10-22 main `ac502ca` 빌드(Worker Version `35680418`)다** — 실체는 Pages가 아니라
+⚠️ **dev 프론트는 2026-10-23 브랜치 `feat/F20-tutorial` `5f3af84` 빌드(Worker Version `24ccf09b`, main 머지 전)다** — 실체는 Pages가 아니라
 **Workers `twilight-base-302d`**이고 **자동 배포가 없다**(push로 안 올라간다). 프론트를 바꾸면 위
 "배포 (프론트엔드)" 두 줄(= `scripts/deploy/frontend-deploy.sh dev` — 2026-10-05부터 `dev|prod` 인자 필수)을 손으로 돌려야 한다. 그래서 **dev 프론트가 main보다 뒤처진 것이 정상**이다
 (2026-08-28 배포 정책 — 변경은 모아서 한 번에). **"dev에서 안 보인다"를 버그로 읽지 말 것.**
@@ -714,6 +714,13 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     자격을 전부 붙이면 R2 버킷 CORS 에 `AllowCredentials` 가 없어 브라우저가 응답을 통째로 막고,
     presigned 에 `Authorization` 을 붙이면 400 이다(실측 — F16 리뷰 회차 1에서 주 경로가 깨졌다).
     **`client.js` 밖에 raw fetch 를 만들면 그 파일에 맞는 가드를 직접 둘 것** — B23-03 은 거기까지 안 본다.
+
+44. **튜토리얼(`frontend/src/utils/tutorials.js`)은 묶음 id 단위로 "본 기록"이 남는다** — 기존 묶음에 장만 끼우면 그 묶음을
+    이미 본 사용자에게는 **에러 없이 안 뜬다.** 신기능은 새 묶음(새 id)으로 더하고, 화면이 크게 바뀌면 그 묶음 id를 올린다
+    (`create` → `create-2`). id를 이유 없이 바꾸면 반대로 다 본 사람에게 다시 뜬다.
+    스크린샷은 **dev에서 test@test.com으로** 찍는다(실사용자 이메일·파일명이 안 찍히게). 비밀번호는 어디에도 저장하지 않고 **찍을 때 사용자에게 묻는다.**
+    dev 백엔드는 **찍는 동안만 켜고 끝나면 바로 `desired 0`**. 촬영은 레포 `scripts/tutorial/` 스크립트로 한다 — 장면과 빨간 테두리가 한 벌이다.
+    튜토리얼 문구는 화면 동작과 짝이라 그 화면을 바꾸는 REQ는 문구와 그림도 다시 본다. (REQ-F20)
 
 ### 배포 (prod)
 
