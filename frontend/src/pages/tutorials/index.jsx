@@ -100,7 +100,8 @@ export default function TutorialsPage({ tutorials = TUTORIALS }) {
                     component="img"
                     src={slide.image}
                     alt={slide.title}
-                    sx={{ display: "block", maxWidth: "100%", mx: "auto", mb: 2, borderRadius: 1, border: 1, borderColor: "divider" }}
+                    // 높이 상한 — 헤더·버튼 줄·설명 두세 줄 자리(약 440px)를 남겨 설명 글이 화면 밖으로 밀리지 않게
+                    sx={{ display: "block", maxWidth: "100%", maxHeight: "calc(100dvh - 440px)", mx: "auto", mb: 2, borderRadius: 1, border: 1, borderColor: "divider" }}
                   />
                 )}
                 <Typography variant="h6" sx={{ mb: 1 }}>{slide.title}</Typography>

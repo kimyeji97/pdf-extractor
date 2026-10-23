@@ -1,7 +1,8 @@
 /**
- * REQ-F20 Phase 1·3 — 튜토리얼 정의 목록과 콘텐츠
+ * REQ-F20 Phase 1·3·5 — 튜토리얼 정의 목록과 콘텐츠
  *
- * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-12, F20-17~20, F20-24~25)
+ * 검증 계약: docs/plans/PLAN-F20-tutorial.md `## 검증 계약` (F20-12, F20-19~20, F20-24~25, F20-46)
+ * F20-17·18(Phase 3 콘텐츠 2개)은 Phase 5 6묶음으로 대체돼 지웠다. 공유 문구 케이스는 id `share`로 계속 본다
  *
  * F20-20은 테스트가 frontend/ 에서 돈다는 전제로 `public${image}` 를 본다 (tutorialSlot.test.js 의 readFileSync 와 같은 전제)
  */
@@ -27,16 +28,6 @@ describe('튜토리얼 정의 목록', () => {
 describe('튜토리얼 콘텐츠 (Phase 3)', () => {
   const byId = (id) => TUTORIALS.find((t) => t.id === id);
 
-  it('[F20-17] 기본 흐름(welcome)과 공유(share) 두 개다', () => {
-    expect(TUTORIALS.map((t) => t.id)).toEqual(['welcome', 'share']);
-  });
-
-  it('[F20-18] 기본 흐름 슬라이드 제목이 업로드·감지·선택·생성 순서다', () => {
-    const titles = (byId('welcome')?.slides ?? []).map((s) => s.title).join(' / ');
-
-    expect(titles).toMatch(/업로드.*감지.*선택.*생성/);
-  });
-
   it('[F20-19] 공유 튜토리얼이 공유받은 쪽 역할(편집자·뷰어)을 설명한다', () => {
     const text = (byId('share')?.slides ?? []).map((s) => `${s.title} ${s.body}`).join(' ');
 
@@ -49,6 +40,15 @@ describe('튜토리얼 콘텐츠 (Phase 3)', () => {
       .map((s) => s.image ?? `(없음) ${s.title}`);
 
     expect(missing).toEqual([]);
+  });
+});
+
+describe('튜토리얼 콘텐츠 (Phase 5)', () => {
+  it('[F20-46] 묶음이 6개이고 제목이 순서대로 분석·생성·결과·템플릿·공유·알림을 담는다', () => {
+    const expected = ['분석', '생성', '결과', '템플릿', '공유', '알림'];
+    const titles = TUTORIALS.map((t) => t.title);
+
+    expect(titles.map((title, i) => title.includes(expected[i] ?? '\u0000'))).toEqual(expected.map(() => true));
   });
 });
 
