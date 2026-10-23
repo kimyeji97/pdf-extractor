@@ -146,7 +146,7 @@
 | REQ-B28 | 생성 PDF 의 한글이 조용히 사라진다 — 그리기 직전 NFC 정규화 | [plan](plans/archive/PLAN-B28-pdf-text-nfc.md) | 2026-10-05 | ✅ 케이스 7/7 · `/review` 3회차 · **dev 육안 확인**(라벨 한글 온전 · 커진 글자가 안 잘림 · 각주 정상) |
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/archive/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/archive/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
-| REQ-F20 | 튜토리얼 — 첫 진입 때 안 본 묶음을 전용 화면(`/tutorials`)으로 보여 주기, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | 2026-10-23 | ✅ Phase 7/7 — 케이스 F20 50/50 · 리뷰 회차 5 @ `5f3af84` (b) 0 · (c) 감수 1 · dev 육안 · 브랜치 `feat/F20-tutorial` main 머지 전 |
+| REQ-F20 | 튜토리얼 — 첫 진입 때 안 본 묶음을 전용 화면(`/tutorials`)으로 보여 주기, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | 2026-10-23 | ✅ Phase 7/7 — PR #52 main 머지 `e14c781` · dev·prod 배포 · 케이스 F20 50/50 · 리뷰 회차 5 @ `5f3af84` (b) 0 · (c) 감수 1 · dev 육안 |
 | REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/archive/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/archive/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/archive/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
@@ -293,7 +293,11 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
   - nit: 테스트 머리 주석 "다시 보기(기록을 안 바꾼다)"가 Phase 7 뒤로 틀렸다 (frontend/src/pages/tutorials/index.test.jsx:7)
   - nit: 주석 "들어온 순간의 기록으로 한 번 정한다"가 바뀌는 `seen` 상태 위에 있다 (frontend/src/pages/tutorials/index.jsx:40)
   - nit: 키보드 포커스(`Mui-focusVisible`) 때는 MUI 기본 선택+포커스 배경이 나온다 (frontend/src/pages/tutorials/index.jsx:101)
-- 리뷰 게이트: 마지막 코드 커밋 `5f3af84` = 회차 5 sha · (c) 1건 감수 · 직전 감수 유지 → 통과. dev 육안 완료(사용자) → ✅. main 머지는 아직이다
+- 리뷰 게이트: 마지막 코드 커밋 `5f3af84` = 회차 5 sha · (c) 1건 감수 · 직전 감수 유지 → 통과. dev 육안 완료(사용자) → ✅.
+- 머지·배포: PR #52 main 머지 `e14c781`(머지 커밋). 머지된 로컬 브랜치 14개·원격 4개를 지웠다
+  - prod 백엔드 `prod-e14c781` 태스크 정의 rev 10(rev 9 deregister, 롤백용 rev 3 유지). 실행 digest `ba0034dd…`가 ECR과 같다. 백엔드 코드가 `ac502ca` 이후 무변경이라 dev `f20-af40bd9`와 같은 digest다
+  - prod 프론트 Version `348b7283`. 라이브 진입 번들 = 로컬 dist, prod API 주소 확인. prod 육안 확인(사용자)
+  - prod 백엔드는 배포 전부터 켜져 있었고(desired 1) 켜고 끄기는 건드리지 않았다
 
 ### REQ-F20 — 튜토리얼 (🟡 Phase 6 dev 육안 피드백 반영, 사람 육안 남음)
 - Phase 5 dev 육안에서 피드백 5건이 나와 Phase 6을 새로 만들었다: 사이드바 숨김과 로고 · 설명 목록화 · 다시 보기 묶음 경계 이동 · 촬영 스크립트 · 재촬영. Phase 5 육안은 Phase 6 dev 육안과 함께 본다
