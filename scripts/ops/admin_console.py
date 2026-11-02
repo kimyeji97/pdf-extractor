@@ -135,11 +135,16 @@ def server(hours: int) -> dict:
     td = ecs.describe_task_definition(taskDefinition=svc["taskDefinition"])["taskDefinition"]
     # REQ-C12 — 수동 on/off 는 다음 예약까지만 유효하다. 켜져 있으면 다음 꺼짐, 꺼져 있으면 다음 켜짐(dev 는 예약 없음 → None)
     # 예약 조회가 실패해도 패널·on/off 버튼은 살린다(리뷰 C12 회차 4) — 다음 예약만 "조회 실패"로
+    running = svc["desiredCount"] > 0
     try:
-        actions = boto3.client("application-autoscaling", region_name=REGION).describe_scheduled_actions(
+        aas = boto3.client("application-autoscaling", region_name=REGION)
+        actions = aas.describe_scheduled_actions(
             ServiceNamespace="ecs", ResourceId=f"service/{CLUSTER}/{SERVICE}")["ScheduledActions"]
-        nxt, schedule_error = operating_schedule.next_scheduled(
-            actions, datetime.now(timezone.utc), running=svc["desiredCount"] > 0), None
+        # REQ-E03 — 운영 구간(확장 대상 max ≥ 1) 안에서는 유휴로 desired 0 이어도 켜진 쪽으로 본다(다음은 꺼짐)
+        targets = aas.describe_scalable_targets(ServiceNamespace="ecs", ResourceIds=[f"service/{CLUSTER}/{SERVICE}"],
+                                                ScalableDimension="ecs:service:DesiredCount")["ScalableTargets"]
+        running = running or (bool(targets) and targets[0].get("MaxCapacity", 0) >= 1)
+        nxt, schedule_error = operating_schedule.next_scheduled(actions, datetime.now(timezone.utc), running=running), None
     except Exception as e:
         nxt, schedule_error = None, f"{type(e).__name__}: {e}"
 
@@ -156,6 +161,7 @@ def server(hours: int) -> dict:
     return {
         "service": SERVICE, "env": ENV, "desired": svc["desiredCount"], "running": svc["runningCount"],
         "next_scheduled": nxt.isoformat() if nxt else None,
+        "next_is_off": running,  # 타일 이름(다음 예약 꺼짐/켜짐)도 이 판정을 따른다 — desired 로 정하면 유휴 0 에서 어긋난다
         "schedule_error": schedule_error,
         "task_def": svc["taskDefinition"].split("/")[-1], "cpu": td.get("cpu"), "memory": td.get("memory"),
         "image": next((c["image"].split(":")[-1] for c in td["containerDefinitions"] if c["name"] == "backend"), ""),
@@ -304,7 +310,7 @@ def set_status(user_id: str, status: str) -> dict:
 
 
 def set_power(on) -> dict:
-    """REQ-C12 Phase 3 — desiredCount 만 바꾼다. 예약은 그대로라 다음 예약 시각에 덮어써진다."""
+    """REQ-C12 Phase 3 — desiredCount 만 바꾼다. 예약은 그대로다. `on` 예약이 min 0(REQ-E03)이라 수동 off 는 되돌아오지 않고, 수동 on 은 유휴 스케일인·`off` 예약이 내린다."""
     if SERVICE is None:
         raise ValueError("local 모드 — ECS 서비스 없음")
     if not isinstance(on, bool):
