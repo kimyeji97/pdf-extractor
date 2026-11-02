@@ -22,6 +22,7 @@ from app.services import storage
 from app.services import thumbnail_service
 from app.services import analysis_slots, prewarm_service
 from app.services import notification_service
+from app.services import idle_scale_in
 from app.services import question_stats_service
 from app.utils.question_parser import detect_question_boundaries
 
@@ -127,6 +128,7 @@ async def direct_upload(
     return {"message": "업로드 완료", "key": key}
 
 
+@idle_scale_in.working()  # 도는 동안 유휴 스케일인하지 않는다 (REQ-E03)
 def _trigger_boundary_detection(job_id: str) -> None:
     """업로드 완료 직후 백그라운드 실행 — 문항 경계 감지 후 상태 업데이트"""
     logger.info("[boundary] 감지 시작 | job_id=%s", job_id)

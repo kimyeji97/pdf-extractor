@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     SCHEDULE_RESOURCE_ID: str = ""
     SCHEDULE_AWS_REGION: str = "ap-northeast-2"
 
+    # ── 유휴 스케일인 (REQ-E03) ─────────────────────────────
+    # N분 동안 사용자 요청이 없으면 자기 서비스를 desired 0 으로. 0 이거나 대상이 비면 끈다(로컬·dev).
+    # 대상은 자기 서비스 — SCHEDULE_RESOURCE_ID 를 재사용하지 말 것(dev 는 그 값이 prod 다).
+    # 태스크 역할에 ecs:UpdateService 권한이 필요하다
+    IDLE_SCALE_IN_MINUTES: int = 0
+    IDLE_SCALE_IN_RESOURCE_ID: str = ""
+
     # ── CORS (REQ-27 Phase 3) ───────────────────────────────
     # 허용 origin 목록. PLAN-27 § 결정 — "CORS 허용 도메인 | dev 프론트 도메인 +
     # 로컬 개발(localhost:5173) 포함". 그 외 origin은 CORSMiddleware가 차단한다.
