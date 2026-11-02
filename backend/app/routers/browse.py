@@ -42,6 +42,7 @@ from app.services import storage
 from app.services import thumbnail_service
 from app.services import prewarm_service
 from app.services import notification_service
+from app.services import idle_scale_in
 from app.services import question_stats_service
 from app.services import share_service
 from app.utils.question_parser import detect_question_boundaries, QuestionBoundary
@@ -457,6 +458,7 @@ def _discard_deleted(job_id: str) -> None:
     storage.delete_job(job_id)
 
 
+@idle_scale_in.working()  # 도는 동안 유휴 스케일인하지 않는다 (REQ-E03)
 def _run_refresh_detection(job_id: str) -> None:
     """
     백그라운드 태스크: 캐시 초기화 후 전체 PDF 재감지.

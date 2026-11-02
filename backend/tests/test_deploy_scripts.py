@@ -28,6 +28,8 @@ _WRANGLER = _ROOT / "frontend" / "wrangler.jsonc"
 
 _DEV_API = "https://dailystudy-workbook-api-dev.yejicraft-cf.com/api"
 _PROD_API = "https://dailystudy-workbook-api.yejicraft-cf.com/api"
+_DEV_WAKE = "https://u5nw75up7u4lvvx7yhduxxpfge0uddri.lambda-url.ap-northeast-2.on.aws/"  # REQ-E03 dev 웨이커
+_LAMBDA_URL = re.compile(r"https://[a-z0-9]+\.lambda-url\.ap-northeast-2\.on\.aws/")
 _REPO = "504233295989.dkr.ecr.ap-northeast-2.amazonaws.com/pdf-extractor-backend"
 _FAMILY = "pdf-extractor-backend-prod"
 _TD_ARN = f"arn:aws:ecs:ap-northeast-2:504233295989:task-definition/{_FAMILY}"
@@ -174,7 +176,8 @@ if not sys.stdin.isatty():
         pass
 with open(os.environ["FAKE_LOG"], "a") as f:
     f.write(json.dumps({"cmd": os.path.basename(sys.argv[0]), "argv": sys.argv[1:],
-                        "VITE_API_BASE_URL": os.environ.get("VITE_API_BASE_URL")}) + "\n")
+                        "VITE_API_BASE_URL": os.environ.get("VITE_API_BASE_URL"),
+                        "VITE_WAKE_URL": os.environ.get("VITE_WAKE_URL")}) + "\n")
 '''
 
 
@@ -211,13 +214,15 @@ def sandbox(tmp_path):
     return {"repo": repo, "bin": bin_dir, "state": state, "log": log}
 
 
-def _run(sb, script, *args):
+def _run(sb, script, *args, extra_env=None):
     path = sb["repo"] / "scripts" / "deploy" / script
     if not path.exists():
         pytest.fail(f"scripts/deploy/{script} 가 없다 (아직 구현 전)")
     env = dict(os.environ, PATH=f"{sb['bin']}{os.pathsep}{os.environ['PATH']}",
                FAKE_LOG=str(sb["log"]), FAKE_STATE=str(sb["state"]))
     env.pop("VITE_API_BASE_URL", None)
+    env.pop("VITE_WAKE_URL", None)
+    env.update(extra_env or {})
     proc = subprocess.run(["bash", str(path), *args], cwd=sb["repo"], env=env,
                           capture_output=True, text=True, timeout=60)
     calls = [json.loads(l) for l in sb["log"].read_text().splitlines() if l.strip()]
@@ -295,6 +300,29 @@ def test_E02_21_prod_배포는_wrangler_deploy_env_prod(sandbox):
     _, calls = _run(sandbox, "frontend-deploy.sh", "prod")
     deploys = [" ".join(c["argv"]) for c in _of(calls, "npx")]
     assert [bool(re.fullmatch(r"wrangler deploy (--env prod|--env=prod)", d)) for d in deploys] == [True]
+
+
+# ── REQ-E03 Phase 5: 환경별 웨이커 URL (PLAN-E03 Q17) ─────────────
+
+
+def _wake_of_build(calls):
+    return [c["VITE_WAKE_URL"] for c in _of(calls, "npm") if c["argv"][:2] == ["run", "build"]]
+
+
+def test_E03_36_dev_빌드는_dev_웨이커_URL을_주입한다(sandbox):
+    _, calls = _run(sandbox, "frontend-deploy.sh", "dev")
+    assert _wake_of_build(calls) == [_DEV_WAKE]
+
+
+def test_E03_37_prod_빌드는_dev와_다른_Lambda_URL을_주입한다(sandbox):
+    _, calls = _run(sandbox, "frontend-deploy.sh", "prod")
+    wakes = _wake_of_build(calls)
+    assert [bool(w and _LAMBDA_URL.fullmatch(w)) and w != _DEV_WAKE for w in wakes] == [True]
+
+
+def test_E03_38_셸의_VITE_WAKE_URL은_prod_빌드에_새지_않는다(sandbox):
+    _, calls = _run(sandbox, "frontend-deploy.sh", "prod", extra_env={"VITE_WAKE_URL": _DEV_WAKE})
+    assert [w != _DEV_WAKE for w in _wake_of_build(calls)] == [True]
 
 
 # ── frontend/wrangler.jsonc ─────────────────────────────────────

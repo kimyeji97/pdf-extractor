@@ -138,11 +138,12 @@ def test_F19_42_rate_in_on_off_returns_empty():
     assert _svc().compute_windows([ON, rate_off], WED_1000) == []
 
 
-def test_F19_43_rate_in_non_on_off_action_is_ignored():
-    neither = {
+def test_F19_43_rate_in_open_only_action_returns_empty():
+    # REQ-E03 Q10: 켜짐 = MaxCapacity ≥ 1 이라 min 0 / max 1 도 켜짐이다 → F19-42 규칙(rate 섞이면 [])
+    open_rate = {
         "ScheduledActionName": "scale",
         "Schedule": "rate(1 day)",
         "Timezone": "Asia/Seoul",
         "ScalableTargetAction": {"MinCapacity": 0, "MaxCapacity": 1},
     }
-    assert _svc().compute_windows([ON, OFF, neither], WED_1000) == _svc().compute_windows([ON, OFF], WED_1000)
+    assert _svc().compute_windows([ON, OFF, open_rate], WED_1000) == []

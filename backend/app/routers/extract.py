@@ -20,6 +20,7 @@ from app.models.schemas import (
 )
 from app.routers.template import is_empty
 from app.services import auth_service, storage, pdf_service, notification_service, share_service
+from app.services import idle_scale_in
 
 router = APIRouter()
 
@@ -90,6 +91,7 @@ def get_status(job_id: str, current_user: dict = Depends(auth_service.get_curren
 
 # ── 백그라운드 처리 ───────────────────────────────────────
 
+@idle_scale_in.working()  # 도는 동안 유휴 스케일인하지 않는다 (REQ-E03)
 def _process_extraction(job_id: str, status_file: JobStatusFile) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         input_path = str(Path(tmpdir) / "original.pdf")
@@ -263,6 +265,7 @@ def _save_workbook_meta(
     storage.save_workbook(meta.workbook_id, data)
 
 
+@idle_scale_in.working()  # 도는 동안 유휴 스케일인하지 않는다 (REQ-E03)
 def _process_extraction_v2(
     selections: list[SelectionItem],
     export_job_id: str,

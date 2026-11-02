@@ -224,3 +224,5 @@
 - [ ] F19 리뷰 TODO: 운영 구간 계산이 예약 작업 `StartTime`/`EndTime`(유효 기간)을 무시 — 기간 끝난 cron도 계속 발화로 계산 (2026-10-08 추가)
 - [ ] F19 리뷰 TODO: 운영 구간 AWS 조회 실패는 캐시 안 됨 — AccessDenied·스로틀 동안 요청마다 AWS 재호출 (2026-10-08 추가)
 - [ ] F19 리뷰 TODO: 꺼짐 예고 배너(fixed·닫기 없음·z-index snackbar)가 좁은 화면에서 헤더 오른쪽 조작부·다이얼로그를 최대 1시간 가릴 수 있음 — dev 육안 확인 후 위치·폭 조정 (2026-10-08 추가)
+- [ ] PDF 생성 중 태스크가 죽으면 `status`가 `PROCESSING`에 멈춘다. 기동 시 FAILED로 바꾸고 사용자가 재생성을 요청할 수 있게. `fail_interrupted()`(`analysis_slots.py:43`)가 감지 상태만 정리하고 생성(`extract.py` BackgroundTasks)은 안 본다. E03 스케일인과 닿아 있다 (2026-11-02 추가)
+- [ ] REQ-E03 리뷰 TODO: 유휴 판정이 사람 아닌 요청도 센다(봇·무인증 401·SSE 재연결 때 refresh/알림 GET, `main.py` `IdleClockMiddleware`). prod 적용 1주 뒤 비용 확인 때 로그로 비중을 보고 활동 기준을 좁힐지 정한다 (2026-11-02 추가)

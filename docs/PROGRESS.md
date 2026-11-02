@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-10-23
+> 최종 갱신: 2026-11-02
 
 ## 요구사항 인덱스
 
@@ -147,6 +147,7 @@
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/archive/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/archive/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
 | REQ-F20 | 튜토리얼 — 첫 진입 때 안 본 묶음을 전용 화면(`/tutorials`)으로 보여 주기, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | 2026-10-23 | ✅ Phase 7/7 — PR #52 main 머지 `e14c781` · dev·prod 배포 · 케이스 F20 50/50 · 리뷰 회차 5 @ `5f3af84` (b) 0 · (c) 감수 1 · dev 육안 |
+| REQ-E03 | prod 유휴 스케일인 + 웨이크 — 30분 유휴면 desired 0, 운영 구간 안에서만 Lambda로 깨우기, `on` 예약은 열기만(min 0 / max 1) | [plan](plans/PLAN-E03-prod-idle-scale-to-zero.md) | — | 🟡 Phase 4/5 — 브랜치 `feat/E03-idle-scale-to-zero` · 케이스 E03 38/38 + F19-43 · 리뷰 통과(`9625676`) · prod 웨이커 Lambda 생성 · 머지 뒤 prod 적용 남음 |
 | REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/archive/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/archive/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/archive/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
@@ -270,6 +271,63 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
 ---
 
 # 로그
+
+## 2026-11-02
+
+### AWS 비용 절감 — 10월 청구 49,484원($36.6) 분석 (사이클 밖)
+- 내역: Fargate $30.85(약 272시간, 2 vCPU / 4GB 시간당 $0.114) · 세금 $3.33 · Public IPv4 $1.37 · Secrets Manager $0.75 · ECR $0.36
+- dev 약 147시간($16.7) 중 10-08~10-13 5일을 켜 둔 채 잊어 약 $13이 샜다(CPU 0.2%). prod 약 135시간($15.3)은 CPU 평균 0.1~0.2%, 메모리 3%
+- 적용(사용자 승인): dev에 매일 00:00 강제 off(`dev-nightly-off` max 0 → 00:05 `dev-nightly-reset` max 1), dev만 Fargate Spot. 클러스터 기본 capacity provider는 `FARGATE`라 prod 영향 없음. CLAUDE.md 배포 상태에 기록
+  - 예약 작업 조회(`operating_schedule`)는 prod 리소스 ID로 거르므로 dev 예약이 배너에 섞이지 않는다
+- prod 1 vCPU 축소와 멀티태스크는 E03 실측 뒤로 미뤘다. 사용자 사유: 태스크를 작게 줄이고 필요한 만큼만 늘리려는 것
+  - 멀티태스크 전환 분석: 계약 #43 외에 SSE 브로커(`notification_broker._subscribers`)·공유 인덱스 캐시(회수가 재시작 전까지 안 보임, 보안)·`_dir_cache`(60~120초 지연)·기동 시 `fail_interrupted()`(다른 태스크의 정상 분석까지 FAILED)가 프로세스 1개 전제다. REQ 1개 Phase 4~5개 추정. 지금 트래픽엔 할 이유가 없다
+  - E03 실측으로 prod가 월 약 20시간만 뜰 것으로 보여 1 vCPU 축소의 추가 절감은 월 $1 정도다
+- 롤링 배포(min 100% / max 200%, 확인)로 태스크가 겹쳐 진행 중 분석이 FAILED 되는 것은 감수(재감지로 복구). PDF 생성 중 태스크가 죽어 `PROCESSING`에 멈추는 것은 TODO로 넘겼다
+
+### REQ-E03 — prod 유휴 스케일인 + 웨이크 (🟡 Phase 4/5, 리뷰 통과, prod 적용 남음)
+- Phase 1 실측(dev): 콜드 스타트 `desired 1` → 터널 경유 `/health` 200까지 43초(이미지 pull 7초, Spot 기동 확인). 예약이 min 1을 걸어 둔 상태에서 `desired 0`으로 내려도 Application Auto Scaling은 되돌리지 않았다(3분 관찰, 스케일링 정책 없음)
+- 10월 prod 실사용: backend 로그에서 OPTIONS·`/health`·`/stream`·`operating-windows`를 빼면 요청이 있던 30분 칸이 23개(11.5시간), 11일뿐이다
+- Q1~Q12 결정(추천안 채택): 백엔드 타이머 · 30분 · SSE 등 제외 · Lambda Function URL · 운영 구간 안에서만, 쿨다운 없음 · `on`은 지우지 않고 min 0 / max 1로
+  - `on`을 그냥 지우면 F19 운영 구간이 빈 목록이 되고 `off`가 남긴 max 0 때문에 못 깨운다(Q8). 그래서 켜짐 식별을 `MinCapacity ≥ 1` → `MaxCapacity ≥ 1`로 바꿨다. 운영 콘솔 `next_scheduled`도 같이. F19-43은 F19-42 규칙으로 흡수
+- 함정: dev 태스크 정의의 `SCHEDULE_RESOURCE_ID`는 prod 서비스다. 스케일인 대상을 이 값으로 잡으면 dev가 놀 때 prod를 끈다 → 별도 `IDLE_SCALE_IN_RESOURCE_ID`로만 받는다(E03-10)
+- 백그라운드 4곳은 `@idle_scale_in.working()` 데코레이터로 감쌌다. `@contextmanager` 객체가 ContextDecorator라 본문 들여쓰기 없이 된다
+- 웨이커는 cron을 다시 계산하지 않고 확장 대상의 현재 max만 본다(on~off 동안만 max 1)
+- 테스트: E03 26/26 + F19-43 · 백엔드 전체 523 통과(`/testrun`)
+- Phase 2·3은 완료 기준의 dev 수동 확인(실제로 0이 되는지, 웨이커 거절·허용)이 남아 체크하지 않았다. dev에 IAM·Lambda·Function URL 생성과 태스크 정의 리비전·배포가 필요해 사용자 승인 대기
+- `scripts/waker/__pycache__/`가 테스트마다 생긴다. 루트 `.gitignore`가 안 덮는다
+- Phase 4: 다운 화면 [서버 켜기](Q13~Q16: `VITE_WAKE_URL` 없거나 오프라인이면 숨김, [다시 시도] 유지, `/health` 3초 간격 2분까지). E03-25·26·35는 "없다"를 보는 케이스라 구현 전부터 녹색이었다
+- 테스트: E03 35/35 + F19-43 · 백엔드 전체 523 · 프론트 전체 515/517(F17-17·20은 Node v20에 `fs.globSync`가 없어서, E03 무관) · 빌드 성공(`/testrun`)
+  - F12-27이 `/implement` 자체 실행의 전체 스위트에서 한 번 실패했다. 단독 3회·E03 변경을 뺀 전체에선 통과. 부하 의존으로 보이나 원인은 미확인
+- dev 확인(사용자 요청으로 모델이 직접):
+  - 웨이커: IAM 역할 `pdf-extractor-waker-role`(dev·prod 서비스 `UpdateService`·`DescribeServices` + `DescribeScalableTargets`) · Lambda `pdf-extractor-waker-dev`(python3.12, `WAKE_RESOURCE_ID`=dev) · Function URL 무인증, CORS는 dev 오리진만. 공개 호출은 `lambda:InvokeFunctionUrl`과 `lambda:InvokeFunction`(`--invoked-via-function-url`) 두 권한을 다 넣었다
+  - 백엔드: 공용 task role `pdf-extractor-ecs-task-role`에 `ecs:UpdateService`(dev·prod 서비스) 인라인 정책 `idle-scale-in`. 이미지 `e03-7432151-dirty`(= `:latest`, `-dirty`는 미커밋 문서 때문이고 `backend/`는 깨끗). 실행 digest가 ECR `latest`와 같았다
+  - Phase 2: 유휴 2분짜리 rev 10으로 띄우자 기동 2분 뒤(06:35:08 UTC) `[idle] 2분 유휴 … desired 0` 로그와 함께 0이 됐다. 그 사이 `/health`는 유휴 시계를 안 되돌렸다
+  - Phase 3: max 0 → 403 `closed`(desired 0 유지) · max 1 → 202 `starting` → 43초 뒤 `/health` 200 · 재호출 202 `running`
+  - Phase 4: dev 프론트를 `VITE_WAKE_URL` 넣어 배포(Version `16d7ca5d`, 브랜치 `7432151`, 라이브 진입 번들 = 로컬 dist). chrome-devtools로 거절 안내 · 켜는 중 → `/health` 13회(3초 간격, 약 39초) 뒤 복귀 · 전역 딤 없음 · 오프라인에서 버튼 숨김을 확인. 사람 육안은 아니다
+  - 안 한 것: 분석이 도는 동안 안 꺼지는지(로그인·업로드 필요). E03-06·16 자동 케이스로만 덮인다
+  - 정리: 유휴 30분 rev 11로 바꾸고 desired 0, rev 10 deregister, 확장 대상 min 0 / max 1. rev 9는 롤백용
+- 함정: zsh에서 `"$ACC:service/..."`의 `:s`가 변수 수식자로 먹혀 IAM 정책 ARN이 깨졌다(`MalformedPolicyDocument`). `${ACC}`로 감쌀 것
+- Phase 5(사용자 결정: Lambda만 지금, 나머지는 머지 뒤): prod 웨이커 Lambda `pdf-extractor-waker-prod`(CORS는 prod 오리진·POST만) 생성. 호출 확인은 202 `running`(prod가 켜져 있어 아무것도 바꾸지 않음). `frontend-deploy.sh`가 환경별 웨이커 URL을 `VITE_WAKE_URL`로 고정한다(Q17). prod 서비스는 손대지 않았다(rev 10, desired 1)
+- 테스트: E03 38/38 + F19-43 · 백엔드 전체 526(`/testrun`, 콘솔 수정 뒤)
+- 리뷰 3회차. 회차 0에서 콘솔 결함 2건(같은 원인)이 나왔다. E03부터 운영 구간 안에서도 desired 0이 정상이라 `desired > 0`으로 켜짐을 판정하던 운영 콘솔이 다음 예약을 내일 15:00, 이름을 "켜짐"으로 보였다. running을 확장 대상 max ≥ 1로 판정하고 타일 이름도 같은 값(`next_is_off`)을 쓰게 고쳤다. 같은 Phase fix 커밋이라 `44c51a7`을 `9625676`으로 합쳤다
+  - 남은 nit: 콘솔·`operating_schedule` 문구 4곳이 아직 "수동 조작은 다음 예약까지만 유효"다. E03 뒤로 구간 밖 수동 off는 15:00에 안 켜진다
+- 리뷰: REQ-E03 @ 9625676 — (b) 4 · (c) 1 · nit 5
+  - (b): [scripts/ops/admin_console.py:141] 운영 구간 안에서 유휴로 desired 0이면 콘솔 "다음 예약"이 다음 날 15:00으로 뜬다 · 실측
+    - 방안: A running 판정을 확장 대상 MaxCapacity ≥ 1로 (+3줄 · admin_console.py, set_power 문서 1줄) · TODO · 감수 — 추천 A
+    - 결정: A → 닫힘 (9625676, 회차 1에서 44c51a7로 닫힌 뒤 같은 Phase fix 커밋에 합쳐짐)
+  - (b): [frontend/src/pages/unavailable/index.jsx:100] 3초 폴링이 응답 느린 /health를 겹쳐 띄우고, 늦게 끝난 요청이 언마운트·시간 초과 뒤에도 goBack한다 · 가설
+    - 방안: A setTimeout 재귀 + 중단 ref (~10줄 · index.jsx) · TODO · 감수 — 추천 감수
+    - 결정: 감수
+  - (b): [backend/app/services/idle_scale_in.py:82] 스케일인 뒤에도 루프가 돌아, 종료 전 웨이커가 desired 1로 올리면 옛 태스크가 다시 0으로 내릴 수 있다 · 가설
+    - 방안: A check_once가 True면 루프 종료 (+1줄 · idle_scale_in.py) · TODO · 감수 — 추천 감수
+    - 결정: 감수
+  - (b): [scripts/ops/admin-console.html:209] 타일 이름은 아직 desired로 정해서, 운영 구간 안 유휴 0이면 "다음 예약 켜짐 · 23:00"(실제는 꺼짐)으로 뜬다 · 실측
+    - 방안: A server()가 다음 예약 종류를 응답에 넣고 타일이 그걸 쓴다 (+2줄 · admin_console.py, admin-console.html) · B A + 옛 "다음 예약까지만 유효" 문구 4곳 정리 (+6줄 · 같은 두 파일, operating_schedule.py docstring) · TODO · 감수 — 추천 A
+    - 결정: A → 닫힘 (9625676)
+  - (c): [backend/app/main.py:74] 활동 판정이 사람 아닌 요청도 센다(봇·무인증 401·SSE 재연결 때 refresh/알림 GET) · 가설
+    - 방안: A 계획서 미결로 (/workplan) · TODO · 감수 — 추천 TODO
+    - 결정: TODO → docs/TODO.md
+- 리뷰 게이트: 마지막 코드 커밋 `9625676` = 회차 2 sha · 수정 2건 닫힘 · 나머지 감수·TODO → 통과. Phase 5 prod 적용이 남아 🟡
 
 ## 2026-10-23
 

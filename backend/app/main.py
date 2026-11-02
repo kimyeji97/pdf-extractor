@@ -11,6 +11,7 @@ from app.routers import upload, extract, browse, workbook, cover, notification, 
 from app.core.config import settings
 from app.services import analysis_slots
 from app.services import question_stats_service
+from app.services import idle_scale_in
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,6 +42,8 @@ async def lifespan(app: FastAPI):
     analysis_slots.fail_interrupted()
     # 옛 상태 파일에 쪽 목록 채우기 (REQ-P06) — 채우는 동안에도 상세 조회는 옛 경로로 같은 답을 내므로 기동을 막지 않는다
     threading.Thread(target=_backfill_page_lists, daemon=True).start()
+    # 유휴 시계를 기동 시각으로 맞추고 유휴 스케일인 확인을 시작한다 (REQ-E03)
+    idle_scale_in.start()
     yield
 
 
@@ -61,6 +64,19 @@ app = FastAPI(
 # 등록 순서 주의: 나중에 add_middleware된 것이 바깥쪽(outermost)이 된다.
 # TimeoutMiddleware를 먼저 등록해 CORSMiddleware가 바깥을 감싸도록 해야
 # 타임아웃으로 반환되는 504 응답에도 CORS 헤더가 정상적으로 붙는다.
+class IdleClockMiddleware:
+    """사용자 요청마다 유휴 시계를 되돌린다 (REQ-E03). 순수 ASGI — SSE 스트림을 감싸 버퍼링하지 않는다."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and idle_scale_in.counts_as_activity(scope["path"]):
+            idle_scale_in.touch()
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(IdleClockMiddleware)
 app.add_middleware(TimeoutMiddleware)
 app.add_middleware(
     CORSMiddleware,

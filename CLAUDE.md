@@ -369,7 +369,9 @@ npx wrangler deploy                    # frontend/wrangler.jsonc (assets=./dist,
 
 ⚠️ **dev 백엔드는 2026-10-23 `af40bd9`(이미지 `f20-af40bd9` = `:latest`, 백엔드 코드는 `ac502ca`와 같다. digest `ba0034dd…` = prod `prod-e14c781`. 태스크 정의 **rev 9** = rev 8 + task role + `SCHEDULE_RESOURCE_ID`=**prod 서비스** — dev엔 예약이 없어 prod 예약을 읽기 전용으로 보여 준다)로 배포돼 있고, F20 육안 뒤 `desired 0`(2026-10-23).** (rev 8은 롤백용으로 활성) (F18은 프론트 전용이라 dev 백엔드 재배포가 필요 없었다. 실행 당시 태스크 digest `sha256:ffca2c03…` 가 ECR 과 일치함을 확인했다.)
 (F17은 `pdf_service`가 바뀌어 **백엔드 배포가 따라왔다** — B25처럼 프론트 전용이 아니었다. 실행 digest `04af8fb8…`가 ECR `f17-25ee3d2`와 일치함을 확인했다.)
-(**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`). 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
+(**쓸 때만 켠다** — 2 vCPU / 4GB라 켜 두면 약 $85/월 추정, 꺼 두면 ~$2/월. 내릴 때는 `--desired-count 0`).
+⚠️ **2026-11-02 dev 백엔드는 태스크 정의 rev 11(rev 9 + `IDLE_SCALE_IN_MINUTES=30`·`IDLE_SCALE_IN_RESOURCE_ID`=dev 서비스, 이미지 `e03-7432151-dirty` = `:latest`)이다 — 30분 유휴면 스스로 0이 된다(REQ-E03). 깨우는 Lambda `pdf-extractor-waker-dev`(Function URL `https://u5nw75up7u4lvvx7yhduxxpfge0uddri.lambda-url.ap-northeast-2.on.aws/`). rev 9는 롤백용 활성.** dev 프론트는 2026-11-02 `feat/E03-idle-scale-to-zero` `7432151` 빌드(Version `16d7ca5d`, `VITE_WAKE_URL` 포함)다. 프론트를 다시 배포할 때 `VITE_WAKE_URL`을 빼면 [서버 켜기]가 사라진다.
+⚠️ **2026-11-02부터 dev는 Fargate Spot이고 매일 00:00(Asia/Seoul) 강제로 꺼진다** — 예약 작업 `dev-nightly-off`(max 0)·`dev-nightly-reset`(00:05, max 1로 복구). 10월에 dev를 5일 켜 둔 채 잊어 약 $13이 샜다. 자정을 넘겨 작업하면 다시 켠다. Spot이라 작업 중 2분 예고 후 회수될 수 있다(dev라 감수). 클러스터 기본 capacity provider는 `FARGATE`라 prod는 영향 없다. 태스크 정의는 **rev 8**(2 vCPU / 4GB · `:latest` +
 `JWT_SECRET_KEY` secret · 터널 기본 QUIC, 2026-10-01 — rev 4는 deregister). 빌드는 `scripts/deploy/backend-build.sh [접두사]`(latest + 커밋 해시 태그, provenance 끔).
 ⚠️ **콘솔 "서비스 업데이트"는 최신 활성 리비전을 기본으로 고른다** — 실험용 리비전을 만들면 반드시
 deregister할 것(2026-09-28 프로브 rev 3이 이렇게 배포됐다, PROGRESS 참조).
@@ -557,6 +559,10 @@ files to upload`로 드러났다. 라이브를 직접 본다: ① `npx wrangler 
     캐시는 API 프로세스만 쓴다는 가정이다. ECS 태스크를 2개 이상으로 늘리거나 uvicorn 워커를 늘리거나, 운영 콘솔 등
     다른 프로세스가 공유를 쓰게 되면 **동시 편집이 다시 유실되고**(잠금 없이 8건 중 1건만 남는 것을 실측) 공유 변경이 안 보인다.
     그때는 저장소 쪽 잠금·캐시 무효화로 바꿔야 한다. (REQ-28)
+45. **유휴 스케일인(`idle_scale_in`)은 세 가지를 지켜야 조용히 틀리지 않는다** (REQ-E03)
+    - 끌 대상은 `IDLE_SCALE_IN_RESOURCE_ID`로만 받는다. dev 태스크 정의의 `SCHEDULE_RESOURCE_ID`는 prod 서비스라, 그 값을 쓰면 dev가 놀 때 prod가 꺼진다(E03-10이 막는다).
+    - 새 백그라운드 작업(`add_task`·스레드)은 `@idle_scale_in.working()`으로 감싼다. 빠뜨리면 작업이 도는 중에 서버가 꺼져 `PROCESSING` 고아가 남는다. E03-16은 지금 있는 4곳만 본다.
+    - 켜짐 예약은 `MaxCapacity ≥ 1`로 식별한다(`on`이 min 0 / max 1). 운영 구간 안에서도 desired 0이 정상이라, `desiredCount > 0`으로 켜짐을 판정하면 다음 예약·배너가 틀린다(운영 콘솔에서 실제로 틀렸다, 리뷰 E03 회차 0).
 
 ### 동기화가 필요한 짝
 

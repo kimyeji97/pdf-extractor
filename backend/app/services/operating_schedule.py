@@ -5,7 +5,8 @@ prod 는 예약 작업으로 켜지고 꺼진다(2026-10-07 실측: on `cron(0 1
 Timezone Asia/Seoul). 시각은 사용자가 수시로 바꾸므로 코드·환경변수에 박지 않고 여기서 읽는다.
 프론트는 cron 을 해석하지 않는다 — 절대 시각(ISO, 시간대 포함) `{start, end}` 목록만 받는다.
 
-- 켜짐/꺼짐은 이름이 아니라 **용량**으로 식별한다 — `MinCapacity >= 1` 이 켜짐, `MaxCapacity == 0` 이 꺼짐.
+- 켜짐/꺼짐은 이름이 아니라 **용량**으로 식별한다 — `MaxCapacity >= 1` 이 켜짐, `MaxCapacity == 0` 이 꺼짐.
+  REQ-E03부터 켜짐 예약은 min 0 / max 1(깨울 수 있게만 연다)이라 `MinCapacity` 로 보면 못 찾는다.
 - AWS cron 은 6필드(분 시 일 월 요일 연도)이고 `?` 가 있으며 요일은 1=SUN … 7=SAT 다. 일반 cron(5필드)과 다르다.
 - `at(...)` 은 그 시각 한 번의 켜짐/꺼짐으로 반영하고, `rate(...)` 가 켜짐/꺼짐에 섞이면 빈 목록이다(2026-10-08 결정).
 - 조회 대상 서비스는 `SCHEDULE_RESOURCE_ID`(예: `service/pdf-extractor-cluster/pdf-extractor-backend-prod-svc`).
@@ -106,6 +107,13 @@ def _occurrences(schedule: str, tz: ZoneInfo, start: datetime, end: datetime) ->
     return out
 
 
+def _is_on(cap: dict) -> bool | None:
+    """켜짐 = 최대 용량 ≥ 1, 꺼짐 = 최대 0 (REQ-E03 Q8·Q11). 최대가 없으면 최소 ≥ 1 만 켜짐(옛 규칙). 둘 다 아니면 None."""
+    if cap.get("MaxCapacity") is not None:
+        return cap["MaxCapacity"] >= 1
+    return True if cap.get("MinCapacity", 0) >= 1 else None
+
+
 def compute_windows(actions: list[dict], now: datetime, days: int = 14) -> list[dict]:
     """앞으로 `days` 일 안의 운영 구간 `[{start, end}]`. 지금이 들어 있는 구간도 포함한다(배너가 그 end 를 본다)."""
     horizon = now + timedelta(days=days)
@@ -115,11 +123,8 @@ def compute_windows(actions: list[dict], now: datetime, days: int = 14) -> list[
     events: list[tuple[datetime, bool]] = []
     for a in actions:
         cap = a.get("ScalableTargetAction") or {}
-        if cap.get("MinCapacity", 0) >= 1:
-            is_on = True
-        elif cap.get("MaxCapacity") == 0:
-            is_on = False
-        else:
+        is_on = _is_on(cap)
+        if is_on is None:
             continue
         try:
             tz = ZoneInfo(a.get("Timezone") or "UTC")
@@ -161,8 +166,8 @@ def next_scheduled(actions: list[dict], now: datetime, running: bool) -> datetim
     times = []
     for a in actions:
         cap = a.get("ScalableTargetAction") or {}
-        is_on = cap.get("MinCapacity", 0) >= 1
-        if not is_on and cap.get("MaxCapacity") != 0:
+        is_on = _is_on(cap)
+        if is_on is None:
             continue
         if is_on == running:  # 켜져 있으면 꺼짐만, 꺼져 있으면 켜짐만
             continue
