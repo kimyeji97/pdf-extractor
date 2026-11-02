@@ -138,7 +138,7 @@ prod는 ECS Auto Scaling 예약 작업으로 켜지고 꺼진다(2026-10-07 실�
 | F19-40 | `compute_windows` | 토 on `at(…10T10:00:00)` + off `at(…10T14:00:00)` → 토 10:00–14:00 구간 | 정상 | PLAN § 결정 — "`at(...)`은 그 시각 한 번의 켜짐/꺼짐으로 반영" | 3 | ✅ |
 | F19-41 | `compute_windows` | off `at(2026-10-07T13:00:00)` Timezone `UTC` → 끝 22:00 KST | 회귀 | PLAN § 제약 — "시간대 없는 로컬 시각이라 `Timezone`을 붙여 해석한다" | 3 | ✅ |
 | F19-42 | `compute_windows` | on/off 중 하나가 `rate(1 day)` → `[]` | 예외 | PLAN § 결정 — "`rate(...)`가 on/off에 섞이면 `[]`" | 3 | ✅ |
-| F19-43 | `compute_windows` | on/off 아닌 예약(Min 0/Max 1)의 `rate(...)`는 무시 → 정상 구간 | 경계 | PLAN § 결정 — "`rate(...)`가 on/off에 섞이면 `[]`" | 3 | ✅ |
+| F19-43 | `compute_windows` | (2026-11-02 REQ-E03 Q10으로 변경 — [PLAN-E03](../PLAN-E03-prod-idle-scale-to-zero.md)) Min 0/Max 1의 `rate(...)`는 켜짐이라 `[]` | 예외 | PLAN § 결정 — "`rate(...)`가 on/off에 섞이면 `[]`" | 3 | — |
 
 > 테스트가 정하는 인터페이스: `api/client` 의 **`setServerDownCallback(fn)`**(`setLoadingCallback` 짝) · `routes/paths` 의 **`paths.unavailable`** ·
 > Phase 2: `errorElement`는 **최상위 라우트**에 둔다 — 테스트가 실제 `routes[0]`을 복제해 children에 throw 라우트를 덧붙인다. [새로고침]의 `window.location.reload()` 호출은 jsdom에서 `location`을 재정의할 수 없어 케이스로 쓰지 않았다(리뷰에서 코드로 본다).
