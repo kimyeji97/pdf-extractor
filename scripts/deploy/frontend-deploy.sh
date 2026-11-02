@@ -5,14 +5,19 @@ set -euo pipefail
 #   dev  → Worker `twilight-base-302d`(wrangler.jsonc 최상위) · API dailystudy-workbook-api-dev
 #   prod → Worker `dailystudy-workbook-prod`(wrangler.jsonc env.prod) · API dailystudy-workbook-api
 # ⚠️ API URL은 셸 env로 넘긴다 — `.env.local`이 localhost라 안 덮으면 그게 박힌다 (Vite: 셸 env > .env*)
+# 웨이커 URL(REQ-E03)도 같은 이유로 여기서 고정한다 — 빠지면 다운 화면 [서버 켜기]가 에러 없이 사라진다
 ENV="${1:-}"
 case "$ENV" in
-  dev)  API=https://dailystudy-workbook-api-dev.yejicraft-cf.com/api; DEPLOY_ARGS=() ;;
-  prod) API=https://dailystudy-workbook-api.yejicraft-cf.com/api;     DEPLOY_ARGS=(--env prod) ;;
+  dev)  API=https://dailystudy-workbook-api-dev.yejicraft-cf.com/api
+        WAKE=https://u5nw75up7u4lvvx7yhduxxpfge0uddri.lambda-url.ap-northeast-2.on.aws/  # Lambda pdf-extractor-waker-dev
+        DEPLOY_ARGS=() ;;
+  prod) API=https://dailystudy-workbook-api.yejicraft-cf.com/api
+        WAKE=https://bmubrqpjlo2fuqaewfhyq5jqnq0ficry.lambda-url.ap-northeast-2.on.aws/  # Lambda pdf-extractor-waker-prod
+        DEPLOY_ARGS=(--env prod) ;;
   *)    echo "사용: $0 dev|prod" >&2; exit 1 ;;
 esac
 
 # 실행 위치와 무관하게 스크립트 기준으로 frontend/ 를 찾는다
 cd "$(dirname "$0")/../../frontend"
 
-VITE_API_BASE_URL="$API" npm run build && npx wrangler deploy ${DEPLOY_ARGS[@]+"${DEPLOY_ARGS[@]}"}
+VITE_API_BASE_URL="$API" VITE_WAKE_URL="$WAKE" npm run build && npx wrangler deploy ${DEPLOY_ARGS[@]+"${DEPLOY_ARGS[@]}"}
