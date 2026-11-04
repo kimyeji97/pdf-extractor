@@ -5,7 +5,7 @@
 > 깨면 회귀하는 **계약**은 이 파일이 아니라 [`CLAUDE.md`](../CLAUDE.md)에 둔다.
 >
 > 조회는 `/progress`, 갱신은 `/checkpoint`.
-> 최종 갱신: 2026-11-02
+> 최종 갱신: 2026-11-03
 
 ## 요구사항 인덱스
 
@@ -147,7 +147,7 @@
 | REQ-E02 | 운영(prod) 환경 구성 — 도메인 `-dev` 제거 · R2 `dailystudy` · ECS prod 서비스 2 vCPU/4GB · 이미지 태그 고정 | [plan](plans/archive/PLAN-E02-prod-environment.md) | 2026-10-05 | ✅ **Phase 1~5 완료** — prod 백엔드(ECS `prod-svc` 2 vCPU/4GB, 이미지 `prod-2cc43de`)·프론트(Worker `dailystudy-workbook-prod`)·R2 `dailystudy`(WAF 경로 제한) 가동, 배포 스크립트 dev/prod 분리, 계약 #37·#38 · 케이스 44/44 · 리뷰 회차 1 @ `2e75c3d` (TODO 4 · 감수 1) |
 | REQ-F19 | 서버 다운 안내 화면 + 꺼짐 예고 배너 — 다운 감지 → 안내 경로, 운영 구간 API, 1시간 전 카운트다운 | [plan](plans/archive/PLAN-F19-server-down-notice.md) | 2026-10-15 | ✅ Phase 4/4 — PR #43 머지(`dfcc485`) · dev·prod 배포 · **prod 응답 대조 일치(2026-10-15)** · 22시 배너 육안(사용자) · 케이스 43/43 · 리뷰 회차 9 @ `340ddea` (TODO 5 · 감수 3) |
 | REQ-F20 | 튜토리얼 — 첫 진입 때 안 본 묶음을 전용 화면(`/tutorials`)으로 보여 주기, 다시 보지 않기, 골라 다시 보기 | [plan](plans/PLAN-F20-tutorial.md) | 2026-10-23 | ✅ Phase 7/7 — PR #52 main 머지 `e14c781` · dev·prod 배포 · 케이스 F20 50/50 · 리뷰 회차 5 @ `5f3af84` (b) 0 · (c) 감수 1 · dev 육안 |
-| REQ-E03 | prod 유휴 스케일인 + 웨이크 — 30분 유휴면 desired 0, 운영 구간 안에서만 Lambda로 깨우기, `on` 예약은 열기만(min 0 / max 1) | [plan](plans/PLAN-E03-prod-idle-scale-to-zero.md) | — | 🟡 Phase 4/5 — 브랜치 `feat/E03-idle-scale-to-zero` · 케이스 E03 38/38 + F19-43 · 리뷰 통과(`9625676`) · prod 웨이커 Lambda 생성 · 머지 뒤 prod 적용 남음 |
+| REQ-E03 | prod 유휴 스케일인 + 웨이크 — 30분 유휴면 desired 0, 운영 구간 안에서만 Lambda로 깨우기, `on` 예약은 열기만(min 0 / max 1) | [plan](plans/PLAN-E03-prod-idle-scale-to-zero.md) | — | 🟡 Phase 4/5 — PR #53 머지(`806f77c`) · prod 적용·유휴 0·깨우기 확인(2026-11-02) · 1주 뒤 Cost Explorer 확인 남음 |
 | REQ-C12 | 운영 콘솔 — 가입 승인 · 계정 차단 · 서버 수동 on/off | [plan](plans/archive/PLAN-C12-ops-console-accounts-server.md) | 2026-10-15 | ✅ Phase 3/3 — 케이스 27/27 · 리뷰 회차 6 @ `ed9d061` (b) 0 · (c) 감수 1 · dev 육안(승인·차단·콘솔 on/off) · prod 확인 창 육안 · prod 실측은 사용자 결정으로 생략(dev 실측 대체) · Phase 1·2는 PR #47 머지·배포, **Phase 3은 `feat/C12-server-onoff` PR·배포 전** |
 | REQ-D13 | 브랜드 리뉴얼 — 로고·파비콘·테마색(남색·빨강)·글꼴(Outfit·Gothic A1) | [plan](plans/archive/PLAN-D13-brand-renewal.md) | 2026-10-08 | ✅ Phase 3/3(로고·파비콘 · 테마색 · 글꼴) — 케이스 30/30 · 리뷰 회차 6 @ `122da1c` (b)·(c) 0 · dev 육안 확인 · PR #45 머지 `cee0695` · prod 프론트 배포 |
 | REQ-D12 | 시스템 이름 변경 — 한글 "오답 클립북" · 영문 "ClipBook" (화면·문서 이름만, 도메인 제외) | [plan](plans/archive/PLAN-D12-system-rename.md) | 2026-10-07 | ✅ Phase 1 완료(케이스 4/4 · `/testrun` 확인 · `/review` (c) 1 감수) — 탭 제목·Swagger 제목. 워드마크·아이콘은 테마 컬러와 함께 **별도 작업으로 분리**(TODO.md). 브랜치 `feat/D12-system-rename` |
@@ -328,6 +328,14 @@ Secrets Manager / IAM 실행역할 / CloudWatch Logs(30일) / Cloudflare Tunnel 
     - 방안: A 계획서 미결로 (/workplan) · TODO · 감수 — 추천 TODO
     - 결정: TODO → docs/TODO.md
 - 리뷰 게이트: 마지막 코드 커밋 `9625676` = 회차 2 sha · 수정 2건 닫힘 · 나머지 감수·TODO → 통과. Phase 5 prod 적용이 남아 🟡
+- 머지: PR #53 → main `806f77c`
+- prod 적용(사용자 승인, 18시대 운영 구간 안):
+  - 백엔드: 태스크 정의 rev 11 = rev 10 + 이미지 `prod-806f77c` + `IDLE_SCALE_IN_MINUTES=30`·`IDLE_SCALE_IN_RESOURCE_ID`=prod 서비스. 실행 digest `2c1f1758…`가 ECR과 같다. rev 10 deregister(롤백용 rev 3 유지). 18:24 롤링 재시작
+  - 예약: `on`을 min 0 / max 1로, 현재 확장 대상도 min 0 / max 1로. 운영 구간 API는 평일 15~23시 그대로
+  - 프론트: `frontend-deploy.sh prod` → Worker Version `359906e0`. 라이브 진입 번들 = 로컬 dist, 번들에 prod 웨이커 URL 있음, prod 오리진 preflight 200
+- prod 실측: 18:24 기동 → 19:04:46 `[idle] 30분 유휴` 로그와 함께 desired 0(사용자 요청이 있어 40분 걸림) → running 0 뒤 웨이커 `starting` → 46초 뒤 `/health` 200 → 아무도 안 써서 19:35:48 다시 0
+- 함정: `backend-deploy-prod.sh`는 현재 리비전을 복제해 이미지만 바꾼다. 환경변수를 더하려면 스크립트 절차(빌드·푸시 → 복제 → 등록 → update → 안정화 → 옛 리비전 deregister)를 손으로 밟아 이미지와 env를 한 리비전에 넣는다. 둘로 나누면 롤링 재시작이 두 번이다
+- 남은 것: 1주 뒤(2026-11-09쯤) Cost Explorer로 prod Fargate 시간 확인 → Phase 5 체크 → ✅. 그때 리뷰 TODO(사람 아닌 요청이 유휴 시계를 되돌리는 비중)도 로그로 본다
 
 ## 2026-10-23
 
